@@ -1,0 +1,899 @@
+/* 
+  MARIMO QUEST - 스타일 시트
+  768px 기준 반응형 및 픽셀 아트 테마
+*/
+
+:root {
+    --bg-sky: #a4d6f5;
+    --header-green: #1e3d2b;
+    --card-cream: #f9f4e8;
+    --accent-yellow: #f1c40f;
+    --accent-green: #2ecc71;
+    --pixel-border: 4px solid #000;
+    --shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'VT323', monospace;
+    image-rendering: pixelated;
+    /* 픽셀 느낌 강화 */
+}
+
+body {
+    background-color: var(--bg-sky);
+    background-image:
+        radial-gradient(circle at 20% 20%, #fff 0%, transparent 10%),
+        radial-gradient(circle at 80% 10%, #fff 0%, transparent 15%);
+    color: #333;
+    overflow-x: hidden;
+    height: 100vh;
+}
+
+.app-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* --- 헤더 --- */
+.main-header {
+    background-color: var(--header-green);
+    color: #fff;
+    border-bottom: var(--pixel-border);
+    padding: 10px 20px;
+    z-index: 100;
+}
+
+.header-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-size: 1.8rem;
+    color: var(--accent-yellow);
+    letter-spacing: 2px;
+}
+
+.pc-nav ul {
+    display: flex;
+    list-style: none;
+    gap: 30px;
+}
+
+.pc-nav li {
+    cursor: pointer;
+    font-size: 1.3rem;
+}
+
+.pc-nav li.active {
+    color: var(--accent-yellow);
+    border-bottom: 3px solid var(--accent-yellow);
+}
+
+.header-info {
+    display: flex;
+    gap: 15px;
+    font-size: 1.2rem;
+}
+
+/* --- 콘텐츠 영역 --- */
+.content-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background-image: linear-gradient(to bottom, transparent 79%, #5d9d44 79%);
+    /* 하단 잔디 높이를 1cm(약 4%) 내려서 75% -> 79%로 조정 */
+}
+
+.screen {
+    display: none;
+    max-width: 1000px;
+    margin: 0 auto;
+    animation: fadeIn 0.3s ease;
+}
+
+.screen.active {
+    display: block;
+}
+
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- 픽셀 카드 & 버튼 --- */
+.card {
+    background-color: var(--card-cream);
+    border: var(--pixel-border);
+    box-shadow: var(--shadow);
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.btn {
+    background-color: var(--accent-yellow);
+    border: var(--pixel-border);
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2);
+    transition: transform 0.1s;
+}
+
+.btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+.btn.active {
+    background-color: var(--accent-green);
+    color: #fff;
+}
+
+.full-btn {
+    width: 100%;
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+/* --- 마리모 캐릭터 (CSS) - 전 페이지 통일된 디자인 --- */
+.pixel-marimo-large,
+.pixel-marimo-med {
+    position: relative;
+    background-color: #27ae60;
+    box-shadow:
+        0 -4px #000, 0 4px #000, -4px 0 #000, 4px 0 #000,
+        -4px -4px #000, 4px -4px #000, -4px 4px #000, 4px 4px #000;
+    margin: 0 auto;
+    background-image:
+        radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.3) 0%, transparent 20%),
+        radial-gradient(circle at 30% 30%, #58d68d 10%, transparent 40%),
+        radial-gradient(circle at 70% 70%, #1e8449 20%, transparent 60%);
+}
+
+.pixel-marimo-large {
+    width: 440px;
+    height: 440px;
+    border-radius: 50%;
+}
+
+.pixel-marimo-med {
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+}
+
+/* 대형 마리모 디테일 (Home) */
+.pixel-marimo-large::before {
+    content: '';
+    position: absolute;
+    top: 35%;
+    left: 25%;
+    width: 40px;
+    height: 40px;
+    background: #000;
+    box-shadow:
+        180px 0 #000,
+        /* 눈 */
+        -50px -70px 0 6px rgba(255, 255, 255, 0.6),
+        200px -40px 0 -3px rgba(255, 255, 255, 0.4),
+        -70px 100px 0 -5px rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+}
+
+.pixel-marimo-large::after {
+    content: '';
+    position: absolute;
+    top: 55%;
+    left: 15%;
+    width: 50px;
+    height: 25px;
+    background: #ff9999;
+    box-shadow:
+        280px 0 #ff9999,
+        140px 15px #000;
+}
+
+/* 중형 마리모 디테일 (그 외 페이지) */
+.pixel-marimo-med::before {
+    content: '';
+    position: absolute;
+    top: 35%;
+    left: 25%;
+    width: 22px;
+    height: 22px;
+    background: #000;
+    box-shadow:
+        90px 0 #000,
+        -30px -45px 0 3px rgba(255, 255, 255, 0.6),
+        100px -20px 0 -1px rgba(255, 255, 255, 0.4);
+    border-radius: 2px;
+}
+
+.pixel-marimo-med::after {
+    content: '';
+    position: absolute;
+    top: 55%;
+    left: 15%;
+    width: 22px;
+    height: 14px;
+    background: #ff9999;
+    box-shadow:
+        140px 0 #ff9999,
+        70px 8px #000;
+}
+
+.bounce {
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-30px) scaleX(1.02);
+    }
+}
+
+.speech-bubble {
+    background: #fff;
+    border: 3px solid #000;
+    padding: 10px 25px;
+    position: absolute;
+    top: -60px;
+    /* 더 높게 배치 */
+    left: 10%;
+    /* 더 왼쪽으로 이동 */
+    font-size: 1.8rem;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: var(--shadow);
+}
+
+/* 말풍선 꼬리 좌우반전 및 위치 수정 */
+.speech-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -15px;
+    right: 30px;
+    /* 오른쪽으로 이동 */
+    border-width: 15px 0 0 15px;
+    /* 좌우반전된 삼각형 모양 */
+    border-style: solid;
+    border-color: #000 transparent transparent transparent;
+}
+
+/* --- 레이아웃 --- */
+.screen-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+    min-height: calc(100vh - 150px);
+    position: relative;
+}
+
+.character-center {
+    width: 100%;
+    text-align: center;
+    padding-bottom: 0px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: -7px; /* 기존 50px에서 1.5cm(57px) 위로 올림 */
+    position: relative;
+    /* 자식 요소인 말풍선 배치를 위해 추가 */
+}
+
+.side-content {
+    width: 100%;
+    max-width: 1000px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    /* 오른쪽 정렬로 복구 */
+}
+
+.big-action-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 120px;
+    margin-top: 20px;
+}
+
+.big-btn {
+    height: 120px;
+    width: 120px;
+    font-size: 4rem;
+    /* 아이콘 사이즈 키움 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--accent-green);
+    color: #fff;
+    border: var(--pixel-border);
+    box-shadow: var(--shadow);
+}
+
+.side-character {
+    width: 150px;
+    text-align: center;
+}
+
+/* --- 채팅 레이아웃 (센서창과 동일 구조) --- */
+.chat-full-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding-top: 113px;
+    /* 센서창과 동일 높이 */
+}
+
+.chat-top-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 20px;
+    min-height: calc(75vh - 60px);
+}
+
+/* 채팅 박스가 남은 공간을 채우도록 (가로 2cm 확장 적용) */
+.chat-top-row .chat-main {
+    flex: 1;
+    max-width: calc(100% - 220px - 113px);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* 입력창을 잔디 라인에 맞춰 아래로 밀기 */
+.chat-top-row .chat-main .chat-input-area {
+    margin-top: auto;
+    padding-top: 15px;
+}
+
+/* --- 센서 전체 레이아웃 (2단 구성) --- */
+.sensor-full-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding-top: 113px;
+    /* 약 7cm (189px - 76px = 2cm 추가 올림) */
+}
+
+/* 상단: 센서값 박스(왼쪽) + 캐릭터(오른쪽) */
+.sensor-top-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+/* 하단 이력 테이블은 sensor-full-layout 의 width 에 맞게 자동 확장 */
+.sensor-full-layout .history-card {
+    width: 100%;
+    margin-top: 18px;
+    /* 이전 위치(37px)에서 0.5cm(19px) 위로 올림 */
+}
+
+.sensor-box-unified {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex: none;
+    width: 500px;
+    /* 500px로 확장 */
+    padding: 18px;
+}
+
+.sensor-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed #ccc;
+    /* 구분선 추가 */
+    padding-bottom: 5px;
+}
+
+.sensor-item:last-child {
+    border-bottom: none;
+}
+
+.sensor-item span {
+    font-size: 1.4rem;
+    font-weight: bold;
+}
+
+.sensor-item strong {
+    font-size: 1.6rem;
+    color: var(--accent-green);
+}
+
+/* --- 센서 테이블 --- */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.history-table th,
+.history-table td {
+    border: 2px solid #000;
+    padding: 8px;
+    text-align: center;
+}
+
+.history-table th {
+    background: #eee;
+}
+
+/* --- 채팅 --- */
+/* pixel-marimo-med 220px 사이즈: 센서창/채팅창 공통 적용됨 */
+.chat-box {
+    height: 389px;
+    /* 5cm(189px) 확장 */
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background: transparent !important;
+    /* 말풍선 배경 투명 처리 */
+    border: none !important;
+    /* 카드 테두리도 제거 */
+    box-shadow: none !important;
+}
+
+.msg {
+    padding: 10px;
+    max-width: 80%;
+    border: 2px solid #000;
+    font-size: 1.1rem;
+}
+
+.marimo-msg {
+    background: #fff;
+    align-self: flex-start;
+}
+
+.user-msg {
+    background: #ffeaa7;
+    align-self: flex-end;
+}
+
+.chat-time {
+    font-size: 0.7rem;
+    color: #888;
+    margin-left: 5px;
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 680px;
+    /* 현재 위치에서 10cm 더 아래 */
+}
+
+.pixel-input {
+    flex: 1;
+    border: var(--pixel-border);
+    padding: 10px;
+    font-size: 1.2rem;
+}
+
+/* --- 보고서 & 설정 레이아웃 (잔디선 정렬) --- */
+.report-full-layout,
+.settings-full-layout {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* 아래쪽으로 밀착 */
+    min-height: calc(75vh - 61px); /* 0.5cm(19px) 올림 */
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding-bottom: 0; /* 바닥 여백을 없애서 확실히 아래로 밀착 */
+}
+
+/* 설정 화면 캐릭터 위치 및 유영 범위 고정 */
+.settings-full-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; /* 상단 기준 정렬 */
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding-top: 150px; /* 캐릭터 활동 영역 */
+    padding-bottom: 200px; /* 설정 버튼 하단 여백 */
+    box-sizing: border-box;
+}
+
+/* 보고서 창: 위클릭/내용 박스를 다시 하단 잔디선 근처로 복구 */
+.report-full-layout {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* 내용 박스를 하단으로 밀착 */
+    min-height: calc(75vh + 60px); /* 캐릭터가 사라지지 않도록 높이 최적화 */
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding-bottom: 38px; /* 내용 박스 하단 여백 */
+}
+
+
+
+/* 기존 설정 관련 개별 클래스 정리 */
+
+
+/* 캐릭터 위치 및 애니메이션은 아래 .settings-main 아래에서 관리 */
+
+.settings-main {
+    width: 100%;
+    max-width: 600px; /* 가로 줄여서 간격 여유 확보 */
+    display: flex;
+    flex-direction: row; /* 버튼 가로 정렬 */
+    justify-content: center;
+    gap: 30px; /* 넓어진 간격 */
+}
+
+.settings-main .btn {
+    flex: 1; /* 세 버튼이 완벽히 동일한 너비를 가지도록 설정 */
+    height: 120px; /* 기존 60px에서 2배 확장 */
+    font-size: 1.5rem;
+}
+
+/* 보고서와 설정 화면에서 유영하는 캐릭터 스타일 */
+.wander-character {
+    position: relative;
+    margin-bottom: 80px; /* 캐릭터와 하단 내용 사이 간격 */
+    animation: wander 10s ease-in-out infinite;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* 설정/보고서 화면용 소형 캐릭터 (1/3 축소: 220 → ~147px) */
+.settings-full-layout .pixel-marimo-med,
+.report-full-layout .pixel-marimo-med {
+    width: 147px;
+    height: 147px;
+}
+
+.settings-full-layout .pixel-marimo-med::before,
+.report-full-layout .pixel-marimo-med::before {
+    top: 35%;
+    left: 25%;
+    width: 15px;
+    height: 15px;
+    box-shadow:
+        60px 0 #000,
+        -20px -30px 0 2px rgba(255,255,255,0.6),
+        67px -13px 0 -1px rgba(255,255,255,0.4);
+    border-radius: 2px;
+}
+
+.settings-full-layout .pixel-marimo-med::after,
+.report-full-layout .pixel-marimo-med::after {
+    top: 55%;
+    left: 15%;
+    width: 15px;
+    height: 10px;
+    background: #ff9999;
+    box-shadow:
+        94px 0 #ff9999,
+        47px 5px #000;
+}
+
+
+
+@keyframes wander {
+    0%   { transform: translate(0px,   0px); }
+    20%  { transform: translate(350px, -40px); } /* 오른쪽 끝 근처 */
+    40%  { transform: translate(-350px, -80px); } /* 왼쪽 끝 근처 */
+    60%  { transform: translate(250px, -20px); }
+    80%  { transform: translate(-250px, -60px); }
+    100% { transform: translate(0px,   0px); }
+}
+
+/* --- 보고서 --- */
+.report-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.report-view {
+    display: none;
+}
+
+.report-view.active {
+    display: flex;
+    flex-direction: column;
+    height: 534px; /* 496px에서 먼슬리 그래프 확장에 맞춰 1cm(38px) 추가로 늘림 */
+}
+
+/* 위클리 내용 스크롤 박스 */
+.weekly-box {
+    display: flex;
+    flex-direction: column;
+    height: 392px; /* 390px에서 0.05cm(2px) 아주 미세하게 다시 늘림 */
+    overflow-y: auto; /* 스크롤 활성화 */
+    padding: 20px;
+}
+
+.weekly-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 0;
+    border-bottom: 1px dashed #ccc;
+}
+
+.weekly-row:last-child {
+    border-bottom: none;
+}
+
+.face {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: 2px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.face-green {
+    background: #2ecc71;
+}
+
+.face-yellow {
+    background: #f1c40f;
+}
+
+.face-orange {
+    background: #e67e22;
+}
+
+.month-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+.chart-container {
+    position: relative;
+    height: 262px; /* 224px에서 1cm(38px) 더 늘림 */
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* --- 모달 --- */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 400px;
+    position: relative;
+    /* 닫기 버튼 배치를 위해 추가 */
+}
+
+/* 센서 설정 및 가이드 모달 2배 확대 */
+.modal-content.double-size {
+    max-width: 800px;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    background-color: #e74c3c !important;
+    /* 닫기 버튼은 빨간색 계열 */
+    color: #fff !important;
+}
+
+/* --- noUiSlider 픽셀 테마 적용 --- */
+.pixel-slider {
+    margin: 40px 10px 10px 10px; /* 툴팁 공간을 위해 상단 여백 확보 */
+    height: 12px;
+    background: #fff;
+    border: 3px solid #000;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    border-radius: 0;
+}
+
+.noUi-connect {
+    background: var(--accent-green);
+}
+
+.noUi-handle {
+    width: 20px !important;
+    height: 30px !important;
+    background: var(--accent-yellow) !important;
+    border: 3px solid #000 !important;
+    border-radius: 0 !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.3) !important;
+    top: -12px !important;
+    right: -10px !important;
+    cursor: pointer;
+}
+
+/* 핸들 내부 선 제거 */
+.noUi-handle::before,
+.noUi-handle::after {
+    display: none;
+}
+
+/* 숫자 툴팁 (점 위 말풍선) */
+.noUi-tooltip {
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    background: #fff;
+    border: 2px solid #000;
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 0;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+}
+
+.notice-modal-box {
+    max-width: 700px;
+    min-height: 400px;
+}
+
+/* 퀘스트 카드보다 크게 설정 */
+.notice-modal-body {
+    font-size: 1.5rem;
+    line-height: 2;
+    margin: 30px 0;
+}
+
+.guide-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.guide-card {
+    background: #fff;
+    border: 2px solid #000;
+    padding: 15px;
+    text-align: center;
+}
+
+/* --- 모바일 내비게이션 (하단) --- */
+.mobile-nav {
+    display: none;
+    background: var(--header-green);
+    border-top: var(--pixel-border);
+    padding: 10px 0;
+    position: sticky;
+    bottom: 0;
+}
+
+.mobile-nav ul {
+    display: flex;
+    justify-content: space-around;
+    list-style: none;
+}
+
+.mobile-nav li {
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+}
+
+.mobile-nav li.active {
+    color: var(--accent-yellow);
+}
+
+.nav-icon {
+    display: block;
+    font-size: 1.5rem;
+}
+
+.nav-text {
+    font-size: 0.8rem;
+}
+
+/* --- 반응형 (768px 기준) --- */
+@media (max-width: 767px) {
+    .pc-nav {
+        display: none;
+    }
+
+    .mobile-nav {
+        display: block;
+    }
+
+    .screen-layout {
+        flex-direction: column;
+        align-items: stretch;
+        min-height: auto;
+    }
+
+    .side-character {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .header-inner {
+        justify-content: center;
+        position: relative;
+    }
+
+    .header-info {
+        display: none;
+    }
+
+    .pixel-marimo-med {
+        transform: scale(0.8);
+    }
+
+    /* 모바일에서는 버튼 중앙 정렬 */
+    .side-content {
+        align-items: center;
+    }
+
+    .big-action-btns {
+        width: 90%;
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-nav {
+        display: none;
+    }
+
+    /* PC에서도 버튼을 오른쪽으로 배치 */
+    .side-content {
+        align-items: flex-end;
+    }
+}

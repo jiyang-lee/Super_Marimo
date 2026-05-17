@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MARIMO QUEST - 마리모 케어 서비스</title>
+    <!-- 구글 폰트: 픽셀 스타일 폰트 -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/main.js"></script>
+</head>
+<body>
+    <div id="app" class="app-wrapper">
+        <!-- 상단 헤더 (PC/모바일 공통) -->
+        <header class="main-header">
+            <div class="header-inner">
+                <h1 class="logo">MARIMO QUEST</h1>
+                
+                <!-- PC용 내비게이션 (데스크탑에서만 보임) -->
+                <nav class="pc-nav">
+                    <ul>
+                        <li class="active" onclick="showScreen('home')">홈</li>
+                        <li onclick="showScreen('sensor')">센서</li>
+                        <li onclick="showScreen('chat')">채팅</li>
+                        <li onclick="showScreen('report')">보고서</li>
+                        <li onclick="showScreen('settings')">설정</li>
+                    </ul>
+                </nav>
+
+                <div class="header-info">
+                    <span class="icon">❤️x3</span>
+                    <span class="level">LV.8</span>
+                    <span id="header-time">14:35</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 메인 콘텐츠 영역 -->
+        <main class="content-container">
+            
+            <!-- 1. 홈 화면 -->
+            <section id="home-screen" class="screen active">
+                <div class="screen-layout">
+                    <div class="side-content">
+                        <!-- 추가된 큰 버튼 영역 (오른쪽 배치) -->
+                        <div class="big-action-btns">
+                            <button class="btn big-btn" onclick="openModal('notice-modal')">📢</button>
+                            <button class="btn big-btn" onclick="openModal('quest-modal')">📜</button>
+                        </div>
+                    </div>
+
+                    <!-- 중앙 캐릭터 영역 (아래로 이동) -->
+                    <div class="character-center">
+                        <div class="pixel-marimo-large bounce"></div>
+                        <div class="speech-bubble">오늘도 잘 부탁해!</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. 센서 화면 -->
+            <section id="sensor-screen" class="screen">
+                <div class="sensor-full-layout">
+                    <!-- 상단: 캐릭터(왼쪽) + 센서값 박스(오른쪽) -->
+                    <div class="sensor-top-row">
+                        <div class="side-character">
+                            <div class="pixel-marimo-med"></div>
+                        </div>
+                        <div class="card sensor-box-unified">
+                            <div class="sensor-item"><span>온도</span> <strong>24℃</strong></div>
+                            <div class="sensor-item"><span>습도</span> <strong>45%</strong></div>
+                            <div class="sensor-item"><span>수위</span> <strong>80%</strong></div>
+                            <div class="sensor-item"><span>조도</span> <strong>500lux</strong></div>
+                        </div>
+                    </div>
+
+                    <!-- 하단: 시간당 센서 이력 (전체 폭 채우기) -->
+                    <div class="card history-card">
+                        <h3>시간당 센서 이력</h3>
+                        <table class="history-table">
+                            <thead><tr><th>시간</th><th>온도</th><th>습도</th><th>수위</th></tr></thead>
+                            <tbody>
+                                <tr><td>14:00</td><td>24</td><td>45</td><td>80</td></tr>
+                                <tr><td>13:00</td><td>23</td><td>44</td><td>78</td></tr>
+                                <tr><td>12:00</td><td>22</td><td>47</td><td>81</td></tr>
+                                <tr><td>11:00</td><td>25</td><td>46</td><td>79</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. 채팅 화면 -->
+            <section id="chat-screen" class="screen">
+                <div class="chat-full-layout">
+                    <div class="chat-top-row">
+                        <!-- 왼쪽: 마리모 캐릭터 -->
+                        <div class="side-character">
+                            <div class="pixel-marimo-med"></div>
+                        </div>
+
+                        <!-- 오른쪽: 채팅 박스 -->
+                        <div class="chat-main">
+                            <div class="chat-header-btns">
+                                <button class="btn active">텍스트</button>
+                                <button class="btn">음성</button>
+                            </div>
+                            <div class="card chat-box" id="chat-display">
+                                <div class="msg marimo-msg">안녕! 무엇을 도와줄까? <span class="chat-time">14:31</span></div>
+                                <div class="msg user-msg">오늘 날씨 어때? <span class="chat-time">14:32</span></div>
+                                <div class="msg marimo-msg">오늘은 맑고 좋아! ☀️ <span class="chat-time">14:32</span></div>
+                            </div>
+                            <div class="chat-input-area">
+                                <input type="text" class="pixel-input" placeholder="메시지를 입력하세요...">
+                                <button class="btn send-btn" onclick="sendMessage()">전송</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. 보고서 화면 -->
+            <section id="report-screen" class="screen">
+                <div class="report-full-layout">
+
+                <div class="report-tabs">
+                    <button id="tab-weekly" class="btn active" onclick="switchReport('weekly')">Weekly</button>
+                    <button id="tab-monthly" class="btn" onclick="switchReport('monthly')">Monthly</button>
+                </div>
+                
+                <!-- Weekly 내용 -->
+                <div id="weekly-content" class="report-view active">
+                    <div class="card weekly-box">
+                        <div class="weekly-row">
+                            <div class="face face-green">😊</div>
+                            <div class="report-text">05.10.~05.16 / 온도 24℃ / 습도 62% / 조도 480lux / 수위 78%</div>
+                        </div>
+                        <div class="weekly-row">
+                            <div class="face face-green">😊</div>
+                            <div class="report-text">05.03.~05.09 / 온도 23℃ / 습도 48% / 조도 500lux / 수위 80%</div>
+                        </div>
+                        <div class="weekly-row">
+                            <div class="face face-yellow">😐</div>
+                            <div class="report-text">04.26.~05.02 / 온도 22℃ / 습도 55% / 조도 420lux / 수위 70%</div>
+                        </div>
+                        <div class="weekly-row">
+                            <div class="face face-orange">😢</div>
+                            <div class="report-text">04.19.~04.25 / 온도 21℃ / 습도 62% / 조도 380lux / 수위 65%</div>
+                        </div>
+                        <div class="weekly-row">
+                            <div class="face face-green">😊</div>
+                            <div class="report-text">04.12.~04.18 / 온도 24℃ / 습도 60% / 조도 450lux / 수위 75%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monthly 내용 -->
+                <div id="monthly-content" class="report-view">
+                    <div class="month-selector">
+                        <button class="btn" onclick="selectMonth(1, this)">1월</button>
+                        <button class="btn" onclick="selectMonth(2, this)">2월</button>
+                        <button class="btn" onclick="selectMonth(3, this)">3월</button>
+                        <button class="btn active" onclick="selectMonth(4, this)">4월</button>
+                        <button class="btn" onclick="selectMonth(5, this)">5월</button>
+                        <button class="btn" onclick="selectMonth(6, this)">6월</button>
+                        <button class="btn" onclick="selectMonth(7, this)">7월</button>
+                        <button class="btn" onclick="selectMonth(8, this)">8월</button>
+                        <button class="btn" onclick="selectMonth(9, this)">9월</button>
+                        <button class="btn" onclick="selectMonth(10, this)">10월</button>
+                        <button class="btn" onclick="selectMonth(11, this)">11월</button>
+                        <button class="btn" onclick="selectMonth(12, this)">12월</button>
+                    </div>
+                    <div class="card chart-card">
+                        <h3 id="monthly-chart-title">4월 센서 추이</h3>
+                        <div class="chart-container">
+                            <canvas id="monthlyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </section>
+
+            <!-- 5. 설정 화면 -->
+            <section id="settings-screen" class="screen">
+                <div class="settings-full-layout">
+                    <div class="side-character wander-character">
+                        <div class="pixel-marimo-med"></div>
+                    </div>
+                    <div class="settings-main">
+                        <button id="noti-btn" class="btn full-btn" onclick="toggleNotiBtn(this)">알림 설정: ON</button>
+                        <button class="btn full-btn" onclick="openModal('sensor-modal')">센서 설정</button>
+                        <button class="btn full-btn" onclick="openModal('guide-modal')">마리모 가이드</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- 모바일 전용 하단 탭바 -->
+        <nav class="mobile-nav">
+            <ul>
+                <li class="active" onclick="showScreen('home')">
+                    <span class="nav-icon">🏠</span><span class="nav-text">홈</span>
+                </li>
+                <li onclick="showScreen('sensor')">
+                    <span class="nav-icon">🌡️</span><span class="nav-text">센서</span>
+                </li>
+                <li onclick="showScreen('chat')">
+                    <span class="nav-icon">💬</span><span class="nav-text">채팅</span>
+                </li>
+                <li onclick="showScreen('report')">
+                    <span class="nav-icon">📊</span><span class="nav-text">보고서</span>
+                </li>
+                <li onclick="showScreen('settings')">
+                    <span class="nav-icon">⚙️</span><span class="nav-text">설정</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- 모달: 센서 설정 -->
+        <div id="sensor-modal" class="modal-overlay">
+            <div class="card modal-content double-size">
+                <h2>센서 범위 설정</h2>
+                <div class="slider-group">
+                    <label>온도 범위 (0~100)</label>
+                    <div id="slider-temp" class="pixel-slider"></div>
+                </div>
+                <div class="slider-group">
+                    <label>습도 범위 (0~100)</label>
+                    <div id="slider-hum" class="pixel-slider"></div>
+                </div>
+                <div class="slider-group">
+                    <label>수위 범위 (0~100)</label>
+                    <div id="slider-water" class="pixel-slider"></div>
+                </div>
+                <div class="slider-group">
+                    <label>조도 범위 (0~10,000)</label>
+                    <div id="slider-light" class="pixel-slider"></div>
+                </div>
+                <button class="btn close-btn" onclick="closeModal('sensor-modal')">X</button>
+            </div>
+        </div>
+
+        <!-- 모달: 가이드 -->
+        <div id="guide-modal" class="modal-overlay">
+            <div class="card modal-content double-size guide-modal-box">
+                <h2>키우기 4가지 규칙</h2>
+                <div class="guide-grid">
+                    <div class="guide-card">💧<br>깨끗한 물</div>
+                    <div class="guide-card">☀️<br>직사광선 X</div>
+                    <div class="guide-card">🔄<br>가끔 굴려주기</div>
+                    <div class="guide-card">❤️<br>사랑 듬뿍!</div>
+                </div>
+                <button class="btn close-btn" onclick="closeModal('guide-modal')">X</button>
+            </div>
+        </div>
+        <!-- 모달: 공지사항 (성장촉진제 클릭 시) -->
+        <div id="notice-modal" class="modal-overlay">
+            <div class="card modal-content notice-modal-box">
+                <h2>📢 공지사항</h2>
+                <div class="notice-modal-body">
+                    <p>✨ 마리모 물갈이 보상 이벤트 진행 중!</p>
+                    <p>✨ 새로운 꾸미기 아이템이 추가됐어요.</p>
+                    <p>✨ 주간 리포트가 업데이트 되었어요!</p>
+                    <p>✨ 성장 촉진제를 사용하여 마리모를 더 크게 키워보세요!</p>
+                </div>
+                <button class="btn close-btn" onclick="closeModal('notice-modal')">X</button>
+            </div>
+        </div>
+        <!-- 모달: 오늘의 퀘스트 (마법 가루 클릭 시) -->
+        <div id="quest-modal" class="modal-overlay">
+            <div class="card modal-content notice-modal-box">
+                <h2>✨ 오늘의 퀘스트</h2>
+                <div class="notice-modal-body">
+                    <ul class="quest-list" style="list-style: none;">
+                        <li style="margin-bottom: 20px; font-size: 1.8rem;"><span>💧 신선한 물 주기</span> <button class="btn quest-btn" onclick="completeQuest(this)">실행</button></li>
+                        <li style="margin-bottom: 20px; font-size: 1.8rem;"><span>🧼 깨끗한 물 갈기</span> <button class="btn quest-btn" onclick="completeQuest(this)">실행</button></li>
+                        <li style="margin-bottom: 20px; font-size: 1.8rem;"><span>☀️ 따뜻한 햇빛 확인</span> <button class="btn quest-btn" onclick="completeQuest(this)">실행</button></li>
+                        <li style="margin-bottom: 20px; font-size: 1.8rem;"><span>❤️ 듬뿍 사랑 주기</span> <button class="btn quest-btn" onclick="completeQuest(this)">실행</button></li>
+                    </ul>
+                </div>
+                <button class="btn close-btn" onclick="closeModal('quest-modal')">X</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
