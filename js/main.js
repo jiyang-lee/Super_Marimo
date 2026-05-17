@@ -1,4 +1,4 @@
-/* 
+﻿/* 
   MARIMO QUEST - 자바스크립트
   화면 전환, 퀘스트 완료, 모달, 리포트 탭 제어
 */
@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. 모달 슬라이더 초기화
     initSliders();
+
+    // 5. 알림 버튼 초기 상태 맞춤
+    initNotiBtn();
 });
 
 // 상단 헤더 시간 업데이트
@@ -30,16 +33,26 @@ function updateTime() {
 
 // 화면 전환 함수
 function showScreen(screenId) {
+    // 보고서 탭은 센서 화면 아래에 붙어 있으므로 센서 화면을 열고 스크롤만 이동한다.
+    const resolvedScreenId = screenId === 'report' ? 'sensor' : screenId;
+
     // 모든 섹션 숨기기
     const screens = document.querySelectorAll('.screen');
     screens.forEach(s => s.classList.remove('active'));
 
     // 대상 섹션 보이기
-    const target = document.getElementById(`${screenId}-screen`);
+    const target = document.getElementById(`${resolvedScreenId}-screen`);
     if (target) target.classList.add('active');
 
-    // 네비게이션 활성화 상태 동기화 (PC & Mobile)
+    // 내비게이션 활성화 상태 동기화 (PC & Mobile)
     updateNavUI(screenId);
+
+    if (screenId === 'report') {
+        requestAnimationFrame(() => {
+            const anchor = document.getElementById('report-anchor');
+            if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
 }
 
 function updateNavUI(screenId) {
@@ -235,14 +248,27 @@ function closeModal(id) {
 // 설정: 알림 토글 버튼
 function toggleNotiBtn(btn) {
     if (btn.innerText.includes('ON')) {
-        btn.innerText = '알림 설정: OFF';
-        btn.style.backgroundColor = '#e74c3c'; // 빨간색 (OFF)
-        btn.style.color = '#fff';
+        setNotiBtnState(btn, false);
     } else {
-        btn.innerText = '알림 설정: ON';
-        btn.style.backgroundColor = 'var(--accent-yellow)';
-        btn.style.color = '#000';
+        setNotiBtnState(btn, true);
     }
+}
+
+function setNotiBtnState(btn, isOn) {
+    if (!btn) return;
+    if (isOn) {
+        btn.innerText = 'ON';
+        btn.style.backgroundColor = 'var(--accent-green)';
+    } else {
+        btn.innerText = 'OFF';
+        btn.style.backgroundColor = '#e74c3c';
+    }
+}
+
+function initNotiBtn() {
+    const btn = document.getElementById('noti-btn');
+    if (!btn) return;
+    setNotiBtnState(btn, btn.innerText.includes('ON'));
 }
 
 // 채팅 전송 (더미)
@@ -258,7 +284,7 @@ function sendMessage() {
         // 사용자 메시지 추가
         const uMsg = document.createElement('div');
         uMsg.className = 'msg user-msg';
-        uMsg.innerHTML = `${text} <span class="chat-time">${timeStr}</span>`;
+        uMsg.innerHTML = `<span class="msg-text">${text}</span><span class="chat-time">${timeStr}</span>`;
         display.appendChild(uMsg);
 
         input.value = '';
@@ -268,7 +294,7 @@ function sendMessage() {
         setTimeout(() => {
             const mMsg = document.createElement('div');
             mMsg.className = 'msg marimo-msg';
-            mMsg.innerHTML = `웅! 알겠어! ٩(◕ᗜ◕)و <span class="chat-time">${timeStr}</span>`;
+            mMsg.innerHTML = `<span class="chat-avatar" aria-hidden="true"></span><div class="chat-bubble"><span class="msg-text">웅! 알겠어! ٩(◕ᗜ◕)و</span><span class="chat-time">${timeStr}</span></div>`;
             display.appendChild(mMsg);
             display.scrollTop = display.scrollHeight;
         }, 1000);
@@ -327,3 +353,8 @@ function initSliders() {
         });
     }
 }
+
+
+
+
+

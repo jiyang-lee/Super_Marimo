@@ -1,4 +1,4 @@
-/* 
+﻿/* 
   MARIMO QUEST - 스타일 시트
   768px 기준 반응형 및 픽셀 아트 테마
 */
@@ -23,11 +23,8 @@
 }
 
 body {
-    background-color: var(--bg-sky);
-    background-image:
-        radial-gradient(circle at 20% 20%, #fff 0%, transparent 10%),
-        radial-gradient(circle at 80% 10%, #fff 0%, transparent 15%);
-    color: #333;
+    background: linear-gradient(to bottom, #93cfee 0%, #7ec1ea 60%, #79be68 60%, #5a9d42 100%);
+    color: #2a2011;
     overflow-x: hidden;
     height: 100vh;
 }
@@ -148,7 +145,7 @@ body {
 .full-btn {
     width: 100%;
     margin-bottom: 10px;
-    text-align: left;
+    text-align: center;
 }
 
 /* --- 마리모 캐릭터 (CSS) - 전 페이지 통일된 디자인 --- */
@@ -495,6 +492,109 @@ body {
     margin-left: 5px;
 }
 
+.chat-main {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.chat-full-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding-top: 113px;
+}
+
+.chat-top-row {
+    min-height: auto;
+}
+
+.msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    max-width: 82%;
+    border: 2px solid #000;
+    font-size: 1.1rem;
+}
+
+.msg-text {
+    display: inline-block;
+    flex: 1;
+    line-height: 1.35;
+}
+
+.marimo-msg {
+    background: #fff;
+    align-self: flex-start;
+}
+
+.user-msg {
+    background: #ffeaa7;
+    align-self: flex-end;
+    justify-content: flex-end;
+}
+
+.chat-avatar {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    border-radius: 50%;
+    border: 2px solid #0b5f20;
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0 18%, rgba(255,255,255,0) 19%),
+        radial-gradient(circle at 50% 50%, #41b44a 0 44%, #1e7f2f 45% 72%, #0f5a1d 73% 100%);
+    box-shadow: inset -2px -2px 0 rgba(0,0,0,0.08);
+}
+
+.chat-avatar::before,
+.chat-avatar::after {
+    content: '';
+    position: absolute;
+}
+
+.chat-avatar {
+    position: relative;
+}
+
+.chat-avatar::before {
+    left: 4px;
+    top: 6px;
+    width: 3px;
+    height: 3px;
+    background: #111;
+    box-shadow: 6px 0 0 #111;
+}
+
+.chat-avatar::after {
+    left: 6px;
+    bottom: 3px;
+    width: 5px;
+    height: 3px;
+    border-radius: 0 0 6px 6px;
+    background: #111;
+}
+
+.user-msg .chat-avatar {
+    display: none;
+}
+
+.user-msg .msg-text {
+    text-align: right;
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 0;
+}
+
 .chat-input-area {
     display: flex;
     gap: 10px;
@@ -568,6 +668,57 @@ body {
     flex: 1; /* 세 버튼이 완벽히 동일한 너비를 가지도록 설정 */
     height: 120px; /* 기존 60px에서 2배 확장 */
     font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.chat-header-btns {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    width: 100%;
+}
+
+.chat-header-btns .btn {
+    min-width: 92px;
+}
+
+#noti-btn {
+    font-weight: 700;
+    font-size: 3rem;
+    color: #000;
+    letter-spacing: 0.06em;
+}
+
+#noti-btn:focus,
+#noti-btn:hover {
+    color: #000;
+}
+
+.quest-list {
+    padding: 0;
+    margin: 0;
+}
+
+.quest-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+}
+
+.quest-list li span {
+    flex: 1;
+}
+
+.quest-btn {
+    min-width: 92px;
+    flex: 0 0 auto;
+    text-align: center;
 }
 
 /* 보고서와 설정 화면에서 유영하는 캐릭터 스타일 */
@@ -897,3 +1048,538 @@ body {
         align-items: flex-end;
     }
 }
+/* 전체 크기 조절 */
+.content-container {
+    padding: 16px;
+}
+
+.logo {
+    font-size: 1.6rem;
+}
+
+.pc-nav li {
+    font-size: 1.15rem;
+}
+
+.header-info {
+    gap: 12px;
+    font-size: 1.05rem;
+}
+
+.pixel-marimo-large {
+    width: 400px;
+    height: 400px;
+}
+
+.pixel-marimo-med {
+    width: 190px;
+    height: 190px;
+}
+
+.big-btn {
+    width: 104px;
+    height: 104px;
+    font-size: 3.5rem;
+}
+
+.sensor-box-unified {
+    width: 460px;
+}
+
+.sensor-item span {
+    font-size: 1.2rem;
+}
+
+.sensor-item strong {
+    font-size: 1.4rem;
+}
+
+.chat-full-layout,
+.sensor-full-layout {
+    max-width: 860px;
+    padding-top: 88px;
+    gap: 3cm;
+}
+
+.chat-box {
+    height: 350px;
+}
+
+.chat-input-area {
+    margin-top: 560px;
+}
+
+.settings-main .btn {
+    height: 100px;
+    font-size: 1.35rem;
+}
+
+.report-full-layout,
+.settings-full-layout {
+    max-width: 860px;
+}
+
+
+
+
+
+/* --- MARIMO QUEST picture-matched theme --- */
+:root {
+    --bg-sky: #8ec7eb;
+    --header-green: #0f5b1f;
+    --card-cream: #f4e4bf;
+    --accent-yellow: #f0c54f;
+    --accent-green: #4aa239;
+    --pixel-border: 3px solid #6a4a1c;
+    --shadow: 0 5px 0 rgba(60, 43, 14, 0.28);
+}
+
+html, body {
+    min-height: 100%;
+}
+
+body {
+    background: linear-gradient(to bottom, #93cfee 0%, #7ec1ea 60%, #79be68 60%, #5a9d42 100%);
+    color: #2a2011;
+}
+
+
+.content-container {
+    background: linear-gradient(to bottom, transparent 78%, rgba(69, 123, 45, 0.96) 78%);
+    padding: 14px 16px 18px;
+}
+
+.main-header {
+    background: linear-gradient(180deg, #135d22 0%, #0a4817 100%);
+    border-bottom: 3px solid #0a3813;
+    box-shadow: inset 0 -2px 0 rgba(255,255,255,0.08);
+    border-radius: 0 0 12px 12px;
+}
+
+.header-inner {
+    max-width: 1400px;
+}
+
+.logo {
+    color: #ffe64d;
+    text-shadow: 2px 2px 0 #0b2c10;
+    font-size: 1.8rem;
+}
+
+.pc-nav ul {
+    gap: 26px;
+    align-items: center;
+}
+
+.pc-nav li,
+.mobile-nav li {
+    color: #f5f0d8;
+    padding: 6px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.pc-nav li.active,
+.mobile-nav li.active {
+    color: #1b220d;
+    background: linear-gradient(180deg, #f2ca59 0%, #e0ac2f 100%);
+    border-color: #7a5a22;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+}
+
+.header-info {
+    color: #f8f5e6;
+    font-size: 1.05rem;
+    gap: 14px;
+    text-shadow: 1px 1px 0 #0a2a0f;
+}
+
+.header-info .icon,
+.header-info .level {
+    color: #ff6464;
+}
+
+.card,
+.modal-content,
+.chat-box,
+.sensor-box-unified,
+.history-card,
+.weekly-box,
+.chart-card,
+.notice-modal-box,
+.guide-modal-box,
+.settings-full-layout .btn,
+.big-btn,
+.pixel-input {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0) 16%),
+        linear-gradient(180deg, #f8edd0 0%, #f1deb7 100%);
+    border: 3px solid #6b4c1d;
+    box-shadow:
+        0 4px 0 rgba(76, 54, 18, 0.22),
+        inset 0 1px 0 rgba(255,255,255,0.28);
+    border-radius: 10px;
+}
+
+.card h3,
+.card h2,
+.report-tabs,
+.month-selector,
+.notice-modal-body,
+.guide-grid,
+.history-table,
+.sensor-item {
+    color: #2f2412;
+}
+
+.btn {
+    background: linear-gradient(180deg, #f4cf60 0%, #e5b735 100%);
+    color: #2b210f;
+    border: 3px solid #745221;
+    box-shadow: 0 4px 0 rgba(74, 53, 17, 0.26);
+    border-radius: 10px;
+}
+
+.btn.active {
+    background: linear-gradient(180deg, #5ba63c 0%, #317f24 100%);
+    color: #f9f6e6;
+}
+
+.btn:active {
+    transform: translateY(2px);
+}
+
+.big-btn {
+    background: linear-gradient(180deg, #f2ca58 0%, #dcae2c 100%);
+    color: #1c180f;
+    border-radius: 10px;
+}
+
+.pixel-input {
+    background: #fff8ea;
+}
+
+.speech-bubble {
+    background: #f9f0dc;
+    border: 3px solid #6b4c1d;
+    color: #2a2011;
+    box-shadow: 0 4px 0 rgba(76,54,18,0.22);
+}
+
+.speech-bubble::after {
+    border-color: #6b4c1d transparent transparent transparent;
+}
+
+.sensor-full-layout,
+.chat-full-layout,
+.report-full-layout,
+.settings-full-layout {
+    max-width: 920px;
+}
+
+.sensor-full-layout {
+    gap: 14px;
+    padding-top: 84px;
+}
+
+.chat-full-layout {
+    gap: 14px;
+    padding-top: 84px;
+}
+
+.report-full-layout {
+    min-height: calc(75vh + 30px);
+}
+
+.settings-full-layout {
+    padding-top: 140px;
+}
+
+.sensor-box-unified {
+    width: 480px;
+}
+
+.sensor-item {
+    border-bottom: 1px dashed rgba(94, 68, 25, 0.35);
+}
+
+.history-table th {
+    background: rgba(255, 249, 230, 0.76);
+}
+
+.history-table th,
+.history-table td {
+    border-color: #7a5a2b;
+}
+
+.chat-box {
+    height: 360px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0)),
+        #edf5fb;
+    border-radius: 12px;
+}
+
+.chat-input-area {
+    margin-top: 560px;
+}
+
+.report-tabs {
+    gap: 8px;
+}
+
+.report-view.active {
+    display: flex;
+    flex-direction: column;
+    height: 534px;
+}
+
+.weekly-box {
+    height: 392px;
+    padding: 16px 18px;
+    overflow-y: auto;
+}
+
+.month-selector {
+    gap: 6px;
+}
+
+.month-selector .btn,
+.report-tabs .btn {
+    min-width: 54px;
+}
+
+.chart-container {
+    height: 262px;
+}
+
+.noUi-target,
+.pixel-slider {
+    background: #fff2d4;
+    border: 3px solid #6b4c1d;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+}
+
+.noUi-connect {
+    background: #67a94d;
+}
+
+.noUi-handle {
+    background: #f0c54f !important;
+    border-color: #6b4c1d !important;
+}
+
+.noUi-tooltip {
+    background: #fff7e4;
+    border-color: #6b4c1d;
+    color: #2b210f;
+}
+
+.face-green { background: #4cab43; }
+.face-yellow { background: #f1ca43; }
+.face-orange { background: #d98d2d; }
+
+.mobile-nav {
+    background: linear-gradient(180deg, #155b23 0%, #0a4117 100%);
+    border-top: 3px solid #0a3813;
+}
+
+.mobile-nav li.active {
+    color: #ffe64d;
+}
+
+@media (max-width: 767px) {
+    .content-container {
+        padding: 10px;
+    }
+
+    .sensor-full-layout,
+    .chat-full-layout,
+    .report-full-layout {
+        padding-top: 70px;
+        gap: 12px;
+    }
+
+    .pixel-marimo-large {
+        width: 360px;
+        height: 360px;
+    }
+
+    .pixel-marimo-med {
+        width: 172px;
+        height: 172px;
+    }
+
+    .sensor-box-unified {
+        width: 100%;
+    }
+
+    .chat-box {
+        height: 330px;
+    }
+}
+
+/* Chat overrides: keep the conversation text as the focus */
+.chat-full-layout {
+    gap: 14px;
+    padding-top: 84px;
+}
+
+.chat-main {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.chat-top-row {
+    min-height: auto;
+}
+
+.chat-box {
+    height: 360px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0)),
+        #edf5fb;
+    border-radius: 12px;
+    box-shadow: none !important;
+}
+
+.msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    max-width: 82%;
+    border: 2px solid #000;
+    font-size: 1.15rem;
+}
+
+.marimo-msg {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    padding: 0;
+    max-width: 100%;
+}
+
+.marimo-msg .chat-bubble {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    max-width: 82%;
+    border: 2px solid #000;
+    background: #fff;
+    font-size: 1.15rem;
+}
+
+.msg-text {
+    display: inline-block;
+    flex: 1;
+    line-height: 1.35;
+}
+
+.user-msg {
+    background: #ffeaa7;
+    align-self: flex-end;
+    justify-content: flex-end;
+}
+
+.chat-avatar {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
+    border-radius: 50%;
+    border: 3px solid #0b5f20;
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0 18%, rgba(255,255,255,0) 19%),
+        radial-gradient(circle at 50% 50%, #41b44a 0 44%, #1e7f2f 45% 72%, #0f5a1d 73% 100%);
+    box-shadow: inset -2px -2px 0 rgba(0,0,0,0.08);
+    position: relative;
+}
+
+.chat-avatar::before,
+.chat-avatar::after {
+    content: '';
+    position: absolute;
+}
+
+.chat-avatar::before {
+    left: 5px;
+    top: 7px;
+    width: 4px;
+    height: 4px;
+    background: #111;
+    box-shadow: 8px 0 0 #111;
+}
+
+.chat-avatar::after {
+    left: 8px;
+    bottom: 4px;
+    width: 6px;
+    height: 4px;
+    border-radius: 0 0 7px 7px;
+    background: #111;
+}
+
+.user-msg .chat-avatar {
+    display: none;
+}
+
+.user-msg .msg-text {
+    text-align: right;
+}
+
+.marimo-msg .chat-time {
+    margin-left: 6px;
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 0;
+}
+
+@media (max-width: 767px) {
+    .chat-full-layout {
+        padding-top: 70px;
+    }
+
+    .chat-box {
+        height: 330px;
+    }
+
+    .msg {
+        max-width: 90%;
+        font-size: 1.05rem;
+    }
+
+    .chat-avatar {
+        flex-basis: 20px;
+        width: 20px;
+        height: 20px;
+    }
+
+    .chat-avatar::before {
+        left: 4px;
+        top: 6px;
+        width: 3px;
+        height: 3px;
+        box-shadow: 7px 0 0 #111;
+    }
+
+    .chat-avatar::after {
+        left: 7px;
+        bottom: 3px;
+        width: 5px;
+        height: 3px;
+    }
+}
+
+
