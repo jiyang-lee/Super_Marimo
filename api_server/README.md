@@ -1,19 +1,29 @@
 # API Server
 
-`api-server`는 대화 세션과 상호작용 로그를 PostgreSQL에 저장하는 계층입니다.
+`api-server` is the persistence and policy layer for the beta stack.
 
-## 역할
-- `llm-server`로 질문 전달
-- `session` / `session_message` 저장
-- `interaction_log` 저장
-- 센서 데이터 저장 및 조회
+## Responsibilities
+- session storage
+- session message storage
+- interaction log storage
+- device event log storage
+- sensor ingest and state judgment
+- downstream LLM orchestration
 
-## 주요 API
+## Main APIs
 - `GET /health`
 - `POST /ask`
 - `POST /voice/ask`
+- `POST /events/wakeword`
+- `POST /events/manual-test`
+- `POST /sensor/status`
+- `POST /sensor/realtime-ingest`
+- `POST /sensor/hourly-ingest`
 - `GET /sessions`
+- `GET /sessions/{session_id}`
 
-## 메모
-- DB 스키마는 서버 시작 시 자동 생성한다.
-- 실제 저장 책임은 이 서비스가 가진다.
+## Notes
+- `device_event_log` stores wakeword and manual test events for now.
+- `sensor-warning` is deferred until threshold policy is defined by the user.
+- `interaction_log` stays separate from device events.
+- The service initializes the DB schema on startup.

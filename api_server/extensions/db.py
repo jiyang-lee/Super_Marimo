@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Optional
 
 import psycopg
@@ -85,6 +85,25 @@ def init_db() -> None:
                 """
             )
             cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS device_event_log (
+                    event_id BIGSERIAL PRIMARY KEY,
+                    session_id UUID NULL REFERENCES session(session_id) ON DELETE SET NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    event_type TEXT NOT NULL CHECK (event_type IN ('wakeword', 'manual_test')),
+                    device_id TEXT NOT NULL DEFAULT '',
+                    trigger_source TEXT NOT NULL DEFAULT 'manual',
+                    distance DOUBLE PRECISION NULL,
+                    sensor_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    state_level TEXT NOT NULL CHECK (state_level IN ('normal', 'warning', 'danger', 'chat')),
+                    state_alerts JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    generated_text TEXT NOT NULL DEFAULT '',
+                    played BOOLEAN NOT NULL DEFAULT FALSE,
+                    meta JSONB NOT NULL DEFAULT '{}'::jsonb
+                )
+                """
+            )
+            cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_session_last_seen_at ON session (last_seen_at DESC)"
             )
             cur.execute(
@@ -95,6 +114,12 @@ def init_db() -> None:
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_interaction_log_session_created_at ON interaction_log (session_id, created_at DESC)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_device_event_log_type_created_at ON device_event_log (event_type, created_at DESC)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_device_event_log_session_created_at ON device_event_log (session_id, created_at DESC)"
             )
         conn.commit()
 
