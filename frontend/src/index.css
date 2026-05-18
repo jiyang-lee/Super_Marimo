@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════
+   IMMERSIVE PC GAME STAGE (16:9)
+   ═══════════════════════════════════════════ */
+
+@layer base {
+  * { cursor: url('https://cur.cursors-4u.net/games/gam-4/gam387.cur'), auto; }
+  body {
+    @apply m-0 p-0 overflow-hidden bg-[#1a1a1a];
+    font-family: 'DotGothic16', sans-serif;
+  }
+}
+
+@layer components {
+  /* ── 16:9 Game Container ── */
+  .game-container {
+    @apply relative mx-auto overflow-hidden shadow-2xl;
+    aspect-ratio: 16 / 9;
+    max-height: 100vh;
+    width: auto;
+    background: #81d4fa;
+  }
+
+  /* ── Top HUD ── */
+  .top-hud {
+    @apply h-16 flex items-center justify-between px-6 z-[100] relative;
+    background: #2e7d32;
+    border-bottom: 4px solid #1b5e20;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+  }
+
+  .hud-logo {
+    @apply font-pixel text-xl text-[#ffeb3b] tracking-tighter;
+    text-shadow: 2px 2px 0 #1b5e20;
+  }
+
+  .hud-nav {
+    @apply flex gap-2;
+  }
+
+  .nav-tab {
+    @apply px-4 py-1 font-pixel text-[0.6rem] text-white/70 transition-all rounded-sm;
+    &.active {
+      @apply bg-[#ffeb3b] text-[#1b5e20] shadow-[0_4px_0_#c6a700];
+      transform: translateY(-2px);
+    }
+  }
+
+  .hud-stats {
+    @apply flex items-center gap-6 text-white font-pixel text-[0.5rem];
+  }
+
+  /* ── Layered Backdrop ── */
+  .stage-backdrop {
+    @apply absolute inset-0 pointer-events-none;
+  }
+
+  .layer-sky {
+    @apply absolute inset-0 bg-gradient-to-b from-[#4fc3f7] to-[#81d4fa];
+  }
+
+  .layer-clouds {
+    @apply absolute inset-0 opacity-40;
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMjAwIDEwMCI+PGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iMjAiIGZpbGw9IndoaXRlIiAvPjxjaXJjbGUgY3g9IjcwIiBjeT0iNDAiIHI9IjMwIiBmaWxsPSJ3aGl0ZSIgLz48Y2lyY2xlIGN4PSIxMDAiIGN5PSI0MCIgcj0iMTUiIGZpbGw9IndoaXRlIiAvPjwvc3ZnPg==');
+    background-repeat: space;
+    animation: clouds-drift 60s linear infinite;
+  }
+
+  .layer-hills {
+    @apply absolute bottom-[20%] left-0 right-0 h-40 opacity-60;
+    background: repeating-linear-gradient(90deg, #aed581 0px, #aed581 100px, transparent 100px, transparent 200px);
+    mask-image: linear-gradient(to top, black, transparent);
+    clip-path: polygon(0 100%, 15% 40%, 30% 70%, 50% 20%, 70% 80%, 85% 30%, 100% 100%);
+  }
+
+  .layer-grass {
+    @apply absolute bottom-[18%] left-0 right-0 h-10 z-10;
+    background: #8bc34a;
+    box-shadow: 0 -4px 0 #689f38;
+  }
+
+  .layer-soil {
+    @apply absolute bottom-0 left-0 right-0 h-[18%] z-20;
+    background: #5d4037;
+    border-top: 4px solid #3e2723;
+  }
+
+  /* ── Boards ── */
+  .board-panel {
+    @apply bg-[#fdf5e6] border-4 border-[#3e2723] rounded-sm p-4 shadow-[6px_6px_0_rgba(0,0,0,0.1)];
+    position: relative;
+  }
+
+  .board-header {
+    @apply font-dot font-bold text-[#3e2723] mb-3 flex items-center gap-2 border-b-2 border-[#3e2723]/20 pb-2;
+  }
+
+  /* ── PC Scene Elements ── */
+  .quest-row {
+    @apply flex items-center justify-between py-2 border-b border-[#3e2723]/10;
+  }
+
+  .btn-game {
+    @apply px-3 py-1 font-pixel text-[0.4rem] rounded-sm border-2 border-[#3e2723] shadow-[0_3px_0_#3e2723] transition-all active:translate-y-1 active:shadow-none;
+    &.done { @apply bg-[#8bc34a] text-white; }
+    &.todo { @apply bg-[#ffeb3b] text-[#3e2723]; }
+  }
+
+  /* ── MapleStyle Bubble ── */
+  .maple-bubble {
+    @apply relative bg-white rounded-2xl p-4 text-sm border-2 border-[#4a3321];
+    filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.05));
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-top: 10px solid #4a3321;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+    }
+  }
+}
+
+/* ── Animations ── */
+@keyframes clouds-drift {
+  from { background-position: 0% 0%; }
+  to { background-position: 100% 0%; }
+}
+
+@keyframes marimo-idle {
+  0%, 100% { transform: scale(1, 1) translateY(0); }
+  50% { transform: scale(1.05, 0.95) translateY(5px); }
+}
+
+.animate-marimo-idle { animation: marimo-idle 3s ease-in-out infinite; }
+.animate-float { animation: float 4s ease-in-out infinite; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
