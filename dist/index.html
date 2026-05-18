@@ -3,279 +3,809 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MARIMO QUEST</title>
+    <title>마리모 퀘스트</title>
     <style>
       :root {
-        --sky: #bfe4ff;
-        --sky-deep: #85c5f0;
-        --grass: #6bc160;
-        --grass-deep: #53a94c;
-        --panel: #fff3d1;
-        --panel-border: #8d5a24;
-        --text: #1c1c1c;
-        --muted: #6f6552;
+        --sky: #d7f3ff;
+        --sky-deep: #8fd3ff;
+        --grass: #79c96e;
+        --grass-deep: #5fb456;
+        --panel: #fff4cf;
+        --panel-top: #fff8e8;
+        --border: #7b5a2d;
+        --text: #193122;
+        --soft: #5f6b62;
+        --accent: #7dcc68;
+        --accent-deep: #2f7e33;
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; font-family: Arial, "Noto Sans KR", sans-serif; color: var(--text); }
-      body { background: linear-gradient(180deg, var(--sky) 0%, var(--sky-deep) 50%, var(--grass) 50%, var(--grass-deep) 100%); }
-      .app { min-height: 100vh; }
-      .header {
-        display: flex;
-        justify-content: space-between;
-        gap: 20px;
-        align-items: center;
-        padding: 16px 24px;
-        background: linear-gradient(180deg, #1c4f25 0%, #153b1c 100%);
-        color: #fff;
+      html, body { margin: 0; min-height: 100%; font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; color: var(--text); }
+      body { background: linear-gradient(180deg, var(--sky) 0%, var(--sky-deep) 58%, var(--grass) 58%, var(--grass-deep) 100%); overflow-x: hidden; }
+      button, input, textarea { font: inherit; }
+      button { cursor: pointer; }
+      .shell { min-height: 100vh; }
+      .topbar {
         position: sticky;
         top: 0;
-        z-index: 10;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: linear-gradient(180deg, rgba(17, 66, 31, 0.98), rgba(15, 57, 25, 0.96));
+        color: #fff;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.18);
       }
-      .brand { font-size: 20px; font-weight: 800; letter-spacing: 0.12em; }
-      .subtitle { margin-top: 4px; font-size: 13px; color: rgba(255,255,255,0.82); }
-      .nav { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
-      .nav button, .pill, .month-btn, .mode-btn {
+      .brand strong { display:block; font-size:1.08rem; letter-spacing:.08em; }
+      .brand span { display:block; margin-top:4px; font-size:.9rem; color: rgba(255,255,255,.78); }
+      .nav { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+      .nav button {
         border: 1px solid transparent;
         border-radius: 999px;
-        padding: 10px 18px;
-        font-weight: 700;
-        cursor: pointer;
+        padding: 10px 16px;
         background: transparent;
+        color: rgba(255,255,255,.88);
+        font-weight: 700;
       }
-      .nav button.active, .mode-btn.active, .month-btn.active {
-        background: linear-gradient(180deg, #ffe78d 0%, #f8c93f 100%);
-        border-color: #d5a528;
+      .nav button.is-active {
         color: #503d00;
-        box-shadow: 0 6px 18px rgba(165, 122, 0, 0.18);
+        background: linear-gradient(180deg, #ffe78d 0%, #f8c93f 100%);
+        box-shadow: 0 6px 18px rgba(165,122,0,.18);
       }
-      .content { padding: 18px; display: grid; gap: 18px; }
-      .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-      .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-      .panel {
-        background: linear-gradient(180deg, #fff3d1 0%, #f9ebc0 100%);
-        border: 3px solid var(--panel-border);
-        border-radius: 28px;
-        padding: 18px;
-        box-shadow: 0 10px 24px rgba(68, 36, 0, 0.12);
-        min-height: 220px;
-      }
-      .panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 14px; }
-      .panel-title { font-size: 20px; font-weight: 800; }
-      .chip { border: 2px solid var(--panel-border); border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 700; background: rgba(255,255,255,0.45); }
-      .card-line, .quest, .setting, .weekly-card, .history-row {
-        background: rgba(255,255,255,0.6);
+      .clock {
+        justify-self:end;
+        min-width: 120px;
+        padding: 10px 16px;
         border-radius: 14px;
-        padding: 14px 16px;
+        background: rgba(255,255,255,.10);
+        text-align:center;
+        font-weight:800;
+        letter-spacing:.04em;
       }
-      .card-line { border: 1px dashed rgba(141, 90, 36, 0.3); margin-bottom: 10px; line-height: 1.6; }
-      .quest, .setting { display: grid; gap: 6px; margin-bottom: 12px; }
+      .main {
+        width: min(1280px, calc(100vw - 24px));
+        margin: 0 auto;
+        padding: 20px 0 88px;
+      }
+      .screen { display:none; animation: fadeUp .2s ease; }
+      .screen.is-active { display:block; }
+      @keyframes fadeUp { from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);} }
+      .grid3 {
+        min-height: calc(100vh - 150px);
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap:18px;
+        align-content:center;
+      }
+      .stack { display:grid; gap:18px; }
+      .top-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:18px; }
+      .panel {
+        min-height: 280px;
+        padding:18px;
+        border-radius:26px;
+        border:3px solid var(--border);
+        background: linear-gradient(180deg, var(--panel-top), var(--panel));
+        box-shadow: 0 18px 40px rgba(29,44,25,.18);
+      }
+      .panel-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+      .panel-head h2 { margin:0; font-size:1.1rem; }
+      .chip {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:999px;
+        border:2px solid var(--border);
+        padding:6px 10px;
+        background:#fff7d9;
+        font-weight:700;
+        font-size:.78rem;
+      }
+      .notice-line, .quest-card, .setting-card, .weekly-card, .history-row {
+        background: rgba(255,255,255,.72);
+        border-radius:14px;
+        padding:14px 16px;
+      }
+      .notice-line { border:1px dashed rgba(123,90,45,.3); margin-bottom:10px; line-height:1.6; }
       .placeholder {
-        border: 2px dashed rgba(93, 143, 98, 0.45);
-        border-radius: 20px;
-        min-height: 220px;
-        display: grid;
-        place-items: center;
-        text-align: center;
-        padding: 16px;
-        background: rgba(255,255,255,0.42);
+        min-height: 200px;
+        display:grid;
+        place-items:center;
+        gap:8px;
+        padding:20px;
+        text-align:center;
+        border-radius:22px;
+        border:2px dashed rgba(47,127,48,.24);
+        background: rgba(255,248,230,.78);
       }
-      .placeholder strong { display: block; font-size: 18px; margin-bottom: 10px; }
-      .muted { color: var(--muted); line-height: 1.65; }
-      .screen { display: none; }
-      .screen.active { display: block; }
-      .sensor-top { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; }
-      .sensor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-      .sensor-card { background: rgba(255,255,255,0.72); border-radius: 16px; padding: 14px 16px; display: grid; gap: 4px; }
-      .sensor-value { font-size: 22px; font-weight: 800; }
-      .status { margin-top: 12px; background: #e6efb5; border-radius: 14px; padding: 12px 14px; color: #405000; font-weight: 600; }
-      .history { display: grid; gap: 10px; max-height: 230px; overflow: auto; padding-right: 4px; }
-      .history-row { display: grid; grid-template-columns: 86px 1fr; gap: 12px; align-items: center; }
-      .controls { display: flex; gap: 10px; margin-bottom: 14px; }
-      .mode-btn, .month-btn { border: 1px solid #e4c892; background: #fffdf6; }
-      .months { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
-      .weekly { display: grid; gap: 10px; }
-      .weekly-card { display: grid; gap: 6px; }
-      .weekly-card strong { color: #1f7f2a; }
-      .graph-box { background: rgba(255,255,255,0.55); border-radius: 18px; padding: 14px; display: grid; gap: 10px; }
-      .graph-placeholder { height: 280px; background: linear-gradient(180deg, rgba(234,247,255,0.95) 0%, rgba(255,255,255,0.82) 100%); border-radius: 16px; display: grid; place-items: center; text-align: center; padding: 20px; }
-      .chat { display: grid; gap: 10px; margin-bottom: 14px; }
-      .bubble { max-width: 72%; line-height: 1.55; padding: 12px 14px; border-radius: 18px; }
-      .bot { justify-self: start; background: #fff0d2; border: 1px solid #e7c78a; border-radius: 18px 18px 18px 4px; }
-      .user { justify-self: end; background: #fff; border: 1px solid #e4d6bf; border-radius: 18px 18px 4px 18px; }
-      .chatbar { display: flex; gap: 10px; align-items: center; }
-      .chatbar input { flex: 1; border-radius: 14px; border: 1px solid #d8c4a1; padding: 12px 14px; font-size: 16px; }
-      .chatbar button { border-radius: 14px; border: 1px solid #8d5a24; background: linear-gradient(180deg, #ffe089 0%, #f2b73e 100%); padding: 12px 18px; font-weight: 700; cursor: pointer; }
-      @media (max-width: 1100px) { .grid3, .grid2, .sensor-top { grid-template-columns: 1fr; } .months { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-      @media (max-width: 640px) { .header { flex-direction: column; align-items: flex-start; } .months { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      .placeholder strong { font-size:1.08rem; }
+      .muted { color: var(--soft); line-height:1.55; }
+      .quest-card, .setting-card { display:grid; gap:4px; margin-bottom:12px; }
+      .sensor-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; }
+      .sensor-card { display:grid; gap:4px; padding:14px; border-radius:16px; background: rgba(255,255,255,.72); border:1px solid rgba(123,90,45,.16); }
+      .sensor-card span { color: var(--soft); font-size:.92rem; }
+      .sensor-card strong { font-size:1.12rem; }
+      .sensor-note { margin:12px 0 0; line-height:1.7; color: var(--soft); }
+      .history-list { display:grid; gap:12px; }
+      .history-row { display:grid; grid-template-columns: 88px 1fr; gap:12px; border:1px solid rgba(123,90,45,.14); }
+      .history-row strong { font-size:1rem; }
+      .period-box { display:grid; gap:14px; }
+      .mode-switch { display:inline-flex; gap:8px; padding:4px; border-radius:999px; background: rgba(255,255,255,.48); }
+      .tab-button {
+        border:none;
+        border-radius:999px;
+        padding:9px 14px;
+        background: transparent;
+        font-weight:700;
+      }
+      .tab-button.is-active { color:#fff; background: linear-gradient(180deg, #7dcc68, #2f7e33); }
+      .month-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap:8px; margin-bottom:14px; }
+      .month-button {
+        border:1px solid rgba(123,90,45,.14);
+        border-radius:14px;
+        padding:9px 10px;
+        background: rgba(255,255,255,.72);
+        font-weight:700;
+      }
+      .month-button.is-active { color:#fff; background: linear-gradient(180deg, #7dcc68, #2f7e33); }
+      .weekly-list { display:grid; gap:12px; }
+      .weekly-card { display:grid; gap:8px; border:1px solid rgba(123,90,45,.14); }
+      .weekly-card strong { color: var(--accent-deep); }
+      .chart-card { display:grid; gap:10px; padding:14px; border-radius:18px; background: rgba(255,255,255,.62); border:1px solid rgba(123,90,45,.14); }
+      .chart-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+      .chart-wrap { position:relative; }
+      .chart-axes {
+        display:grid;
+        grid-template-columns: 72px minmax(0,1fr) 72px;
+        gap:8px;
+        align-items:stretch;
+      }
+      .axis {
+        position:relative;
+        min-height: 360px;
+        font-size:12px;
+      }
+      .axis-left { color: #cc8300; }
+      .axis-right { color: #45698c; text-align:right; }
+      .axis span { position:absolute; transform: translateY(-50%); }
+      .chart-box {
+        position:relative;
+        border-radius:18px;
+        overflow:hidden;
+        background: linear-gradient(180deg, rgba(234,247,255,.95) 0%, rgba(255,255,255,.82) 100%);
+      }
+      .chart-svg { display:block; width:100%; height:360px; }
+      .chart-grid { stroke: rgba(123,90,45,.14); stroke-width:1; stroke-dasharray:4 6; }
+      .legend { display:flex; flex-wrap:wrap; gap:10px 14px; font-size:.9rem; color: var(--soft); }
+      .legend i { display:inline-block; width:12px; height:12px; border-radius:999px; margin-right:6px; vertical-align:middle; }
+      .tooltip {
+        position:absolute;
+        min-width: 210px;
+        max-width: 240px;
+        display:grid;
+        gap:4px;
+        padding:12px 14px;
+        border-radius:14px;
+        background: rgba(255,247,227,.98);
+        border:1px solid #e4cb8a;
+        box-shadow: 0 12px 24px rgba(33,45,54,.14);
+        pointer-events:none;
+      }
+      .chat-shell {
+        min-height: calc(100vh - 150px);
+        display:grid;
+        gap:14px;
+        align-content:start;
+      }
+      .chat-box {
+        border-radius:28px;
+        padding:18px;
+        background: rgba(255,255,255,.12);
+        border:1px solid rgba(255,255,255,.22);
+        backdrop-filter: blur(4px);
+      }
+      .chat-list { display:grid; gap:12px; margin-bottom:18px; }
+      .chat-row { display:grid; grid-template-columns: 42px 1fr; gap:12px; align-items:start; }
+      .chat-row.is-user { grid-template-columns: 1fr 42px; }
+      .chat-row.is-user .bubble { justify-self:end; border-radius:18px 18px 4px 18px; background: linear-gradient(180deg, #fff9cc, #ffe26d); }
+      .avatar {
+        width:42px; height:42px; border-radius:50%;
+        display:grid; place-items:center;
+        color:#fff; font-weight:800;
+        background: linear-gradient(180deg, #7bd469, #3d8d34);
+      }
+      .bubble {
+        max-width:78%;
+        padding:14px 15px;
+        border-radius:18px 18px 18px 4px;
+        background: rgba(255,255,255,.7);
+        border:1px solid rgba(123,90,45,.14);
+        line-height:1.55;
+      }
+      .composer {
+        display:grid;
+        gap:12px;
+        padding:12px;
+        border-radius:18px;
+        background: rgba(255,255,255,.62);
+        border:1px solid rgba(123,90,45,.14);
+      }
+      .composer textarea {
+        min-height:92px;
+        resize:vertical;
+        border:1px solid rgba(123,90,45,.16);
+        border-radius:14px;
+        padding:14px 16px;
+        background:#fff;
+      }
+      .composer-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+      .send-btn, .mode-btn, .settings-btn, .modal-close, .modal-toggle {
+        border:1px solid rgba(123,90,45,.16);
+        border-radius:14px;
+        padding:12px 16px;
+        background: rgba(255,255,255,.72);
+        font-weight:700;
+      }
+      .send-btn { background: linear-gradient(180deg, #ffe089 0%, #f2b73e 100%); }
+      .mode-btn.is-active { color:#fff; background: linear-gradient(180deg, #7dcc68, #2f7e33); }
+      .settings-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:18px; }
+      .settings-actions { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+      .settings-btn.is-on { color:#fff; background: linear-gradient(180deg, #7dcc68, #2f7e33); }
+      .modal-backdrop {
+        position:fixed; inset:0; z-index:50;
+        display:grid; place-items:center; padding:20px;
+        background: rgba(13,25,15,.45);
+      }
+      .modal {
+        width:min(920px,100%);
+        max-height:min(88vh,900px);
+        overflow:auto;
+        padding:20px;
+        border-radius:28px;
+        background: linear-gradient(180deg, #fff8e8, #fff4cf);
+        border:3px solid var(--border);
+        box-shadow: 0 24px 60px rgba(0,0,0,.24);
+      }
+      .modal-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+      .modal-head h3 { margin:0; font-size:1.1rem; }
+      .modal p { margin-top:0; color: var(--soft); line-height:1.7; }
+      .range-grid { display:grid; gap:14px; }
+      .range-card {
+        padding:16px;
+        border-radius:18px;
+        background: rgba(255,255,255,.72);
+        border:1px solid rgba(123,90,45,.14);
+        display:grid;
+        gap:10px;
+      }
+      .range-inputs { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+      .field { display:grid; gap:8px; color:#4a5d52; }
+      .field input {
+        border:1px solid rgba(123,90,45,.18);
+        border-radius:12px;
+        padding:12px 14px;
+        background:#fff;
+      }
+      .guide-grid { display:grid; gap:12px; }
+      .guide-card {
+        display:grid; grid-template-columns:64px 1fr; gap:12px; align-items:center;
+        padding:16px; border-radius:18px; background: rgba(255,255,255,.72); border:1px solid rgba(123,90,45,.14);
+      }
+      .guide-icon {
+        width:64px; height:64px; border-radius:18px;
+        display:grid; place-items:center; font-size:1.8rem;
+        background: linear-gradient(180deg, #d8f0d2, #bfe3ae);
+      }
+      .guide-copy { display:grid; gap:6px; }
+      .guide-copy span { color: var(--soft); line-height:1.55; }
+      @media (max-width: 1120px) {
+        .top-grid { grid-template-columns: 1fr; }
+        .settings-grid { grid-template-columns: 1fr; }
+        .month-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      }
+      @media (max-width: 820px) {
+        .topbar { grid-template-columns: 1fr; justify-items:center; }
+        .brand { justify-self:start; width:100%; }
+        .clock { justify-self:stretch; width:100%; }
+        .main { width:min(100vw - 20px, 100%); }
+        .grid3 { min-height:auto; }
+        .sensor-grid, .chat-row.is-user, .chat-row { grid-template-columns: 1fr; }
+        .chat-row.is-user .bubble { justify-self:start; }
+        .month-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .sensor-averages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 540px) {
+        .month-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .sensor-averages { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
-    <div class="app">
-      <header class="header">
-        <div>
-          <div class="brand">MARIMO QUEST</div>
-          <div class="subtitle">화면을 확인하고 다시 정리하는 기준 화면</div>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <strong>마리모 퀘스트</strong>
+          <span>앱 구조를 단순하게 확인하는 UI 화면</span>
         </div>
-        <nav class="nav" aria-label="주요 화면 이동">
-          <button class="active" data-screen="home">Home</button>
-          <button data-screen="sensor">Sensor</button>
-          <button data-screen="chat">Chat</button>
-          <button data-screen="settings">Settings</button>
-        </nav>
+        <nav class="nav" id="nav"></nav>
+        <div class="clock" id="clock">--:--:--</div>
       </header>
 
-      <main class="content">
-        <section class="screen active" id="home">
-          <div class="grid3">
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">공지사항</strong><span class="chip">초보자용</span></div>
-              <div class="card-line">지금은 화면이 실제로 보이는지 먼저 확인하는 단계예요.</div>
-              <div class="card-line">공지사항, 전체 마리모 이미지, 오늘의 퀘스트 구조를 다시 살렸어요.</div>
-              <div class="card-line">이미지는 아직 비워 두고, 나중에 넣기 쉽게 자리만 준비해 두었어요.</div>
-            </div>
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">전체 마리모 이미지</strong></div>
-              <div class="placeholder"><div><strong>이미지 자리</strong><div class="muted">전체 마리모 이미지는 나중에 이 위치에 넣으면 됩니다.</div></div></div>
-            </div>
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">오늘의 퀘스트</strong><span class="chip">DAY 01</span></div>
-              <div class="quest"><strong>물 상태 확인</strong><span class="muted">센서 값이 안정적인지 먼저 살펴봐요.</span></div>
-              <div class="quest"><strong>온도 상태 확인</strong><span class="muted">마리모가 지내기 좋은 온도인지 봐요.</span></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="screen" id="sensor">
-          <div class="grid2 sensor-top">
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">마리모 이미지</strong><span class="chip">캐릭터</span></div>
-              <div class="placeholder"><div><strong>전체 마리모 이미지</strong><div class="muted">왼쪽에는 실제 마리모 캐릭터 이미지를 넣을 예정이에요.</div></div></div>
-            </div>
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">현재 센서 상태</strong><span class="chip">실시간</span></div>
-              <div class="sensor-grid">
-                <div class="sensor-card"><span class="muted">온도</span><strong class="sensor-value">24.3°</strong></div>
-                <div class="sensor-card"><span class="muted">습도</span><strong class="sensor-value">56%</strong></div>
-                <div class="sensor-card"><span class="muted">수위</span><strong class="sensor-value">78%</strong></div>
-                <div class="sensor-card"><span class="muted">조도</span><strong class="sensor-value">661 lux</strong></div>
-              </div>
-              <div class="status">무난해요. 지금 상태도 괜찮아요.</div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><strong class="panel-title">시간별 센서 이력</strong><span class="chip">기록</span></div>
-            <div class="history">
-              <div class="history-row"><strong>09:00</strong><span class="muted">온도 24°C · 습도 47% · 수위 81% · 조도 410 lux</span></div>
-              <div class="history-row"><strong>12:00</strong><span class="muted">온도 25°C · 습도 45% · 수위 80% · 조도 620 lux</span></div>
-              <div class="history-row"><strong>15:00</strong><span class="muted">온도 24°C · 습도 48% · 수위 79% · 조도 540 lux</span></div>
-              <div class="history-row"><strong>18:00</strong><span class="muted">온도 23°C · 습도 52% · 수위 80% · 조도 360 lux</span></div>
-              <div class="history-row"><strong>21:00</strong><span class="muted">온도 22°C · 습도 55% · 수위 81% · 조도 240 lux</span></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><strong class="panel-title">위클릭 / 머슬릭 자료</strong><span class="chip">주간 / 월간</span></div>
-            <div class="controls">
-              <button class="mode-btn active" data-mode="weekly">위클릭</button>
-              <button class="mode-btn" data-mode="monthly">머슬릭</button>
-            </div>
-            <div class="months">
-              <button class="month-btn" data-month="1월">1월</button>
-              <button class="month-btn" data-month="2월">2월</button>
-              <button class="month-btn">3월</button>
-              <button class="month-btn">4월</button>
-              <button class="month-btn active" data-month="5월">5월</button>
-              <button class="month-btn">6월</button>
-              <button class="month-btn">7월</button>
-              <button class="month-btn">8월</button>
-              <button class="month-btn">9월</button>
-              <button class="month-btn">10월</button>
-              <button class="month-btn">11월</button>
-              <button class="month-btn">12월</button>
-            </div>
-            <div id="weekly-view" class="weekly">
-              <div class="weekly-card"><strong>05.01.~05.07.</strong><span class="muted">온도 : 24.9도, 습도 : 52%, 수위 : 82%, 조도 : 980lux</span></div>
-              <div class="weekly-card"><strong>05.08.~05.14.</strong><span class="muted">온도 : 25.1도, 습도 : 53%, 수위 : 83%, 조도 : 1,020lux</span></div>
-              <div class="weekly-card"><strong>05.15.~05.21.</strong><span class="muted">온도 : 25.3도, 습도 : 54%, 수위 : 83%, 조도 : 1,050lux</span></div>
-              <div class="weekly-card"><strong>05.22.~05.31.</strong><span class="muted">온도 : 25.5도, 습도 : 55%, 수위 : 84%, 조도 : 1,120lux</span></div>
-            </div>
-            <div id="monthly-view" style="display:none;" class="graph-box">
-              <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>5월 그래프</strong><span class="muted">온도 / 습도 / 수위 / 조도</span></div>
-              <div class="graph-placeholder">
-                <div><strong>그래프 자리</strong><div class="muted">다음에 실제 꺾은선 그래프를 넣을 위치예요.</div></div>
-              </div>
-              <div class="graph-box" style="padding:12px;">
-                <strong>마우스 안내</strong>
-                <span class="muted">나중에 마우스를 올리면 날짜별 온도, 습도, 수위, 조도 값을 보여줄 수 있어요.</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="screen" id="chat">
-          <div class="panel">
-            <div class="panel-head"><strong class="panel-title">마리모와 대화하기</strong><span class="chip">채팅</span></div>
-            <div class="chat">
-              <div class="bubble bot">안녕! 오늘 센서 상태를 함께 볼까?</div>
-              <div class="bubble user">좋아, 위클릭이랑 머슬릭도 확인해볼게.</div>
-              <div class="bubble bot">좋아. 화면이 잘 보이면 이제 세부 조정만 남았어.</div>
-            </div>
-            <div class="chatbar">
-              <input type="text" value="메시지를 입력해 보세요" readonly />
-              <button type="button">전송</button>
-            </div>
-          </div>
-        </section>
-
-        <section class="screen" id="settings">
-          <div class="grid2">
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">초보자용 설정</strong><span class="chip">안내</span></div>
-              <div class="setting"><strong>이미지 보관</strong><span class="muted">새 이미지는 incoming 폴더에 먼저 넣고 나중에 분리하면 돼요.</span></div>
-              <div class="setting"><strong>화면 기준</strong><span class="muted">Home, Sensor, Chat, Settings 순으로 하나씩 다듬으면 돼요.</span></div>
-            </div>
-            <div class="panel">
-              <div class="panel-head"><strong class="panel-title">작업 메모</strong><span class="chip">체크</span></div>
-              <div class="setting"><strong>브랜치</strong><span class="muted">frontend/jeong에서 작업을 이어가면 돼요.</span></div>
-              <div class="setting"><strong>커밋</strong><span class="muted">큰 수정 후에는 체크포인트를 남기면 안전해요.</span></div>
-            </div>
-          </div>
-        </section>
-      </main>
+      <main class="main" id="app"></main>
     </div>
 
     <script>
-      const screenButtons = document.querySelectorAll("[data-screen]");
-      const screens = document.querySelectorAll(".screen");
-      const modeButtons = document.querySelectorAll("[data-mode]");
-      const monthlyView = document.getElementById("monthly-view");
-      const weeklyView = document.getElementById("weekly-view");
-      const monthButtons = document.querySelectorAll("[data-month]");
+      const NAV_ITEMS = [
+        { key: "home", label: "홈" },
+        { key: "sensor", label: "센서" },
+        { key: "chat", label: "채팅" },
+        { key: "settings", label: "설정" },
+      ];
 
-      screenButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          screenButtons.forEach((item) => item.classList.remove("active"));
-          button.classList.add("active");
-          screens.forEach((screen) => screen.classList.remove("active"));
-          document.getElementById(button.dataset.screen).classList.add("active");
-        });
-      });
+      const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+      const MONTH_DAYS = [31,28,31,30,31,30,31,31,30,31,30,31];
+      const SENSOR_FIELDS = [
+        { key:"temperature", label:"온도", min:0, max:100 },
+        { key:"humidity", label:"습도", min:0, max:100 },
+        { key:"water", label:"수위", min:0, max:100 },
+        { key:"light", label:"조도", min:0, max:10000 },
+      ];
+      const GUIDE_ITEMS = [
+        { icon:"💧", title:"깨끗한 물", text:"물은 깨끗하게 유지하는 화면으로 보여줍니다." },
+        { icon:"☀️", title:"직사광선 X", text:"강한 직사광선은 피해야 한다는 안내를 넣습니다." },
+        { icon:"🌀", title:"가끔 굴러주기", text:"마리모가 가끔 굴러가야 한다는 메시지를 보여줍니다." },
+        { icon:"💚", title:"사랑 주기", text:"마리모에게 꾸준히 관심을 주자는 문구를 넣습니다." },
+      ];
+      const HOME_NOTICES = [
+        "화면 구조는 최대한 단순하게 유지합니다.",
+        "상단에는 가운데 네비게이션과 오른쪽 실시간 시간이 고정됩니다.",
+        "홈 화면은 화면 높이 기준으로 가운데 정렬됩니다.",
+      ];
+      const HOME_QUESTS = [
+        { title:"물 상태 확인", text:"물 상태를 먼저 살펴보는 안내 카드입니다." },
+        { title:"온도 상태 확인", text:"현재 온도가 적당한지 확인하는 안내 카드입니다." },
+      ];
+      const CHAT_MESSAGES = [
+        { id:1, from:"marimo", text:"안녕! 오늘은 센서 화면부터 천천히 볼까?" },
+        { id:2, from:"user", text:"좋아. 화면만 먼저 깔끔하게 볼 수 있게 만들자." },
+        { id:3, from:"marimo", text:"그래. 텍스트나 음성을 바꿔도 입력은 그대로 남게 할게." },
+      ];
+      const DEFAULT_SENSOR_RANGES = {
+        temperature: { min:0, max:100 },
+        humidity: { min:0, max:100 },
+        water: { min:0, max:100 },
+        light: { min:0, max:10000 },
+      };
 
-      modeButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          modeButtons.forEach((item) => item.classList.remove("active"));
-          button.classList.add("active");
-          const monthly = button.dataset.mode === "monthly";
-          weeklyView.style.display = monthly ? "none" : "grid";
-          monthlyView.style.display = monthly ? "grid" : "none";
-        });
-      });
+      const state = {
+        activeScreen: "home",
+        sensorView: "weekly",
+        selectedMonth: "5월",
+        hoverPoint: null,
+        notificationOn: true,
+        openModal: null,
+        chatMode: "텍스트",
+        chatDraft: "",
+        sensorRanges: structuredClone(DEFAULT_SENSOR_RANGES),
+        clockText: formatClock(new Date()),
+      };
 
-      monthButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          monthButtons.forEach((item) => item.classList.remove("active"));
-          button.classList.add("active");
+      const app = document.getElementById("app");
+      const nav = document.getElementById("nav");
+      const clock = document.getElementById("clock");
+
+      function formatClock(date) {
+        return date.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+      }
+
+      function pad(value) {
+        return String(value).padStart(2, "0");
+      }
+
+      function roundOne(value) {
+        return Math.round(value * 10) / 10;
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function setState(patch) {
+        Object.assign(state, patch);
+        render();
+      }
+
+      function buildMonthBundle(monthIndex) {
+        const safeIndex = Math.max(0, Math.min(MONTHS.length - 1, monthIndex));
+        const daysInMonth = MONTH_DAYS[safeIndex];
+        const monthNumber = safeIndex + 1;
+
+        const weeklyRows = Array.from({ length: 4 }, (_, weekIndex) => {
+          const startDay = weekIndex * 7 + 1;
+          const endDay = weekIndex === 3 ? daysInMonth : (weekIndex + 1) * 7;
+          const temp = roundOne(23.5 + safeIndex * 0.2 + weekIndex * 0.4);
+          const humidity = Math.round(48 + safeIndex * 0.4 + weekIndex * 1.5);
+          const water = Math.round(80 + (safeIndex % 4) + weekIndex);
+          const light = Math.round(700 + safeIndex * 180 + weekIndex * 240);
+          return {
+            range: `${pad(monthNumber)}.${pad(startDay)}.~${pad(monthNumber)}.${pad(endDay)}.`,
+            text: `온도 : ${temp}도, 습도 : ${humidity}%, 수위 : ${water}%, 조도 : ${light.toLocaleString()}lux`,
+          };
         });
-      });
+
+        const pointDays = Array.from(new Set([1, 5, 10, 15, 20, 25, 30, daysInMonth])).filter((value) => value <= daysInMonth);
+        const chartSeries = pointDays.map((day, index) => ({
+          day,
+          temp: clamp(roundOne(24 + safeIndex * 0.15 + Math.sin((index + safeIndex) / 2) * 1.2 + index * 0.08), 20, 30),
+          humidity: clamp(Math.round(50 + safeIndex * 0.3 + Math.cos((index + safeIndex) / 2.2) * 4 + index * 0.4), 0, 100),
+          water: clamp(Math.round(82 + (safeIndex % 5) + Math.sin((index + safeIndex) / 3) * 2 - index * 0.2), 0, 100),
+          light: clamp(Math.round(1800 + safeIndex * 360 + Math.sin((index + safeIndex) / 1.5) * 1200 + index * 480), 0, 10000),
+        }));
+
+        const history = [
+          { time:"09:00", text:`온도 ${roundOne(23.8 + safeIndex * 0.1)}°C · 습도 ${47 + (safeIndex % 4)}% · 수위 ${81 + (safeIndex % 3)}% · 조도 ${Math.round(400 + safeIndex * 70)} lux` },
+          { time:"12:00", text:`온도 ${roundOne(24.2 + safeIndex * 0.1)}°C · 습도 ${45 + (safeIndex % 4)}% · 수위 ${80 + (safeIndex % 3)}% · 조도 ${Math.round(620 + safeIndex * 70)} lux` },
+          { time:"15:00", text:`온도 ${roundOne(24.0 + safeIndex * 0.1)}°C · 습도 ${48 + (safeIndex % 4)}% · 수위 ${79 + (safeIndex % 3)}% · 조도 ${Math.round(540 + safeIndex * 70)} lux` },
+          { time:"18:00", text:`온도 ${roundOne(23.2 + safeIndex * 0.1)}°C · 습도 ${52 + (safeIndex % 4)}% · 수위 ${80 + (safeIndex % 3)}% · 조도 ${Math.round(360 + safeIndex * 70)} lux` },
+          { time:"21:00", text:`온도 ${roundOne(22.8 + safeIndex * 0.1)}°C · 습도 ${55 + (safeIndex % 4)}% · 수위 ${81 + (safeIndex % 3)}% · 조도 ${Math.round(240 + safeIndex * 70)} lux` },
+        ];
+
+        return { weeklyRows, chartSeries, history };
+      }
+
+      function buildChart(points) {
+        const width = 1000;
+        const height = 360;
+        const padding = { top: 28, right: 88, bottom: 44, left: 88 };
+        const plotWidth = width - padding.left - padding.right;
+        const plotHeight = height - padding.top - padding.bottom;
+        const days = points.length > 1 ? points[points.length - 1].day : 31;
+        const xScale = (day) => padding.left + ((day - 1) / Math.max(days - 1, 1)) * plotWidth;
+        const yRight = (value) => padding.top + plotHeight - (value / 100) * plotHeight;
+        const yLeft = (value) => padding.top + plotHeight - (value / 10000) * plotHeight;
+        const linePoints = (key, scale) => points.map((point) => `${xScale(point.day)},${scale(point[key])}`).join(" ");
+
+        return {
+          width,
+          height,
+          padding,
+          points,
+          gridLines: [0, 25, 50, 75, 100].map((value) => ({ y: yRight(value) })),
+          leftTicks: [0, 2500, 5000, 7500, 10000].map((value) => ({ value, label: value.toLocaleString(), y: yLeft(value) })),
+          rightTicks: [0, 25, 50, 75, 100].map((value) => ({ value, label: String(value), y: yRight(value) })),
+          axisLabels: points.map((point) => ({ x: xScale(point.day), label: String(point.day) })),
+          tempPoints: linePoints("temp", yRight),
+          humidityPoints: linePoints("humidity", yRight),
+          waterPoints: linePoints("water", yRight),
+          lightPoints: linePoints("light", yLeft),
+          xScale,
+        };
+      }
+
+      function findNearestPoint(points, x, y, chart) {
+        const nearest = points.reduce((best, point, index) => {
+          const pointX = chart.xScale(point.day);
+          const distance = Math.abs(pointX - x);
+          return distance < best.distance ? { index, distance, pointX, point } : best;
+        }, { index: 0, distance: Number.POSITIVE_INFINITY, pointX: 0, point: points[0] });
+
+        return { ...nearest, x: nearest.pointX, displayX: x, displayY: y };
+      }
+
+      function chartTooltipStyle(hoverPoint, chart) {
+        const left = hoverPoint ? clamp(hoverPoint.displayX + 16, 12, Math.max(12, hoverPoint.containerWidth - 260)) : chart.padding.left + 12;
+        const top = hoverPoint ? clamp(hoverPoint.displayY - 130, 12, Math.max(12, hoverPoint.containerHeight - 150)) : chart.padding.top + 8;
+        return `left:${left}px;top:${top}px;`;
+      }
+
+      function updateSensorRange(sensorKey, edge, value) {
+        const numeric = value === "" ? "" : Number(value);
+        state.sensorRanges[sensorKey][edge] = Number.isFinite(numeric) ? numeric : state.sensorRanges[sensorKey][edge];
+        render();
+      }
+
+      function navMarkup() {
+        return NAV_ITEMS.map((item) => `<button type="button" data-screen="${item.key}" class="${state.activeScreen === item.key ? 'is-active' : ''}">${item.label}</button>`).join("");
+      }
+
+      function homeMarkup() {
+        return `
+          <section class="screen ${state.activeScreen === 'home' ? 'is-active' : ''}">
+            <div class="grid3">
+              <section class="panel">
+                <div class="panel-head"><h2>공지사항</h2><span class="chip">초보자용</span></div>
+                ${HOME_NOTICES.map((notice) => `<div class="notice-line">${notice}</div>`).join("")}
+              </section>
+              <section class="panel">
+                <div class="panel-head"><h2>전체 마리모 이미지</h2></div>
+                <div class="placeholder"><div><strong>이미지 자리</strong><div class="muted">나중에 전체 마리모 이미지를 이 위치에 넣으면 됩니다.</div></div></div>
+              </section>
+              <section class="panel">
+                <div class="panel-head"><h2>오늘의 퀘스트</h2><span class="chip">DAY 01</span></div>
+                ${HOME_QUESTS.map((quest) => `<div class="quest-card"><strong>${quest.title}</strong><span class="muted">${quest.text}</span></div>`).join("")}
+              </section>
+            </div>
+          </section>`;
+      }
+
+      function sensorMarkup(bundle, chart) {
+        const weeklyList = bundle.weeklyRows.map((week) => `<div class="weekly-card"><strong>${week.range}</strong><div class="muted">${week.text}</div></div>`).join("");
+        const monthlyButtons = MONTHS.map((month) => `<button type="button" data-month="${month}" class="month-button ${state.selectedMonth === month ? 'is-active' : ''}">${month}</button>`).join("");
+        const leftLabels = chart.leftTicks.map((tick) => `<span style="top:${tick.y}px;left:0;">${tick.label}</span>`).join("");
+        const rightLabels = chart.rightTicks.map((tick) => `<span style="top:${tick.y}px;right:0;">${tick.label}</span>`).join("");
+        const svgLines = chart.gridLines.map((line) => `<line class="chart-grid" x1="${chart.padding.left}" x2="${chart.width - chart.padding.right}" y1="${line.y}" y2="${line.y}" />`).join("");
+        const hover = state.hoverPoint;
+        const tooltip = hover ? `
+          <div class="tooltip" style="${chartTooltipStyle(hover, chart)}">
+            <strong>${state.selectedMonth} / ${hover.point.day}일</strong>
+            <span>온도 ${hover.point.temp}°C</span>
+            <span>습도 ${hover.point.humidity}%</span>
+            <span>수위 ${hover.point.water}%</span>
+            <span>조도 ${hover.point.light.toLocaleString()} lux</span>
+          </div>` : `
+          <div class="tooltip" style="${chartTooltipStyle(null, chart)}"><span class="muted">그래프 선 위에 마우스를 올리면 해당 일자의 센서값이 표시됩니다.</span></div>`;
+
+        return `
+          <section class="screen ${state.activeScreen === 'sensor' ? 'is-active' : ''}">
+            <div class="stack">
+              <div class="top-grid">
+                <section class="panel">
+                  <div class="panel-head"><h2>마리모 이미지</h2><span class="chip">캐릭터</span></div>
+                  <div class="placeholder"><div><strong>캐릭터 자리</strong><div class="muted">나중에 전체 마리모 캐릭터 이미지를 이 위치에 넣습니다.</div></div></div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><h2>현재 센서 상태</h2><span class="chip">실시간</span></div>
+                  <div class="sensor-grid">
+                    <div class="sensor-card"><span>온도</span><strong>24.3°</strong></div>
+                    <div class="sensor-card"><span>습도</span><strong>56%</strong></div>
+                    <div class="sensor-card"><span>수위</span><strong>78%</strong></div>
+                    <div class="sensor-card"><span>조도</span><strong>661 lux</strong></div>
+                  </div>
+                  <p class="sensor-note">현재 값은 예시입니다. 실제 센서가 들어오면 이 숫자만 바뀌도록 연결하면 됩니다.</p>
+                </section>
+              </div>
+
+              <section class="panel">
+                <div class="panel-head"><h2>시간별 센서 이력</h2><span class="chip">기록</span></div>
+                <div class="history-list">
+                  ${bundle.history.map((row) => `<div class="history-row"><strong>${row.time}</strong><span>${row.text}</span></div>`).join("")}
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head"><h2>위클릭 / 머슬릭 자료</h2><span class="chip">주간 / 월간</span></div>
+                <div class="mode-switch">
+                  <button type="button" class="tab-button ${state.sensorView === 'weekly' ? 'is-active' : ''}" data-view="weekly">위클릭</button>
+                  <button type="button" class="tab-button ${state.sensorView === 'monthly' ? 'is-active' : ''}" data-view="monthly">머슬릭</button>
+                </div>
+                <div class="month-grid">${monthlyButtons}</div>
+                ${state.sensorView === 'weekly' ? `
+                  <div class="weekly-list">
+                    ${weeklyList}
+                  </div>` : `
+                  <div class="period-box">
+                    <div class="chart-card">
+                      <div class="chart-head"><strong>${state.selectedMonth} 그래프</strong><span class="muted">온도 / 습도 / 수위 / 조도</span></div>
+                      <div class="chart-wrap">
+                        <div class="chart-axes">
+                          <div class="axis axis-left">${leftLabels}</div>
+                          <div class="chart-box">
+                            <svg class="chart-svg" viewBox="0 0 ${chart.width} ${chart.height}" id="chart-svg">
+                              ${svgLines}
+                              <polyline fill="none" stroke="#ff8f4d" stroke-width="3" points="${chart.tempPoints}" />
+                              <polyline fill="none" stroke="#4f9cff" stroke-width="3" points="${chart.humidityPoints}" />
+                              <polyline fill="none" stroke="#55b95b" stroke-width="3" points="${chart.waterPoints}" />
+                              <polyline fill="none" stroke="#d4a012" stroke-width="3" points="${chart.lightPoints}" />
+                              ${hover ? `<line stroke="#355066" stroke-width="1" stroke-dasharray="3 4" x1="${hover.x}" x2="${hover.x}" y1="${chart.padding.top}" y2="${chart.height - chart.padding.bottom}" />` : ""}
+                              ${chart.axisLabels.map((label) => `<text class="sensor-chart-axis-label" x="${label.x}" y="${chart.height - 8}" text-anchor="middle">${label.label}</text>`).join("")}
+                            </svg>
+                            ${tooltip}
+                          </div>
+                          <div class="axis axis-right">${rightLabels}</div>
+                        </div>
+                        <div class="legend">
+                          <span><i style="background:#ff8f4d"></i>온도</span>
+                          <span><i style="background:#4f9cff"></i>습도</span>
+                          <span><i style="background:#55b95b"></i>수위</span>
+                          <span><i style="background:#d4a012"></i>조도</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>`}
+              </section>
+            </div>
+          </section>`;
+      }
+
+      function chatMarkup() {
+        return `
+          <section class="screen ${state.activeScreen === 'chat' ? 'is-active' : ''}">
+            <div class="chat-shell">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                <strong style="font-size:1.1rem;">마리모와 대화하기</strong>
+                <span class="chip">채팅</span>
+              </div>
+              <div class="chat-box">
+                <div class="chat-list">
+                  ${CHAT_MESSAGES.map((message) => `
+                    <div class="chat-row ${message.from === 'user' ? 'is-user' : ''}">
+                      ${message.from === 'marimo' ? '<div class="avatar">M</div>' : '<div></div>'}
+                      <div class="bubble">${message.text}</div>
+                      ${message.from === 'user' ? '<div class="avatar" style="visibility:hidden">M</div>' : ''}
+                    </div>
+                  `).join("")}
+                </div>
+                <div class="composer">
+                  <textarea id="chat-input" placeholder="메시지를 입력해 보세요">${escapeHtml(state.chatDraft)}</textarea>
+                  <div class="composer-actions">
+                    <button type="button" class="send-btn" data-action="send">전송</button>
+                    <button type="button" class="mode-btn ${state.chatMode === '텍스트' ? 'is-active' : ''}" data-mode="텍스트">텍스트</button>
+                    <button type="button" class="mode-btn ${state.chatMode === '음성' ? 'is-active' : ''}" data-mode="음성">음성</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>`;
+      }
+
+      function settingsMarkup() {
+        return `
+          <section class="screen ${state.activeScreen === 'settings' ? 'is-active' : ''}">
+            <div class="settings-grid">
+              <section class="panel">
+                <div class="panel-head"><h2>설정</h2><span class="chip">기본</span></div>
+                <div class="settings-actions">
+                  <button type="button" class="settings-btn ${state.notificationOn ? 'is-on' : ''}" data-action="toggle-notification">알림 ${state.notificationOn ? 'on' : 'off'}</button>
+                  <button type="button" class="settings-btn" data-modal="sensor">센서</button>
+                  <button type="button" class="settings-btn" data-modal="guide">가이드</button>
+                </div>
+                <div class="setting-card"><strong>알림 버튼</strong><span class="muted">버튼 문구는 on/off만 표시합니다.</span></div>
+                <div class="setting-card"><strong>센서 버튼</strong><span class="muted">온도 / 습도 / 수위 / 조도 범위를 모달에서 확인합니다.</span></div>
+                <div class="setting-card"><strong>가이드 버튼</strong><span class="muted">깨끗한 물, 직사광선 X, 가끔 굴러주기, 사랑 주기 안내를 보여줍니다.</span></div>
+              </section>
+            </div>
+          </section>`;
+      }
+
+      function modalMarkup() {
+        if (state.openModal === null) return "";
+        if (state.openModal === "sensor") {
+          return `
+            <div class="modal-backdrop" data-close-modal="1">
+              <div class="modal">
+                <div class="modal-head">
+                  <h3>센서 범위 설정</h3>
+                  <button type="button" class="modal-close" data-close-modal="1">닫기</button>
+                </div>
+                <p>센서 값의 최소값과 최대값을 각각 따로 지정하는 화면입니다. 조도만 0~10,000 기준이고, 나머지는 0~100 기준으로 둡니다.</p>
+                <div class="range-grid">
+                  ${SENSOR_FIELDS.map((field) => `
+                    <div class="range-card">
+                      <strong>${field.label}</strong>
+                      <div class="range-inputs">
+                        <label class="field">최소
+                          <input type="number" min="${field.min}" max="${field.max}" value="${state.sensorRanges[field.key].min}" data-sensor-key="${field.key}" data-edge="min">
+                        </label>
+                        <label class="field">최대
+                          <input type="number" min="${field.min}" max="${field.max}" value="${state.sensorRanges[field.key].max}" data-sensor-key="${field.key}" data-edge="max">
+                        </label>
+                      </div>
+                      <span class="muted">기준 범위: ${field.min} ~ ${field.max}</span>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+            </div>`;
+        }
+
+        return `
+          <div class="modal-backdrop" data-close-modal="1">
+            <div class="modal">
+              <div class="modal-head">
+                <h3>마리모 가이드</h3>
+                <button type="button" class="modal-close" data-close-modal="1">닫기</button>
+              </div>
+              <div class="guide-grid">
+                ${GUIDE_ITEMS.map((item) => `
+                  <div class="guide-card">
+                    <div class="guide-icon">${item.icon}</div>
+                    <div class="guide-copy">
+                      <strong>${item.title}</strong>
+                      <span>${item.text}</span>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function render() {
+        const monthIndex = MONTHS.indexOf(state.selectedMonth);
+        const bundle = buildMonthBundle(monthIndex);
+        const chart = buildChart(bundle.chartSeries);
+
+        nav.innerHTML = navMarkup();
+        app.innerHTML = homeMarkup() + sensorMarkup(bundle, chart) + chatMarkup() + settingsMarkup() + modalMarkup();
+        bind(bundle, chart);
+      }
+
+      function bind(bundle, chart) {
+        document.querySelectorAll("[data-screen]").forEach((button) => {
+          button.onclick = () => setState({ activeScreen: button.dataset.screen });
+        });
+
+        document.querySelectorAll("[data-view]").forEach((button) => {
+          button.onclick = () => setState({ sensorView: button.dataset.view, hoverPoint: null });
+        });
+
+        document.querySelectorAll("[data-month]").forEach((button) => {
+          button.onclick = () => setState({ selectedMonth: button.dataset.month, hoverPoint: null });
+        });
+
+        const chatInput = document.getElementById("chat-input");
+        if (chatInput) {
+          chatInput.oninput = (event) => setState({ chatDraft: event.target.value });
+        }
+
+        document.querySelectorAll("[data-mode]").forEach((button) => {
+          button.onclick = () => setState({ chatMode: button.dataset.mode });
+        });
+
+        document.querySelectorAll("[data-modal]").forEach((button) => {
+          button.onclick = () => setState({ openModal: button.dataset.modal });
+        });
+
+        document.querySelectorAll("[data-action='toggle-notification']").forEach((button) => {
+          button.onclick = () => setState({ notificationOn: !state.notificationOn });
+        });
+
+        document.querySelectorAll("[data-close-modal]").forEach((button) => {
+          button.onclick = () => setState({ openModal: null });
+        });
+
+        document.querySelectorAll("[data-sensor-key]").forEach((input) => {
+          input.oninput = (event) => updateSensorRange(event.target.dataset.sensorKey, event.target.dataset.edge, event.target.value);
+        });
+
+        const chartSvg = document.getElementById("chart-svg");
+        if (chartSvg) {
+          chartSvg.onmousemove = (event) => {
+            const rect = chartSvg.getBoundingClientRect();
+            const displayX = event.clientX - rect.left;
+            const displayY = event.clientY - rect.top;
+            const x = (displayX / rect.width) * chart.width;
+            const y = (displayY / rect.height) * chart.height;
+            state.hoverPoint = {
+              ...findNearestPoint(chart.points, x, y, chart),
+              displayX,
+              displayY,
+              containerWidth: rect.width,
+              containerHeight: rect.height,
+            };
+            render();
+          };
+          chartSvg.onmouseleave = () => {
+            state.hoverPoint = null;
+            render();
+          };
+        }
+      }
+
+      setInterval(() => {
+        clock.textContent = formatClock(new Date());
+      }, 1000);
+
+      render();
+      clock.textContent = formatClock(new Date());
     </script>
   </body>
 </html>
