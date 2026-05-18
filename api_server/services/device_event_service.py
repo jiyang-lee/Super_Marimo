@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import HTTPException
 from psycopg.types.json import Json
@@ -109,10 +109,12 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
 def list_events(
     *,
     event_type: Optional[str] = None,
+    event_types: Optional[list[str]] = None,
     device_id: Optional[str] = None,
     played: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
+    order: Literal["asc", "desc"] = "desc",
 ) -> dict[str, Any]:
     safe_limit = max(1, min(limit, 200))
     safe_offset = max(0, offset)
@@ -120,10 +122,24 @@ def list_events(
     conditions: list[str] = []
     params: list[Any] = []
 
+    normalized_types: list[str] = []
     if event_type:
-        normalized = normalize_event_type(event_type)
-        conditions.append("event_type = %s")
-        params.append(normalized)
+        normalized_types.append(normalize_event_type(event_type))
+    if event_types:
+        normalized_types.extend(
+            normalized
+            for normalized in (normalize_event_type(item) for item in event_types)
+            if normalized
+        )
+    if normalized_types:
+        unique_types = list(dict.fromkeys(normalized_types))
+        if len(unique_types) == 1:
+            conditions.append("event_type = %s")
+            params.append(unique_types[0])
+        else:
+            placeholders = ", ".join(["%s"] * len(unique_types))
+            conditions.append(f"event_type IN ({placeholders})")
+            params.extend(unique_types)
     if device_id:
         conditions.append("device_id = %s")
         params.append(device_id)
@@ -132,6 +148,7 @@ def list_events(
         params.append(played)
 
     where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+    order_clause = "ASC" if order == "asc" else "DESC"
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -153,7 +170,7 @@ def list_events(
                     meta
                 FROM device_event_log
                 {where_clause}
-                ORDER BY created_at DESC
+                ORDER BY created_at {order_clause}
                 LIMIT %s OFFSET %s
                 """,
                 (*params, safe_limit, safe_offset),

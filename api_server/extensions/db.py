@@ -134,6 +134,9 @@ def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_device_event_log_type_created_at ON device_event_log (event_type, created_at DESC)"
             )
             cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_device_event_log_played_type_created_at ON device_event_log (played, event_type, created_at DESC)"
+            )
+            cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_device_event_log_session_created_at ON device_event_log (session_id, created_at DESC)"
             )
         conn.commit()

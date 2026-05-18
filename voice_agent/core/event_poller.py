@@ -48,33 +48,40 @@ class EventPoller:
             self._stop_event.wait(self.interval_sec)
 
     def _poll_once(self) -> None:
-        for event_type in self.event_types:
+        while True:
             try:
                 result = self.api_client.list_events(
-                    event_type=event_type,
+                    event_types=self.event_types,
                     played=False,
                     limit=1,
+                    order="asc",
                 )
                 events = result.get("events") or []
                 if not events:
-                    continue
+                    return
 
                 event = events[0]
                 event_id = event["event_id"]
-                generated_text = event.get("generated_text", "")
+                event_type = str(event.get("event_type") or "event")
+                generated_text = str(event.get("generated_text") or "").strip()
 
                 if not generated_text:
-                    logger.warning("Event %s has no generated_text, skipping", event_id)
+                    logger.warning("Event %s has no generated_text, marking played", event_id)
                     self.api_client.mark_event_played(event_id)
                     continue
 
                 logger.info("Processing event %s (%s): %s", event_id, event_type, generated_text[:40])
-                self.tts_client.synthesize_to_file(
-                    generated_text,
-                    prefix=f"event_{event_type}_{event_id}",
-                )
-                self.api_client.mark_event_played(event_id)
-                logger.info("Event %s marked as played, TTS saved", event_id)
+                try:
+                    self.tts_client.synthesize_to_file(
+                        generated_text,
+                        prefix=f"event_{event_type}_{event_id}",
+                    )
+                except Exception:
+                    logger.exception("TTS synthesis failed for event %s (%s)", event_id, event_type)
+                finally:
+                    self.api_client.mark_event_played(event_id)
+                    logger.info("Event %s marked as played", event_id)
 
             except Exception as exc:
-                logger.exception("EventPoller failed for type %s: %s", event_type, exc)
+                logger.exception("EventPoller poll error: %s", exc)
+                return

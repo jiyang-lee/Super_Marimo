@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter
 
@@ -17,17 +17,21 @@ router = APIRouter()
 @router.get("/events")
 def device_event_list(
     event_type: Optional[str] = None,
+    event_types: Optional[list[str]] = None,
     device_id: Optional[str] = None,
     played: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
+    order: Literal["asc", "desc"] = "desc",
 ) -> dict[str, Any]:
     return list_events(
         event_type=event_type,
+        event_types=event_types,
         device_id=device_id,
         played=played,
         limit=limit,
         offset=offset,
+        order=order,
     )
 
 

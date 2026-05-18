@@ -34,14 +34,20 @@ class ApiClient:
         self,
         *,
         event_type: Optional[str] = None,
+        event_types: Optional[list[str]] = None,
         played: Optional[bool] = False,
         limit: int = 10,
+        order: str = "desc",
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": limit}
         if event_type:
             params["event_type"] = event_type
+        if event_types:
+            params["event_types"] = event_types
         if played is not None:
             params["played"] = str(played).lower()
+        if order:
+            params["order"] = order
         response = requests.get(f"{self.api_server_url}/events", params=params, timeout=10)
         response.raise_for_status()
         return response.json()

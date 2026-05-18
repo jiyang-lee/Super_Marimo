@@ -1,6 +1,17 @@
+from importlib import util
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from main import app
+import routers.events as events_router
+
+
+API_MAIN_PATH = Path(__file__).resolve().parents[1] / "main.py"
+spec = util.spec_from_file_location("api_server_main_test", API_MAIN_PATH)
+assert spec is not None and spec.loader is not None
+api_main = util.module_from_spec(spec)
+spec.loader.exec_module(api_main)
+app = api_main.app
 
 
 def test_wakeword_event_routes_to_service(monkeypatch) -> None:
@@ -17,7 +28,7 @@ def test_wakeword_event_routes_to_service(monkeypatch) -> None:
             },
         }
 
-    monkeypatch.setattr("routers.events.save_device_event", fake_save_device_event)
+    monkeypatch.setattr(events_router, "save_device_event", fake_save_device_event)
 
     client = TestClient(app)
     response = client.post(
@@ -53,7 +64,7 @@ def test_device_event_routes_to_service(monkeypatch) -> None:
             },
         }
 
-    monkeypatch.setattr("routers.events.save_device_event", fake_save_device_event)
+    monkeypatch.setattr(events_router, "save_device_event", fake_save_device_event)
 
     client = TestClient(app)
     response = client.post(
@@ -90,7 +101,7 @@ def test_manual_test_event_routes_to_service(monkeypatch) -> None:
             },
         }
 
-    monkeypatch.setattr("routers.events.save_device_event", fake_save_device_event)
+    monkeypatch.setattr(events_router, "save_device_event", fake_save_device_event)
 
     client = TestClient(app)
     response = client.post(
