@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const screens = [
   { key: "home", label: "Home" },
@@ -7,72 +7,183 @@ const screens = [
   { key: "settings", label: "Settings" },
 ];
 
-const weeklySummaries = [
-  {
-    range: "05.18.~05.24.",
-    text: "온도 : 23.5도, 습도 : 49%, 수위 : 81%, 조도 : 408lux",
-    note: "이번 주는 물 상태가 안정적이었어요.",
-  },
-  {
-    range: "05.25.~05.31.",
-    text: "온도 : 25.7도, 습도 : 54%, 수위 : 84%, 조도 : 700lux",
-    note: "조도가 조금 올라간 주간이에요.",
-  },
-  {
-    range: "06.01.~06.07.",
-    text: "온도 : 24.2도, 습도 : 51%, 수위 : 83%, 조도 : 1,120lux",
-    note: "전체 센서 수치가 고르게 유지됐어요.",
-  },
-  {
-    range: "06.08.~06.14.",
-    text: "온도 : 24.8도, 습도 : 52%, 수위 : 82%, 조도 : 860lux",
-    note: "주중과 주말 변화가 작았어요.",
-  },
+const homeNotices = [
+  "지금은 화면이 실제로 보이는지 먼저 확인하는 단계예요.",
+  "공지사항, 전체 마리모 이미지, 오늘의 퀘스트 구조를 다시 살렸어요.",
+  "이미지는 아직 비워 두고, 나중에 넣기 쉽게 자리만 준비해 두었어요.",
+];
+
+const homeQuests = [
+  { title: "물 상태 확인", description: "센서 값이 안정적인지 먼저 살펴봐요." },
+  { title: "온도 상태 확인", description: "마리모가 지내기 좋은 온도인지 봐요." },
 ];
 
 const hourlyHistory = [
-  ["09:00", "온도 24도, 습도 47%, 수위 81%, 조도 410 lux"],
-  ["12:00", "온도 25도, 습도 45%, 수위 80%, 조도 620 lux"],
-  ["15:00", "온도 24도, 습도 48%, 수위 79%, 조도 540 lux"],
-  ["18:00", "온도 23도, 습도 52%, 수위 80%, 조도 360 lux"],
+  { time: "09:00", text: "온도 24°C · 습도 47% · 수위 81% · 조도 410 lux" },
+  { time: "12:00", text: "온도 25°C · 습도 45% · 수위 80% · 조도 620 lux" },
+  { time: "15:00", text: "온도 24°C · 습도 48% · 수위 79% · 조도 540 lux" },
+  { time: "18:00", text: "온도 23°C · 습도 52% · 수위 80% · 조도 360 lux" },
+  { time: "21:00", text: "온도 22°C · 습도 55% · 수위 81% · 조도 240 lux" },
 ];
 
-const monthLabels = [
-  "1월",
-  "2월",
-  "3월",
-  "4월",
-  "5월",
-  "6월",
-  "7월",
-  "8월",
-  "9월",
-  "10월",
-  "11월",
-  "12월",
-];
+const weeklyByMonth = {
+  "1월": [
+    { range: "01.01.~01.07.", text: "온도 : 24.0도, 습도 : 51%, 수위 : 82%, 조도 : 480lux" },
+    { range: "01.08.~01.14.", text: "온도 : 23.8도, 습도 : 50%, 수위 : 81%, 조도 : 510lux" },
+    { range: "01.15.~01.21.", text: "온도 : 24.2도, 습도 : 49%, 수위 : 83%, 조도 : 530lux" },
+    { range: "01.22.~01.31.", text: "온도 : 24.5도, 습도 : 48%, 수위 : 84%, 조도 : 560lux" },
+  ],
+  "2월": [
+    { range: "02.01.~02.07.", text: "온도 : 24.8도, 습도 : 50%, 수위 : 82%, 조도 : 600lux" },
+    { range: "02.08.~02.14.", text: "온도 : 25.1도, 습도 : 52%, 수위 : 81%, 조도 : 640lux" },
+    { range: "02.15.~02.21.", text: "온도 : 24.9도, 습도 : 49%, 수위 : 82%, 조도 : 620lux" },
+    { range: "02.22.~02.29.", text: "온도 : 24.7도, 습도 : 48%, 수위 : 83%, 조도 : 610lux" },
+  ],
+  "3월": [
+    { range: "03.01.~03.07.", text: "온도 : 24.4도, 습도 : 49%, 수위 : 82%, 조도 : 700lux" },
+    { range: "03.08.~03.14.", text: "온도 : 24.6도, 습도 : 50%, 수위 : 82%, 조도 : 720lux" },
+    { range: "03.15.~03.21.", text: "온도 : 24.8도, 습도 : 51%, 수위 : 83%, 조도 : 740lux" },
+    { range: "03.22.~03.31.", text: "온도 : 25.0도, 습도 : 52%, 수위 : 84%, 조도 : 760lux" },
+  ],
+  "4월": [
+    { range: "04.01.~04.07.", text: "온도 : 24.1도, 습도 : 50%, 수위 : 81%, 조도 : 820lux" },
+    { range: "04.08.~04.14.", text: "온도 : 24.3도, 습도 : 51%, 수위 : 82%, 조도 : 860lux" },
+    { range: "04.15.~04.21.", text: "온도 : 24.5도, 습도 : 50%, 수위 : 82%, 조도 : 900lux" },
+    { range: "04.22.~04.30.", text: "온도 : 24.7도, 습도 : 51%, 수위 : 83%, 조도 : 940lux" },
+  ],
+  "5월": [
+    { range: "05.01.~05.07.", text: "온도 : 24.9도, 습도 : 52%, 수위 : 82%, 조도 : 980lux" },
+    { range: "05.08.~05.14.", text: "온도 : 25.1도, 습도 : 53%, 수위 : 83%, 조도 : 1,020lux" },
+    { range: "05.15.~05.21.", text: "온도 : 25.3도, 습도 : 54%, 수위 : 83%, 조도 : 1,050lux" },
+    { range: "05.22.~05.31.", text: "온도 : 25.5도, 습도 : 55%, 수위 : 84%, 조도 : 1,120lux" },
+  ],
+  "6월": [
+    { range: "06.01.~06.07.", text: "온도 : 24.6도, 습도 : 51%, 수위 : 83%, 조도 : 1,140lux" },
+    { range: "06.08.~06.14.", text: "온도 : 24.8도, 습도 : 52%, 수위 : 83%, 조도 : 1,180lux" },
+    { range: "06.15.~06.21.", text: "온도 : 25.0도, 습도 : 53%, 수위 : 84%, 조도 : 1,220lux" },
+    { range: "06.22.~06.30.", text: "온도 : 25.2도, 습도 : 54%, 수위 : 84%, 조도 : 1,260lux" },
+  ],
+};
+
+const monthSeries = {
+  "1월": [
+    { day: 1, temp: 24, humidity: 48, water: 82, light: 1800 },
+    { day: 5, temp: 24.2, humidity: 49, water: 83, light: 2200 },
+    { day: 10, temp: 24.5, humidity: 50, water: 83, light: 2600 },
+    { day: 15, temp: 24.8, humidity: 51, water: 84, light: 2800 },
+    { day: 20, temp: 24.6, humidity: 50, water: 83, light: 3000 },
+    { day: 25, temp: 24.3, humidity: 49, water: 82, light: 3400 },
+    { day: 30, temp: 24.1, humidity: 48, water: 82, light: 3600 },
+  ],
+  "2월": [
+    { day: 1, temp: 24.5, humidity: 50, water: 82, light: 2600 },
+    { day: 5, temp: 24.7, humidity: 51, water: 82, light: 3000 },
+    { day: 10, temp: 24.9, humidity: 52, water: 83, light: 3400 },
+    { day: 15, temp: 25.0, humidity: 52, water: 83, light: 3800 },
+    { day: 20, temp: 24.8, humidity: 51, water: 83, light: 4200 },
+    { day: 25, temp: 24.6, humidity: 50, water: 82, light: 4600 },
+    { day: 29, temp: 24.5, humidity: 49, water: 82, light: 5000 },
+  ],
+  "3월": [
+    { day: 1, temp: 24.2, humidity: 49, water: 82, light: 3200 },
+    { day: 5, temp: 24.4, humidity: 50, water: 82, light: 3600 },
+    { day: 10, temp: 24.6, humidity: 50, water: 83, light: 4100 },
+    { day: 15, temp: 24.8, humidity: 51, water: 83, light: 4500 },
+    { day: 20, temp: 24.9, humidity: 52, water: 84, light: 4900 },
+    { day: 25, temp: 25.0, humidity: 52, water: 84, light: 5200 },
+    { day: 31, temp: 24.8, humidity: 51, water: 83, light: 5600 },
+  ],
+  "4월": [
+    { day: 1, temp: 24.0, humidity: 50, water: 81, light: 4200 },
+    { day: 5, temp: 24.2, humidity: 51, water: 82, light: 4700 },
+    { day: 10, temp: 24.4, humidity: 51, water: 82, light: 5200 },
+    { day: 15, temp: 24.5, humidity: 52, water: 83, light: 5800 },
+    { day: 20, temp: 24.6, humidity: 52, water: 83, light: 6200 },
+    { day: 25, temp: 24.8, humidity: 51, water: 84, light: 6800 },
+    { day: 30, temp: 24.9, humidity: 50, water: 84, light: 7200 },
+  ],
+  "5월": [
+    { day: 1, temp: 24.8, humidity: 52, water: 82, light: 4800 },
+    { day: 5, temp: 25.0, humidity: 53, water: 83, light: 5200 },
+    { day: 10, temp: 25.2, humidity: 54, water: 83, light: 5800 },
+    { day: 15, temp: 25.4, humidity: 54, water: 84, light: 6400 },
+    { day: 20, temp: 25.3, humidity: 55, water: 84, light: 7000 },
+    { day: 25, temp: 25.1, humidity: 54, water: 84, light: 7600 },
+    { day: 30, temp: 25.0, humidity: 53, water: 83, light: 7800 },
+  ],
+  "6월": [
+    { day: 1, temp: 24.6, humidity: 51, water: 83, light: 5200 },
+    { day: 5, temp: 24.8, humidity: 52, water: 83, light: 5800 },
+    { day: 10, temp: 25.0, humidity: 53, water: 84, light: 6200 },
+    { day: 15, temp: 25.2, humidity: 54, water: 84, light: 6800 },
+    { day: 20, temp: 25.3, humidity: 54, water: 84, light: 7200 },
+    { day: 25, temp: 25.1, humidity: 53, water: 83, light: 7600 },
+    { day: 30, temp: 25.0, humidity: 52, water: 83, light: 8000 },
+  ],
+};
+
+const chartSeries = monthSeries["5월"];
 
 const chatMessages = [
-  { id: 1, from: "marimo", text: "안녕! 오늘 센서 상태부터 살펴볼까?" },
-  { id: 2, from: "user", text: "좋아, 순서대로 다시 확인해보자." },
-  { id: 3, from: "marimo", text: "좋아. 홈부터 센서, 채팅, 설정 순서로 복구하면 돼." },
+  { id: 1, from: "marimo", text: "안녕! 오늘 센서 상태를 함께 볼까?" },
+  { id: 2, from: "user", text: "좋아, 위클릭이랑 머슬릭도 확인해볼게." },
+  { id: 3, from: "marimo", text: "좋아. 화면이 잘 보이면 이제 세부 조정만 남았어." },
 ];
 
 export default function App() {
   const [activeScreen, setActiveScreen] = useState("home");
-  const [sensorView, setSensorView] = useState("weekly");
+  const [sensorMode, setSensorMode] = useState("weekly");
   const [activeMonth, setActiveMonth] = useState("5월");
+  const [hoverPoint, setHoverPoint] = useState(null);
 
   useEffect(() => {
     document.getElementById("fallback-root")?.remove();
   }, []);
+
+  const monthlyData = monthSeries[activeMonth] ?? chartSeries;
+
+  const chartMetrics = useMemo(() => {
+    const width = 100;
+    const height = 240;
+    const padding = 28;
+    const plotWidth = width - padding * 2;
+    const plotHeight = height - padding * 2;
+    const tempMax = 30;
+    const tempMin = 20;
+    const lightMax = 10000;
+
+    const scaleX = (index, length) =>
+      padding + (length <= 1 ? 0 : (plotWidth * index) / (length - 1));
+    const scaleY = (value, min, max) =>
+      padding + plotHeight - ((value - min) / (max - min)) * plotHeight;
+
+    const buildLine = (key, min, max) =>
+      monthlyData
+        .map((point, index) => `${scaleX(index, monthlyData.length)},${scaleY(point[key], min, max)}`)
+        .join(" ");
+
+    return {
+      width,
+      height,
+      padding,
+      scaleX,
+      scaleY,
+      tempLine: buildLine("temp", tempMin, tempMax),
+      humidityLine: buildLine("humidity", 0, 100),
+      waterLine: buildLine("water", 0, 100),
+      lightLine: buildLine("light", 0, lightMax),
+      tempMin,
+      tempMax,
+      lightMax,
+    };
+  }, [monthlyData]);
 
   return (
     <div style={shellStyle}>
       <header style={headerStyle}>
         <div>
           <div style={brandStyle}>MARIMO QUEST</div>
-          <div style={subtitleStyle}>마리모를 돌보는 반응형 웹앱</div>
+          <div style={subtitleStyle}>화면을 확인하고 다시 정리하는 기준 화면</div>
         </div>
 
         <nav style={navStyle} aria-label="주요 화면 이동">
@@ -93,13 +204,10 @@ export default function App() {
         {activeScreen === "home" && (
           <section style={gridThreeStyle}>
             <Panel title="공지사항" chip="초보자용">
-              <p style={leadStyle}>
-                지금은 홈 구조를 다시 정리한 상태예요. 아래 3개 카드가 보이면 정상입니다.
-              </p>
+              <p style={leadStyle}>{homeNotices[0]}</p>
               <ul style={listStyle}>
-                <li style={listItemStyle}>왼쪽: 공지사항</li>
-                <li style={listItemStyle}>가운데: 전체 마리모 이미지</li>
-                <li style={listItemStyle}>오른쪽: 오늘의 퀘스트</li>
+                <li style={listItemStyle}>{homeNotices[1]}</li>
+                <li style={listItemStyle}>{homeNotices[2]}</li>
               </ul>
             </Panel>
 
@@ -111,14 +219,12 @@ export default function App() {
             </Panel>
 
             <Panel title="오늘의 퀘스트" chip="DAY 01">
-              <div style={questItemStyle}>
-                <strong>물 상태 확인</strong>
-                <span style={mutedStyle}>수위가 적정한지 먼저 살펴보세요.</span>
-              </div>
-              <div style={questItemStyle}>
-                <strong>온도 상태 확인</strong>
-                <span style={mutedStyle}>마리모가 지내기 좋은 온도인지 봐주세요.</span>
-              </div>
+              {homeQuests.map((quest) => (
+                <div key={quest.title} style={questItemStyle}>
+                  <strong>{quest.title}</strong>
+                  <span style={mutedStyle}>{quest.description}</span>
+                </div>
+              ))}
             </Panel>
           </section>
         )}
@@ -129,9 +235,7 @@ export default function App() {
               <Panel title="마리모 이미지" chip="캐릭터">
                 <div style={avatarSlotStyle}>
                   <strong style={imageStrongStyle}>전체 마리모 이미지</strong>
-                  <span style={mutedStyle}>
-                    왼쪽에는 나중에 전체 마리모 캐릭터 이미지를 넣을 수 있어요.
-                  </span>
+                  <span style={mutedStyle}>왼쪽에는 나중에 전체 마리모 캐릭터 이미지를 넣을 수 있어요.</span>
                 </div>
               </Panel>
 
@@ -149,18 +253,16 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                <p style={leadStyle}>
-                  현재 값은 예시예요. 실제 센서가 연결되면 이 숫자만 자동으로 바뀌게 됩니다.
-                </p>
+                <p style={leadStyle}>현재 값은 예시예요. 실제 센서가 연결되면 이 숫자만 자동으로 바뀌게 됩니다.</p>
               </Panel>
             </div>
 
             <Panel title="시간별 센서 이력" chip="기록">
               <div style={historyBoxStyle}>
-                {hourlyHistory.map(([time, text]) => (
-                  <div key={time} style={historyRowStyle}>
-                    <strong>{time}</strong>
-                    <span style={mutedStyle}>{text}</span>
+                {hourlyHistory.map((item) => (
+                  <div key={item.time} style={historyRowStyle}>
+                    <strong>{item.time}</strong>
+                    <span style={mutedStyle}>{item.text}</span>
                   </div>
                 ))}
               </div>
@@ -170,21 +272,21 @@ export default function App() {
               <div style={modeSwitchStyle}>
                 <button
                   type="button"
-                  onClick={() => setSensorView("weekly")}
-                  style={modeButtonStyle(sensorView === "weekly")}
+                  onClick={() => setSensorMode("weekly")}
+                  style={modeButtonStyle(sensorMode === "weekly")}
                 >
                   위클릭
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSensorView("monthly")}
-                  style={modeButtonStyle(sensorView === "monthly")}
+                  onClick={() => setSensorMode("monthly")}
+                  style={modeButtonStyle(sensorMode === "monthly")}
                 >
                   머슬릭
                 </button>
               </div>
 
-              {sensorView === "weekly" ? (
+              {sensorMode === "weekly" ? (
                 <div style={weeklyListStyle}>
                   {weeklySummaries.map((week) => (
                     <div key={week.range} style={weeklyCardStyle}>
@@ -197,7 +299,7 @@ export default function App() {
               ) : (
                 <div style={monthlyLayoutStyle}>
                   <div style={monthGridStyle}>
-                    {monthLabels.map((month) => (
+                    {Object.keys(monthSeries).map((month) => (
                       <button
                         key={month}
                         type="button"
@@ -214,11 +316,115 @@ export default function App() {
                       <strong>{activeMonth} 그래프</strong>
                       <span style={mutedStyle}>온도 / 습도 / 수위 / 조도</span>
                     </div>
-                    <div style={graphPlaceholderStyle}>
-                      <strong>그래프 자리</strong>
-                      <span style={mutedStyle}>
-                        다음 단계에서 월별 꺾은선 그래프와 마우스 툴팁을 붙일게요.
-                      </span>
+
+                    <div style={graphSvgWrapStyle}>
+                      <svg
+                        viewBox={`0 0 ${chartMetrics.width} ${chartMetrics.height}`}
+                        style={svgStyle}
+                        onMouseLeave={() => setHoverPoint(null)}
+                        onMouseMove={(event) => {
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          const x = ((event.clientX - rect.left) / rect.width) * chartMetrics.width;
+                          const nearestIndex = monthlyData.reduce(
+                            (best, point, index) => {
+                              const pointX = chartMetrics.scaleX(index, monthlyData.length);
+                              const distance = Math.abs(pointX - x);
+                              return distance < best.distance
+                                ? { index, distance, pointX }
+                                : best;
+                            },
+                            { index: 0, distance: Number.POSITIVE_INFINITY, pointX: 0 },
+                          );
+                          setHoverPoint(nearestIndex);
+                        }}
+                      >
+                        {[0, 25, 50, 75, 100].map((tick) => {
+                          const y = chartMetrics.scaleY(tick, 0, 100);
+                          return (
+                            <g key={`temp-${tick}`}>
+                              <line x1="28" x2="72" y1={y} y2={y} stroke="#ffffff" strokeOpacity="0.2" />
+                              <text x="10" y={y + 4} fontSize="4" fill="#846a2a">
+                                {tick}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {[0, 2500, 5000, 7500, 10000].map((tick) => {
+                          const y = chartMetrics.scaleY(tick, 0, chartMetrics.lightMax);
+                          return (
+                            <text key={`light-${tick}`} x="75" y={y + 4} fontSize="4" fill="#da8f00">
+                              {tick}
+                            </text>
+                          );
+                        })}
+
+                        <polyline fill="none" stroke="#ff8f4d" strokeWidth="1.8" points={chartMetrics.tempLine} />
+                        <polyline fill="none" stroke="#4f9cff" strokeWidth="1.8" points={chartMetrics.humidityLine} />
+                        <polyline fill="none" stroke="#55b95b" strokeWidth="1.8" points={chartMetrics.waterLine} />
+                        <polyline fill="none" stroke="#d4a012" strokeWidth="1.8" points={chartMetrics.lightLine} />
+
+                        {hoverPoint && monthlyData[hoverPoint.index] ? (
+                          <>
+                            <line
+                              x1={hoverPoint.pointX}
+                              x2={hoverPoint.pointX}
+                              y1="28"
+                              y2="212"
+                              stroke="#2d4f6b"
+                              strokeWidth="0.8"
+                              strokeDasharray="2 2"
+                            />
+                            <circle
+                              cx={hoverPoint.pointX}
+                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].temp, 20, 30)}
+                              r="1.8"
+                              fill="#ff8f4d"
+                            />
+                            <circle
+                              cx={hoverPoint.pointX}
+                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].humidity, 0, 100)}
+                              r="1.8"
+                              fill="#4f9cff"
+                            />
+                            <circle
+                              cx={hoverPoint.pointX}
+                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].water, 0, 100)}
+                              r="1.8"
+                              fill="#55b95b"
+                            />
+                            <circle
+                              cx={hoverPoint.pointX}
+                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].light, 0, chartMetrics.lightMax)}
+                              r="1.8"
+                              fill="#d4a012"
+                            />
+                          </>
+                        ) : null}
+                      </svg>
+
+                      <div style={legendStyle}>
+                        <span><i style={{ ...legendDotStyle, background: "#ff8f4d" }} />온도</span>
+                        <span><i style={{ ...legendDotStyle, background: "#4f9cff" }} />습도</span>
+                        <span><i style={{ ...legendDotStyle, background: "#55b95b" }} />수위</span>
+                        <span><i style={{ ...legendDotStyle, background: "#d4a012" }} />조도</span>
+                      </div>
+
+                      <div style={tooltipStyle}>
+                        {hoverPoint && monthlyData[hoverPoint.index] ? (
+                          <>
+                            <strong>
+                              {activeMonth} / {monthlyData[hoverPoint.index].day}일
+                            </strong>
+                            <span style={tooltipLineStyle}>온도 {monthlyData[hoverPoint.index].temp}°C</span>
+                            <span style={tooltipLineStyle}>습도 {monthlyData[hoverPoint.index].humidity}%</span>
+                            <span style={tooltipLineStyle}>수위 {monthlyData[hoverPoint.index].water}%</span>
+                            <span style={tooltipLineStyle}>조도 {monthlyData[hoverPoint.index].light.toLocaleString()} lux</span>
+                          </>
+                        ) : (
+                          <span style={mutedStyle}>그래프 선 위에 마우스를 올리면 해당 날짜의 값을 볼 수 있어요.</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -228,7 +434,7 @@ export default function App() {
         )}
 
         {activeScreen === "chat" && (
-          <Panel title="마리모와 대화하기" chip="대화">
+          <Panel title="마리모와 대화하기" chip="채팅">
             <div style={chatPreviewStyle}>
               {chatMessages.map((message) => (
                 <div
@@ -243,10 +449,10 @@ export default function App() {
             <div style={chatInputBarStyle}>
               <input
                 type="text"
-                defaultValue="메시지를 입력해 보세요"
                 readOnly
-                style={chatInputStyle}
+                defaultValue="메시지를 입력해 보세요"
                 aria-label="메시지 입력"
+                style={chatInputStyle}
               />
               <button type="button" style={sendButtonStyle}>
                 전송
@@ -257,16 +463,14 @@ export default function App() {
 
         {activeScreen === "settings" && (
           <section style={gridTwoStyle}>
-            <Panel title="초보자용 설정">
-              <p style={leadStyle}>
-                이미지 보관, 알림, 화면 구조처럼 자주 확인하는 부분을 먼저 보기 쉽게 정리해두는
-                화면이에요.
-              </p>
+            <Panel title="초보자용 설정" chip="안내">
+              <div style={settingRowStyle}>이미지 보관: incoming 폴더에 먼저 넣고 나중에 분리하면 돼요.</div>
+              <div style={settingRowStyle}>화면 기준: Home, Sensor, Chat, Settings 순으로 하나씩 다듬으면 돼요.</div>
             </Panel>
 
-            <Panel title="설정 항목" chip="정리 중">
-              <div style={settingRowStyle}>알림 상태: ON</div>
-              <div style={settingRowStyle}>이미지 보관: incoming 폴더</div>
+            <Panel title="작업 메모" chip="체크">
+              <div style={settingRowStyle}>브랜치: frontend/jeong에서 작업을 이어가면 돼요.</div>
+              <div style={settingRowStyle}>커밋: 큰 수정 후에는 체크포인트를 남기면 안전해요.</div>
             </Panel>
           </section>
         )}
@@ -277,14 +481,28 @@ export default function App() {
 
 function Panel({ title, chip, children }) {
   return (
-    <article style={panelStyle}>
+    <section style={panelStyle}>
       <div style={panelHeadStyle}>
-        <h2 style={titleStyle}>{title}</h2>
+        <strong style={panelTitleStyle}>{title}</strong>
         {chip ? <span style={chipStyle}>{chip}</span> : <span />}
       </div>
-      {children}
-    </article>
+      <div>{children}</div>
+    </section>
   );
+}
+
+function chatBubbleStyle(isMarimo) {
+  return {
+    alignSelf: isMarimo ? "start" : "end",
+    justifySelf: isMarimo ? "start" : "end",
+    maxWidth: "78%",
+    padding: "14px 15px",
+    borderRadius: isMarimo ? "18px 18px 18px 4px" : "18px 18px 4px 18px",
+    background: isMarimo
+      ? "rgba(255,255,255,0.7)"
+      : "linear-gradient(to bottom, #fff9cc, #ffe26d)",
+    border: "1px solid rgba(123,90,45,0.14)",
+  };
 }
 
 const shellStyle = {
@@ -384,8 +602,7 @@ const panelHeadStyle = {
   marginBottom: "16px",
 };
 
-const titleStyle = {
-  margin: 0,
+const panelTitleStyle = {
   fontSize: "1.1rem",
 };
 
@@ -575,60 +792,75 @@ const graphHeaderStyle = {
   gap: "12px",
 };
 
-const graphPlaceholderStyle = {
-  minHeight: "220px",
-  borderRadius: "18px",
-  border: "1px dashed rgba(123,90,45,0.18)",
-  background: "rgba(255,255,255,0.42)",
+const graphSvgWrapStyle = {
   display: "grid",
-  placeItems: "center",
-  color: "#5f6b62",
-  textAlign: "center",
-  padding: "18px",
+  gap: "10px",
+};
+
+const svgStyle = {
+  width: "100%",
+  height: "260px",
+  display: "block",
+  background: "linear-gradient(180deg, rgba(234, 247, 255, 0.95) 0%, rgba(255,255,255,0.82) 100%)",
+  borderRadius: "16px",
+};
+
+const legendStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "14px",
+  fontSize: "14px",
+  alignItems: "center",
+};
+
+const legendDotStyle = {
+  display: "inline-block",
+  width: "10px",
+  height: "10px",
+  borderRadius: "999px",
+  marginRight: "6px",
+  verticalAlign: "middle",
+};
+
+const tooltipStyle = {
+  display: "grid",
+  gap: "4px",
+  background: "#fff7e3",
+  border: "1px solid #e4cb8a",
+  borderRadius: "14px",
+  padding: "12px 14px",
+  minHeight: "92px",
+};
+
+const tooltipLineStyle = {
+  color: "#43321a",
 };
 
 const chatPreviewStyle = {
   display: "grid",
-  gap: "12px",
-  marginBottom: "18px",
+  gap: "10px",
+  marginBottom: "14px",
 };
 
-const chatBubbleStyle = (isMarimo) => ({
-  maxWidth: "78%",
-  padding: "14px 15px",
-  borderRadius: "18px",
-  background: isMarimo
-    ? "rgba(255,255,255,0.7)"
-    : "linear-gradient(to bottom, #fff9cc, #ffe26d)",
-  border: "1px solid rgba(123,90,45,0.14)",
-});
-
 const chatInputBarStyle = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: "12px",
-  padding: "12px",
-  borderRadius: "18px",
-  background: "rgba(255,255,255,0.62)",
-  border: "1px solid rgba(123,90,45,0.14)",
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
 };
 
 const chatInputStyle = {
-  border: "none",
+  flex: 1,
   borderRadius: "14px",
-  padding: "14px 16px",
-  background: "#fff",
-  color: "#33403a",
-  fontSize: "1rem",
-  outline: "none",
+  border: "1px solid #d8c4a1",
+  padding: "12px 14px",
+  fontSize: "16px",
 };
 
 const sendButtonStyle = {
-  border: "none",
   borderRadius: "14px",
-  padding: "14px 20px",
-  background: "linear-gradient(to bottom, #7bd469, #3d8d34)",
-  color: "#fff",
+  border: "1px solid #8d5a24",
+  background: "linear-gradient(180deg, #ffe089 0%, #f2b73e 100%)",
+  padding: "12px 18px",
   fontWeight: 700,
   cursor: "pointer",
 };
