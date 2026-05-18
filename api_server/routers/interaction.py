@@ -16,6 +16,8 @@ async def ask(payload: AskPayload) -> dict[str, Any]:
         sensor=payload.sensor,
         use_sensor_context=payload.use_sensor_context,
         source="ask",
+        persona_memo=payload.persona_memo,
+        system_memo=payload.system_memo,
     )
 
 
@@ -31,4 +33,6 @@ async def voice_ask(payload: VoiceAskPayload) -> dict[str, Any]:
         sensor=payload.sensor,
         use_sensor_context=payload.use_sensor_context,
         source="voice",
+        persona_memo=payload.persona_memo,
+        system_memo=payload.system_memo,
     )

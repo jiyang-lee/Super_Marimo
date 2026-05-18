@@ -18,19 +18,31 @@ from services.session_service import (
 from utils import normalize_datetime, normalize_response_payload
 
 
+DEFAULT_PERSONA_MEMO = (
+    "한국인 꼬마 같은 말투를 쓰되 예의 바르고 다정하게 말한다. "
+    "짧고 자연스럽게 답하고, 너무 유치하지 않게 부드러운 톤을 유지한다."
+)
+
+
 async def request_llm(
     question: str,
     sensor: Optional[SensorPayload],
     state: Optional[dict[str, Any]],
     use_sensor_context: bool,
     history: Optional[list[dict[str, str]]] = None,
+    persona_memo: Optional[str] = None,
+    system_memo: Optional[str] = None,
 ) -> dict[str, Any]:
+    resolved_persona_memo = (persona_memo or DEFAULT_PERSONA_MEMO).strip()
+    resolved_system_memo = system_memo.strip() if system_memo else None
     request_body = {
         "question": question,
         "sensor": sensor.model_dump() if sensor is not None else None,
         "state": state,
         "history": history or [],
         "use_sensor_context": use_sensor_context,
+        "persona_memo": resolved_persona_memo,
+        "system_memo": resolved_system_memo,
     }
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -48,10 +60,14 @@ async def handle_interaction(
     sensor: Optional[SensorPayload],
     use_sensor_context: bool,
     source: str,
+    persona_memo: Optional[str] = None,
+    system_memo: Optional[str] = None,
 ) -> dict[str, Any]:
     resolved_session_id = session_id or uuid4()
     active_sensor: Optional[SensorPayload] = sensor
     state: dict[str, Any] = {"level": "chat", "alerts": []}
+    resolved_persona_memo = (persona_memo or DEFAULT_PERSONA_MEMO).strip()
+    resolved_system_memo = system_memo.strip() if system_memo else None
 
     if use_sensor_context:
         active_sensor = active_sensor or load_latest_sensor_payload()
@@ -74,6 +90,8 @@ async def handle_interaction(
             state,
             use_sensor_context=use_sensor_context,
             history=history,
+            persona_memo=resolved_persona_memo,
+            system_memo=resolved_system_memo,
         )
         answer = str(llm.get("answer", "")).strip()
         if not answer:

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import logging
 import os
 import re
+import unicodedata
 from threading import Lock
 from typing import Any, Optional
 
@@ -42,6 +45,17 @@ class PrivateNetworkCorsMiddleware(BaseHTTPMiddleware):
 app.add_middleware(PrivateNetworkCorsMiddleware)
 
 
+class GeneratePayload(BaseModel):
+    question: str
+    history: list[dict[str, str]] = Field(default_factory=list)
+    sensor: Optional[dict[str, Any]] = None
+    state: Optional[dict[str, Any]] = None
+    session_id: Optional[str] = None
+    persona_memo: Optional[str] = None
+    system_memo: Optional[str] = None
+    use_sensor_context: bool = False
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled llm-server error: %s", exc)
@@ -55,42 +69,34 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
-class GeneratePayload(BaseModel):
-    question: str
-    history: list[dict[str, str]] = Field(default_factory=list)
-    sensor: Optional[dict[str, Any]] = None
-    state: Optional[dict[str, Any]] = None
-    session_id: Optional[str] = None
-    persona_memo: Optional[str] = None
-    system_memo: Optional[str] = None
-    use_sensor_context: bool = False
-
-
 def format_context(payload: GeneratePayload) -> str:
     if not payload.use_sensor_context:
         return "센서 정보 없음"
 
     sensor = payload.sensor or {}
     state = payload.state or {}
-    return f"센서값: {sensor}\n상태 판단: {state}"
+    return f"센서: {sensor}\n상태: {state}"
 
 
 def build_system_prompt(payload: GeneratePayload) -> str:
     persona_note = payload.persona_memo.strip() if payload.persona_memo else ""
     system_note = payload.system_memo.strip() if payload.system_memo else ""
+    if not persona_note:
+        persona_note = "한국인 꼬마 같은 말투를 쓰되 예의 바르고 다정하게 말한다. 짧고 자연스럽게 답하고, 너무 유치하지 않게 부드러운 톤을 유지한다."
     parts = [
-        "너는 '마리모'라는 한국어 음성 비서다.",
-        "답변은 자연스러운 한국어 말투로 한다.",
-        "보통 1~2문장, 길어도 3문장 이내로 끝낸다.",
-        "답변은 반드시 문장을 끝까지 완성하고 끝낸다.",
-        "불필요한 서론, 리스트, 중복 설명은 피한다.",
-        "답변 앞에 '마리모:' 같은 화자 표시는 붙이지 않는다.",
-        "JSON, 키-값 나열, 표 형식, 항목 목록으로 답하지 말고 항상 자연스러운 대화 문장만 사용한다.",
-        "호출어로 대화가 시작되면 바로 이어서 도와준다.",
-        "이전 대화를 참고하되, 이전 문장을 그대로 복사하지 말고 현재 질문에 맞게 재구성한다.",
-        "사용자가 '마리모는 어떤 식물이야?'처럼 묻는 경우에는 비서 자기소개가 아니라 실제 마리모 생물 정보로 답한다.",
-        "모호하면 짧게 한 번만 다시 묻는다.",
-        "같은 단어를 연속해서 쓰지 않는다.",
+        "너는 마리모라는 한국어 음성 비서다.",
+        "반드시 한국어만 사용한다.",
+        "영어, 로마자, 이모지, 과한 자기소개, 장황한 설명은 쓰지 않는다.",
+        "답변은 1문장, 길어도 2문장으로 끝낸다.",
+        "문장 끝에 추가 질문을 붙이지 말고, 필요한 정보만 말한다.",
+        "질문이 모호해도 실제 질문처럼 보이면 먼저 짧게 답한다.",
+        "정말 정보가 부족할 때만 한 번만 짧게 되묻는다.",
+        "재질문보다 자연스러운 추론 응답을 우선한다.",
+        "답변드릴 수 있을 것 같아요, 제 생각에는, I think 같은 말투는 쓰지 않는다.",
+        "맞춤법, 조사, 어미를 자연스럽게 맞춘다.",
+        "비문, 번역투, 어색한 높임말, 어색한 받침 처리, 이상한 조사 반복은 쓰지 않는다.",
+        "별표, 괄호, 코드블록, HTML 조각, 이모지, 특수 기호는 쓰지 않는다.",
+        "호출어 이후 대화는 부드럽고 친근한 톤으로 이어 간다.",
     ]
     if persona_note:
         parts.append(f"추가 페르소나 메모: {persona_note}")
@@ -114,44 +120,22 @@ def build_history_messages(payload: GeneratePayload) -> list[dict[str, str]]:
 
 def direct_answer(question: str) -> Optional[str]:
     normalized = " ".join(question.strip().split())
-    lowered = normalized.lower()
     if not normalized:
         return None
-
-    if "안녕 마리모" in normalized or lowered in {"마리모", "안녕 마리모야", "마리모야"}:
-        return "네, 듣고 있어요. 무엇을 도와드릴까요?"
-
-    if any(
-        token in normalized
-        for token in (
-            "마리모는 어떤 식물이야",
-            "마리모가 뭐야",
-            "마리모의 종",
-            "마리모 자체",
-        )
-    ):
-        return "마리모는 보통 구형으로 자라는 녹조류를 뜻하고, 어항에서 관상용으로 키우는 경우가 많습니다."
-
     return None
 
 
 def normalize_answer(answer: str) -> str:
-    cleaned = answer.strip()
-    cleaned = re.sub(r"^(마리모|assistant)\s*[:：]\s*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"^(사용자|user)\s*[:：]\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = unicodedata.normalize("NFKC", answer or "")
+    cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
 
 
 def build_mock_answer(payload: GeneratePayload) -> str:
-    question = payload.question.strip()
-    quick = direct_answer(question)
-    if quick:
-        return quick
-
     if not payload.use_sensor_context:
-        if any(token in question for token in ("안녕", "소개", "이름")):
-            return "안녕하세요. 저는 식물 상태를 부드럽게 설명해 주는 작은 한국어 음성 비서예요."
-        return "좋아요. 질문을 자연스럽게 이해해서 필요한 내용을 한국어로 간단히 말해볼게요."
+        return "좋아. 조금만 더 자세히 말해줘."
 
     sensor = payload.sensor or {}
     state = payload.state or {}
@@ -163,16 +147,16 @@ def build_mock_answer(payload: GeneratePayload) -> str:
         ("temperature", "기온"),
         ("humidity", "습도"),
         ("light", "조도"),
-        ("water_level", "수분"),
+        ("water_level", "수위"),
         ("distance", "거리"),
     ):
         if sensor.get(key) is not None:
             values.append(f"{label} {sensor[key]}")
 
-    summary = ", ".join(values) if values else "센서값이 아직 충분히 들어오지 않았어요."
+    summary = ", ".join(values) if values else "센서 값이 아직 들어오지 않았어요."
     if alerts:
-        return f"지금 상태는 {level} 단계예요. {summary}로 보이고 {', '.join(alerts)} 신호가 있어요."
-    return f"지금 상태는 {level} 단계예요. {summary} 비교적 안정적입니다."
+        return f"지금 상태는 {level}예요. {summary}. {', '.join(alerts)}가 보여요."
+    return f"지금 상태는 {level}예요. {summary}. 비교적 안정적이에요."
 
 
 def get_model_bundle() -> dict[str, Any]:
@@ -252,10 +236,6 @@ def generate_answer(payload: GeneratePayload) -> str:
     import torch
 
     question = payload.question.strip()
-    quick = direct_answer(question)
-    if quick:
-        return quick
-
     bundle = get_model_bundle()
     tokenizer = bundle["tokenizer"]
     model = bundle["model"]
@@ -277,7 +257,7 @@ def generate_answer(payload: GeneratePayload) -> str:
         output_ids = model.generate(
             **inputs,
             do_sample=False,
-            max_new_tokens=256,
+            max_new_tokens=96,
             repetition_penalty=1.12,
             no_repeat_ngram_size=2,
             length_penalty=0.9,

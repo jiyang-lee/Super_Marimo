@@ -39,6 +39,7 @@ _TTS_RUNTIME_STATE: dict[str, Any] = {
     "loaded": False,
     "ready": False,
     "voice_name": TTS_VOICE_NAME,
+    "available_voice_names": [],
     "error": None,
 }
 _TTS_RUNTIME_LOCK = Lock()
@@ -68,6 +69,7 @@ app.add_middleware(PrivateNetworkCorsMiddleware)
 
 class TtsPayload(BaseModel):
     text: str
+    voice_name: str | None = None
 
 
 @app.exception_handler(Exception)
@@ -153,6 +155,20 @@ def get_tts_model():
     return TTS(auto_download=True, model="supertonic-3", model_dir=SUPERTONIC_MODEL_DIR)
 
 
+def select_tts_voice_name(available_voice_names: list[str], requested_voice_name: str | None = None) -> str:
+    requested = (requested_voice_name or "").strip()
+    if requested and requested in available_voice_names:
+        return requested
+    if requested and requested not in available_voice_names:
+        logger.warning("Requested TTS voice '%s' not available; falling back", requested)
+
+    if TTS_VOICE_NAME in available_voice_names:
+        return TTS_VOICE_NAME
+    if available_voice_names:
+        return available_voice_names[0]
+    return requested or TTS_VOICE_NAME
+
+
 def get_tts_runtime() -> dict[str, Any]:
     global _TTS_RUNTIME
 
@@ -165,26 +181,20 @@ def get_tts_runtime() -> dict[str, Any]:
 
         tts = get_tts_model()
         available_voice_names = list(getattr(tts, "voice_style_names", []) or [])
-        voice_name = TTS_VOICE_NAME if TTS_VOICE_NAME in available_voice_names else None
-
-        if voice_name is None and available_voice_names:
-            voice_name = available_voice_names[0]
-            logger.warning(
-                "Requested TTS voice '%s' not available, falling back to '%s'",
-                TTS_VOICE_NAME,
-                voice_name,
-            )
-
-        if voice_name is None:
-            voice_name = TTS_VOICE_NAME
-
+        voice_name = select_tts_voice_name(available_voice_names, TTS_VOICE_NAME)
         style = tts.get_voice_style(voice_name=voice_name)
-        _TTS_RUNTIME = {"tts": tts, "style": style, "voice_name": voice_name}
+        _TTS_RUNTIME = {
+            "tts": tts,
+            "style": style,
+            "voice_name": voice_name,
+            "available_voice_names": available_voice_names,
+        }
         _TTS_RUNTIME_STATE.update(
             {
                 "loaded": True,
                 "ready": True,
                 "voice_name": voice_name,
+                "available_voice_names": available_voice_names,
                 "error": None,
             }
         )
@@ -221,6 +231,7 @@ def health() -> dict[str, Any]:
         "tts_backend": TTS_BACKEND,
         "tts_model": TTS_MODEL_ID,
         "tts_voice_name": TTS_VOICE_NAME,
+        "tts_voice_names": _TTS_RUNTIME_STATE.get("available_voice_names", []),
         "tts_lang": TTS_LANG,
         "tts_ready": _TTS_RUNTIME_STATE["ready"],
         "tts_runtime_voice_name": _TTS_RUNTIME_STATE["voice_name"],
@@ -294,7 +305,9 @@ def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
 
     runtime = get_tts_runtime()
     tts = runtime["tts"]
-    style = runtime["style"]
+    available_voice_names = runtime.get("available_voice_names", [])
+    resolved_voice_name = select_tts_voice_name(available_voice_names, payload.voice_name)
+    style = tts.get_voice_style(voice_name=resolved_voice_name)
     wav, _duration = tts.synthesize(payload.text, voice_style=style, lang=TTS_LANG)
     tts.save_audio(wav, output_path)
     background_tasks.add_task(os.remove, output_path)

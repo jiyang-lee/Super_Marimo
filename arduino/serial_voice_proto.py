@@ -11,7 +11,9 @@ import re
 import tempfile
 import time
 import uuid
+import threading
 import wave
+import unicodedata
 from pathlib import Path
 from urllib import error as urlerror
 from urllib import request as urlrequest
@@ -25,33 +27,60 @@ CHANNELS = 1
 SAMPLE_WIDTH = 2
 FRAME_SAMPLES = 256
 FRAME_BYTES = FRAME_SAMPLES * SAMPLE_WIDTH
-WAKE_PHRASES = (
-    "\uc548\ub155\ub9c8\ub9ac\ubaa8",
-    "\uc548\ub155\ud558\uc138\uc694\ub9c8\ub9ac\ubaa8",
-    "\ub9c8\ub9ac\ubaa8",
-    "\ub9c8\ub9ac\ubaa8\uc57c",
-    "\ub9c8\ub9ac\ubaa8\uc528",
+
+WAKE_PREFIXES = (
+    "안녕마리모",
+    "안녕하세요마리모",
+    "마리모",
+    "마니모",
+    "마린모",
+    "마리모야",
+    "마리모씨",
+    "마니모야",
+    "마린모야",
 )
+
+WAKE_SUFFIXES = (
+    "",
+    "야",
+    "씨",
+    "님",
+    "요",
+    "좀",
+    "부탁",
+    "불러",
+    "불러줘",
+    "도와줘",
+    "도와줄래",
+    "말해줘",
+)
+
 EXIT_PHRASES = (
-    "\uc798\uac00\ub9c8\ub9ac\ubaa8",
-    "\ubc14\uc774\ub9c8\ub9ac\ubaa8",
-    "\uadf8\ub9cc\ud574\ub9c8\ub9ac\ubaa8",
-    "\uc885\ub8cc\ud574\ub9c8\ub9ac\ubaa8",
+    "잘가",
+    "잘 가",
+    "바이",
+    "그만해",
+    "대화 종료",
+    "대화종료",
+    "종료해 마리모",
+    "종료해마리모",
 )
-DEFAULT_PERSONA_MEMO = (
-    "\uc9e4\uace0 \uc790\uc5f0\uc2a4\ub7fd\uac8c \ub2f5\ud55c\ub2e4. "
-    "\ubcf4\ud1b5 1~2\ubb38\uc7a5, \uae38\uc5b4\ub3c4 3\ubb38\uc7a5\uc744 \ub118\uae30\uc9c0 \uc54a\ub294\ub2e4."
-)
-DEFAULT_SYSTEM_MEMO = (
-    "\ud638\ucd9c\uc5b4 \ud6c4\uc758 \ub300\ud654\ub97c \uc774\uc5b4\uac00\ub418, "
-    "\ud575\uc2ec\ub9cc \uac04\ub2e8\ud788 \ub9d0\ud55c\ub2e4. "
-    "\ubaa8\ud638\ud558\uba74 \uc9e7\uac8c \ub2e4\uc2dc \ubb3b\ub294\ub2e4."
-)
+
 WAKE_GREETINGS = (
-    "\uc548\ub155! \uc624\ub298 \ud558\ub8e8\ub294 \uc5b4\ub5bb\uc5c8\uc5b4?",
-    "\uc548\ub155? \uc9c0\uae08 \ubb50\ud574?",
-    "\ubb34\uc0c8\uc694. \ub9c8\ub9ac\ubaa8\uc608\uc694.",
-    "\uc798 \ubd88\ub800\uc5b4. \ubb50\ub97c \ub3c4\uc640\ub4dc\ub9b4\uae4c?",
+    "안녕, 불렀구나. 천천히 말해줘.",
+    "응, 마리모야. 편하게 이야기해도 돼.",
+    "안녕. 무엇을 도와줄까?",
+    "그래, 듣고 있어. 말해줘.",
+)
+
+DEFAULT_PERSONA_MEMO = (
+    "짧고 자연스럽게 답한다. "
+    "보통 1~2문장, 길어도 3문장을 넘기지 않는다."
+)
+
+DEFAULT_SYSTEM_MEMO = (
+    "호출어 직후에는 친절한 인사만 하고, "
+    "답변은 한국어로만 짧고 자연스럽게 말해준다."
 )
 
 
@@ -64,11 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tts-endpoint", default="http://127.0.0.1:8002/tts")
     parser.add_argument("--api-endpoint", default="http://127.0.0.1:8000/voice/ask")
     parser.add_argument("--events-endpoint", default="http://127.0.0.1:8000/events")
-    parser.add_argument(
-        "--session-state-file",
-        default="arduino\\voice_session.json",
-        help="Session id state file",
-    )
+    parser.add_argument("--session-state-file", default="arduino\\voice_session.json", help="Session id state file")
     parser.add_argument("--history-turns", type=int, default=6)
     parser.add_argument("--wake-timeout-sec", type=int, default=120)
     parser.add_argument("--start-rms", type=int, default=900)
@@ -108,9 +133,45 @@ def normalize_text(text: str) -> str:
     return normalized
 
 
+def sanitize_tts_text(text: str) -> str:
+    value = unicodedata.normalize("NFKC", text or "")
+    value = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", value)
+    value = re.sub(r"[\x00-\x1f\x7f]", "", value)
+    value = re.sub(r"\([^)]*\)", "", value)
+    value = re.sub(r"\s+", " ", value)
+    value = value.strip()
+    value = re.sub(r"^[은는이가을를은는이가을를]+\s*", "", value)
+    value = re.sub(r"\s+([,.;:!?])", r"\1", value)
+    value = re.sub(r"[ ]{2,}", " ", value)
+    return value.strip()
+
+
+def _is_repeated_chunk(text: str) -> bool:
+    if len(text) < 2:
+        return False
+    max_chunk = min(4, len(text) // 2)
+    for size in range(1, max_chunk + 1):
+        if len(text) % size != 0:
+            continue
+        chunk = text[:size]
+        if chunk * (len(text) // size) == text:
+            return True
+    return False
+
+
 def has_wake_phrase(text: str) -> bool:
     normalized = normalize_text(text)
-    return any(phrase in normalized for phrase in WAKE_PHRASES)
+    if not normalized:
+        return False
+    for phrase in WAKE_PREFIXES:
+        if not normalized.startswith(phrase):
+            continue
+        suffix = normalized[len(phrase) :]
+        if not suffix:
+            return True
+        if any(suffix.startswith(allowed) for allowed in WAKE_SUFFIXES if allowed):
+            return True
+    return False
 
 
 def has_exit_phrase(text: str) -> bool:
@@ -120,12 +181,76 @@ def has_exit_phrase(text: str) -> bool:
 
 def strip_wake_phrase(text: str) -> str:
     raw = (text or "").strip()
-    return re.sub(
-        r"^(\uC548\uB155(?:\uD558\uC138(?:\uC694)?)?\s*\uB9C8\uB9AC\uBAA8|\uB9C8\uB9AC\uBAA8(?:\uC57C|\uC528)?)\s*[:,-]?\s*",
-        "",
-        raw,
-        flags=re.IGNORECASE,
-    ).strip()
+    compact = normalize_text(raw)
+    for phrase in WAKE_PREFIXES:
+        if not compact.startswith(phrase):
+            continue
+        return raw[len(raw) - len(compact) + len(phrase) :].lstrip(" \t\r\n:,-")
+    return raw
+
+
+def is_noise_transcript(text: str) -> bool:
+    normalized = normalize_text(text)
+    if not normalized:
+        return True
+    if re.fullmatch(r"[ㅋㅎㅜㅠ]{2,}", normalized):
+        return True
+    if normalized in {"음", "어", "아", "네", "응", "예", "흠", "휴", "헉"}:
+        return True
+    if len(set(normalized)) == 1:
+        return True
+    if _is_repeated_chunk(normalized) and len(normalized) <= 8:
+        return True
+    return False
+
+
+def should_retry_followup(text: str) -> bool:
+    if is_noise_transcript(text):
+        return True
+
+    normalized = normalize_text(text)
+    if not normalized:
+        return True
+
+    if re.search(r"[?？]", text):
+        return False
+
+    question_cues = (
+        "왜",
+        "뭐",
+        "누구",
+        "언제",
+        "어디",
+        "어떻게",
+        "얼마",
+        "몇",
+        "어떤",
+        "궁금",
+        "알려줘",
+        "말해줘",
+        "도와줘",
+        "설명",
+        "해줘",
+        "할까",
+        "될까",
+        "되나",
+        "되니",
+        "가능해",
+    )
+    if any(cue in normalized for cue in question_cues):
+        return False
+
+    if len(normalized) <= 1:
+        return True
+
+    if _is_repeated_chunk(normalized):
+        return True
+
+    return False
+
+
+def retry_prompt() -> str:
+    return "조금만 다시 말해줄래?"
 
 
 def wav_bytes_from_pcm(pcm_bytes: bytes) -> bytes:
@@ -238,7 +363,19 @@ class VoicePrototype:
             self.active_session_id = str(uuid.uuid4())
             self.save_session_id(self.active_session_id)
             print(f"[session] opened {self.active_session_id}")
+        self.touch_remote_session()
         return self.active_session_id
+
+    def touch_remote_session(self) -> None:
+        session_id = self.active_session_id
+        if not session_id:
+            return
+        try:
+            parsed = urlsplit(self.args.api_endpoint)
+            touch_url = urlunsplit((parsed.scheme, parsed.netloc, f"/sessions/{session_id}/touch", "", ""))
+            post_json(touch_url, {"touched_by": "serial_voice_proto"}, timeout=30)
+        except Exception as exc:
+            print(f"[session] touch failed: {exc}")
 
     def end_active_session(self) -> None:
         session_id = self.active_session_id
@@ -247,11 +384,7 @@ class VoicePrototype:
         try:
             parsed = urlsplit(self.args.api_endpoint)
             end_url = urlunsplit((parsed.scheme, parsed.netloc, f"/sessions/{session_id}/end", "", ""))
-            post_json(
-                end_url,
-                {"ended_by": "serial_voice_proto"},
-                timeout=30,
-            )
+            post_json(end_url, {"ended_by": "serial_voice_proto"}, timeout=30)
         except Exception as exc:
             print(f"[session] end failed: {exc}")
         self.clear_session_id()
@@ -285,10 +418,14 @@ class VoicePrototype:
             payload["distance"] = distance
         if sensor is not None:
             payload["sensor"] = sensor
-        try:
-            post_json(self.args.events_endpoint, payload, timeout=30)
-        except Exception as exc:
-            print(f"[event] {event_type} log failed: {exc}")
+
+        def _send_event() -> None:
+            try:
+                post_json(self.args.events_endpoint, payload, timeout=15)
+            except Exception as exc:
+                print(f"[event] {event_type} log failed: {exc}")
+
+        threading.Thread(target=_send_event, daemon=True).start()
 
     def sanitize_tail(self, text: str) -> str:
         value = (text or "").strip()
@@ -299,6 +436,10 @@ class VoicePrototype:
     def pick_wake_greeting(self) -> str:
         return random.choice(WAKE_GREETINGS)
 
+    def keep_conversation_open(self, ttl_sec: int | None = None) -> None:
+        ttl = ttl_sec if ttl_sec is not None else self.args.wake_timeout_sec
+        self.armed_until = time.time() + ttl
+
     def stt(self, pcm_bytes: bytes) -> str:
         wav_bytes = wav_bytes_from_pcm(pcm_bytes)
         url = f"{self.args.stt_endpoint}?model={self.args.stt_model}"
@@ -306,10 +447,11 @@ class VoicePrototype:
         return (payload.get("text") or "").strip()
 
     def ask_api(self, text: str) -> dict:
+        session_id = self.active_session_id or self.ensure_active_session()
         payload = {
             "text": text,
             "use_sensor_context": False,
-            "session_id": self.ensure_active_session(),
+            "session_id": session_id,
         }
         return post_json(self.args.api_endpoint, payload, timeout=120)
 
@@ -335,7 +477,11 @@ class VoicePrototype:
             tmp.close()
 
     def speak(self, text: str) -> None:
-        wav_path = self.tts(text)
+        cleaned_text = sanitize_tts_text(text)
+        if not cleaned_text:
+            print("[tts] skipped empty sanitized text")
+            return
+        wav_path = self.tts(cleaned_text)
         try:
             winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
         finally:
@@ -371,7 +517,7 @@ class VoicePrototype:
             return
 
         if has_exit_phrase(transcript):
-            goodbye = "\uc54c\uaca0\uc5b4\uc694. \ub300\ud654\ub97c \uc885\ub8cc\ud560\uac8c\uc694. \ub2e4\uc74c\uc5d0 \ub2e4\uc2dc \ubd88\ub7ec\uc8fc\uc138\uc694."
+            goodbye = "알겠어. 대화를 종료할게. 다음에 또 불러줘."
             print(f"[session] closed by voice {self.active_session_id or '<none>'}")
             try:
                 self.speak(goodbye)
@@ -401,31 +547,57 @@ class VoicePrototype:
         if has_wake_phrase(transcript) or has_wake_phrase(self.transcript_buffer):
             if not self.active_session_id:
                 self.ensure_active_session()
-            self.armed_until = time.time() + self.args.wake_timeout_sec
-            tail = self.sanitize_tail(
-                strip_wake_phrase(transcript) or strip_wake_phrase(self.transcript_buffer)
-            )
+            self.keep_conversation_open(self.args.wake_timeout_sec)
             self.transcript_buffer = ""
             print("[wake] detected")
             self.record_event(
                 "wakeword",
                 generated_text=transcript,
-                meta={"tail": tail, "wake_timeout_sec": self.args.wake_timeout_sec},
+                meta={"wake_timeout_sec": self.args.wake_timeout_sec},
             )
             response_text = self.pick_wake_greeting()
             self.speak(response_text)
+            self.keep_conversation_open()
             self.record_event(
                 "tts_played",
                 generated_text=response_text,
                 played=True,
                 meta={"success": True, "kind": "wake_prompt"},
             )
-            if tail:
-                self.answer_turn(tail)
             return
 
         if time.time() <= self.armed_until:
+            if should_retry_followup(transcript):
+                prompt = retry_prompt()
+                print("[retry] transcript looks like noise")
+                try:
+                    self.speak(prompt)
+                    self.record_event(
+                        "tts_played",
+                        generated_text=prompt,
+                        played=True,
+                        meta={"success": True, "kind": "retry_prompt"},
+                    )
+                except Exception as exc:
+                    self.record_event(
+                        "tts_played",
+                        generated_text=prompt,
+                        played=False,
+                        meta={"success": False, "error": str(exc), "kind": "retry_prompt"},
+                    )
+                    print(f"[tts] playback failed: {exc}")
+                self.keep_conversation_open(15)
+                return
             self.answer_turn(transcript)
+            return
+
+        if self.active_session_id:
+            if is_noise_transcript(transcript) or should_retry_followup(transcript):
+                print("[idle] transcript ignored outside wake window")
+                return
+            print("[late] processing transcript outside wake window")
+            self.answer_turn(transcript)
+            return
 
     def answer_turn(self, text: str) -> None:
         clean_text = text.strip()
@@ -442,13 +614,15 @@ class VoicePrototype:
             )
             print(f"[error] api request failed: {exc}")
             return
+
         answer = str(
             api_result.get("answer")
             or api_result.get("tts_text")
             or api_result.get("llm_answer")
             or ""
         ).strip()
-        answer = re.sub(r"^(assistant|\uB9C8\uB9AC\uBAA8)\s*[:\-]?\s*", "", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"^(assistant|마리모)\s*[:\-]?\s*", "", answer, flags=re.IGNORECASE)
+        answer = sanitize_tts_text(answer)
         if not answer:
             self.record_event(
                 "llm_completed",
@@ -457,6 +631,7 @@ class VoicePrototype:
             )
             print(f"[error] voice api returned no answer: {api_result}")
             return
+
         print(f"[agent] session={api_result.get('session_id')}")
         print(f"[marimo] {answer}")
         self.record_event(
@@ -471,6 +646,7 @@ class VoicePrototype:
         )
         try:
             self.speak(answer)
+            self.keep_conversation_open()
             self.record_event(
                 "tts_played",
                 generated_text=answer,
@@ -485,6 +661,8 @@ class VoicePrototype:
                 meta={"success": False, "error": str(exc)},
             )
             print(f"[tts] playback failed: {exc}")
+        finally:
+            self.keep_conversation_open()
 
 
 def run_capture_loop(args: argparse.Namespace) -> None:

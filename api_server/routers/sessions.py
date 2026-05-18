@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from extensions.db import get_db_connection
-from services.session_service import end_session, fetch_session_detail, list_sessions
+from services.session_service import ensure_session, end_session, fetch_session_detail, list_sessions
 from utils import normalize_response_payload
 
 router = APIRouter()
@@ -23,6 +23,26 @@ def session_detail(session_id: UUID) -> dict[str, Any]:
     with get_db_connection() as conn:
         payload = fetch_session_detail(conn, session_id)
     return normalize_response_payload(payload)
+
+
+@router.post("/sessions/{session_id}/touch")
+def session_touch(session_id: UUID) -> dict[str, Any]:
+    with get_db_connection() as conn:
+        payload, created = ensure_session(conn, session_id)
+        conn.commit()
+    return normalize_response_payload(
+        {
+            "session": {
+                "session_id": str(payload["session_id"]),
+                "created_at": payload["created_at"],
+                "last_seen_at": payload["last_seen_at"],
+                "ended_at": payload["ended_at"],
+                "turn_count": payload["turn_count"],
+                "meta": payload["meta"],
+            },
+            "created": created,
+        }
+    )
 
 
 @router.post("/sessions/{session_id}/end")

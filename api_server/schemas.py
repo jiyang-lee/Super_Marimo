@@ -29,6 +29,8 @@ class AskPayload(BaseModel):
     sensor: SensorPayload
     session_id: Optional[UUID] = None
     use_sensor_context: bool = True
+    persona_memo: Optional[str] = None
+    system_memo: Optional[str] = None
 
 
 class VoiceAskPayload(BaseModel):
@@ -36,6 +38,8 @@ class VoiceAskPayload(BaseModel):
     sensor: Optional[SensorPayload] = None
     session_id: Optional[UUID] = None
     use_sensor_context: bool = False
+    persona_memo: Optional[str] = None
+    system_memo: Optional[str] = None
 
 
 class DeviceEventBasePayload(BaseModel):

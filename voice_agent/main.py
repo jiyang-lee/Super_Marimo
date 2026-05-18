@@ -22,6 +22,7 @@ VOICE_SERVER_URL = os.getenv("VOICE_SERVER_URL", "http://127.0.0.1:8002")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://127.0.0.1:8001")
 SESSION_FILE = Path(os.getenv("SESSION_FILE", "voice_agent.session.json"))
 DEFAULT_STT_MODEL = os.getenv("STT_MODEL", "fast")
+VOICE_AGENT_PORT = int(os.getenv("VOICE_AGENT_PORT", "8003"))
 
 logger = logging.getLogger("voice_agent")
 app = FastAPI(title="Super Marimo Voice Agent", version="0.2.0")
@@ -49,6 +50,9 @@ class AskPayload(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list)
     session_id: Optional[str] = None
     speak: bool = False
+    persona_memo: Optional[str] = None
+    system_memo: Optional[str] = None
+    voice_name: Optional[str] = None
 
 
 class AskResponse(BaseModel):
@@ -56,8 +60,6 @@ class AskResponse(BaseModel):
     answer: str
     session_id: str
     api_health: dict[str, Any]
-    voice_health: dict[str, Any]
-    llm_health: dict[str, Any]
     tts_ok: bool
     tts_path: Optional[str] = None
     interaction_id: Optional[int] = None
@@ -117,27 +119,19 @@ def api_health() -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-def voice_health() -> dict[str, Any]:
-    try:
-        data = get_json(f"{VOICE_SERVER_URL}/health")
-        return {"ok": True, "data": data}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
-
-
-def llm_health() -> dict[str, Any]:
-    try:
-        data = get_json(f"{LLM_SERVER_URL}/health")
-        return {"ok": True, "data": data}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
-
-
-def ask_api_server(text: str, session_id: str) -> dict[str, Any]:
+def ask_api_server(
+    text: str,
+    session_id: str,
+    *,
+    persona_memo: Optional[str] = None,
+    system_memo: Optional[str] = None,
+) -> dict[str, Any]:
     payload = {
         "text": text,
         "session_id": session_id,
         "use_sensor_context": False,
+        "persona_memo": persona_memo,
+        "system_memo": system_memo,
     }
     return post_json(f"{API_SERVER_URL}/voice/ask", payload, timeout=120)
 
@@ -154,10 +148,13 @@ def extract_answer(api_result: dict[str, Any]) -> str:
     return answer
 
 
-def synthesize_tts(text: str) -> Optional[str]:
+def synthesize_tts(text: str, voice_name: Optional[str] = None) -> Optional[str]:
+    payload: dict[str, Any] = {"text": text}
+    if voice_name:
+        payload["voice_name"] = voice_name
     response = requests.post(
         f"{VOICE_SERVER_URL}/tts",
-        json={"text": text},
+        json=payload,
         timeout=120,
     )
     response.raise_for_status()
@@ -180,8 +177,6 @@ def health() -> dict[str, Any]:
         "ok": True,
         "server": "voice-agent",
         "api_server": api_health(),
-        "voice_server": voice_health(),
-        "llm_server": llm_health(),
         "default_stt_model": DEFAULT_STT_MODEL,
         "session_id": session_id,
     }
@@ -193,23 +188,22 @@ def ask(payload: AskPayload) -> AskResponse:
     save_session_id(session_id)
 
     a_health = api_health()
-    v_health = voice_health()
-    l_health = llm_health()
     if not a_health.get("ok"):
         raise HTTPException(status_code=503, detail=f"api-server unavailable: {a_health.get('error')}")
-    if not v_health.get("ok"):
-        raise HTTPException(status_code=503, detail=f"voice-server unavailable: {v_health.get('error')}")
-    if not l_health.get("ok"):
-        raise HTTPException(status_code=503, detail=f"llm-server unavailable: {l_health.get('error')}")
 
-    api_result = ask_api_server(payload.text, session_id)
+    api_result = ask_api_server(
+        payload.text,
+        session_id,
+        persona_memo=payload.persona_memo,
+        system_memo=payload.system_memo,
+    )
     answer = extract_answer(api_result)
     tts_path: Optional[str] = None
     tts_ok = False
 
     if payload.speak:
         try:
-            tts_path = synthesize_tts(answer)
+            tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
             tts_ok = True
         except Exception as exc:
             logger.warning("Audio playback skipped: %s", exc)
@@ -222,8 +216,6 @@ def ask(payload: AskPayload) -> AskResponse:
         answer=answer,
         session_id=resolved_session_id,
         api_health=a_health,
-        voice_health=v_health,
-        llm_health=l_health,
         tts_ok=tts_ok,
         tts_path=tts_path,
         interaction_id=api_result.get("interaction_id"),
@@ -235,7 +227,7 @@ def ask(payload: AskPayload) -> AskResponse:
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=VOICE_AGENT_PORT, reload=False)
 
 
 if __name__ == "__main__":
