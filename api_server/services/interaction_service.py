@@ -8,13 +8,11 @@ from psycopg.types.json import Json
 from config import LLM_SERVER_URL
 from extensions.db import get_db_connection
 from schemas import SensorPayload
-from services.sensor_service import judge_sensor_state, load_latest_sensor_payload
-from services.session_service import (
-    ensure_session,
-    fetch_recent_session_messages,
-    save_session_message,
-    update_session_turn,
-)
+from services.sensor_judge import judge_sensor_state
+from services.sensor_store import load_latest_sensor_payload
+from services.session_lifecycle import ensure_session, update_session_turn
+from services.session_message import fetch_recent_session_messages, save_session_message
+
 from utils import normalize_datetime, normalize_response_payload
 
 

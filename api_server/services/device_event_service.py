@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import HTTPException
 from psycopg.types.json import Json
@@ -104,3 +104,183 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
         "meta": normalize_response_payload(row["meta"]),
     }
     return {"saved": True, "event": normalize_response_payload(event)}
+
+
+def list_events(
+    *,
+    event_type: Optional[str] = None,
+    device_id: Optional[str] = None,
+    played: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(limit, 200))
+    safe_offset = max(0, offset)
+
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if event_type:
+        normalized = normalize_event_type(event_type)
+        conditions.append("event_type = %s")
+        params.append(normalized)
+    if device_id:
+        conditions.append("device_id = %s")
+        params.append(device_id)
+    if played is not None:
+        conditions.append("played = %s")
+        params.append(played)
+
+    where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    event_id,
+                    session_id,
+                    created_at,
+                    event_type,
+                    device_id,
+                    trigger_source,
+                    distance,
+                    sensor_json,
+                    state_level,
+                    state_alerts,
+                    generated_text,
+                    played,
+                    meta
+                FROM device_event_log
+                {where_clause}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, safe_limit, safe_offset),
+            )
+            rows = cur.fetchall() or []
+
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        events.append(
+            {
+                "event_id": row["event_id"],
+                "session_id": str(row["session_id"]) if row.get("session_id") else None,
+                "created_at": normalize_datetime(row["created_at"]),
+                "event_type": row["event_type"],
+                "device_id": row["device_id"],
+                "trigger_source": row["trigger_source"],
+                "distance": row["distance"],
+                "sensor": normalize_response_payload(row["sensor_json"]),
+                "state_level": row["state_level"],
+                "state_alerts": normalize_response_payload(row["state_alerts"]),
+                "generated_text": row["generated_text"],
+                "played": row["played"],
+                "meta": normalize_response_payload(row["meta"]),
+            }
+        )
+
+    return {
+        "events": normalize_response_payload(events),
+        "limit": safe_limit,
+        "offset": safe_offset,
+        "count": len(events),
+    }
+
+
+def get_event(event_id: int) -> dict[str, Any]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    event_id,
+                    session_id,
+                    created_at,
+                    event_type,
+                    device_id,
+                    trigger_source,
+                    distance,
+                    sensor_json,
+                    state_level,
+                    state_alerts,
+                    generated_text,
+                    played,
+                    meta
+                FROM device_event_log
+                WHERE event_id = %s
+                """,
+                (event_id,),
+            )
+            row = cur.fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="event not found")
+
+    return normalize_response_payload(
+        {
+            "event_id": row["event_id"],
+            "session_id": str(row["session_id"]) if row.get("session_id") else None,
+            "created_at": normalize_datetime(row["created_at"]),
+            "event_type": row["event_type"],
+            "device_id": row["device_id"],
+            "trigger_source": row["trigger_source"],
+            "distance": row["distance"],
+            "sensor": normalize_response_payload(row["sensor_json"]),
+            "state_level": row["state_level"],
+            "state_alerts": normalize_response_payload(row["state_alerts"]),
+            "generated_text": row["generated_text"],
+            "played": row["played"],
+            "meta": normalize_response_payload(row["meta"]),
+        }
+    )
+
+
+def mark_event_played(event_id: int) -> dict[str, Any]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE device_event_log
+                SET played = TRUE
+                WHERE event_id = %s
+                RETURNING
+                    event_id,
+                    session_id,
+                    created_at,
+                    event_type,
+                    device_id,
+                    trigger_source,
+                    distance,
+                    sensor_json,
+                    state_level,
+                    state_alerts,
+                    generated_text,
+                    played,
+                    meta
+                """,
+                (event_id,),
+            )
+            row = cur.fetchone()
+        conn.commit()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="event not found")
+
+    return normalize_response_payload(
+        {
+            "event_id": row["event_id"],
+            "session_id": str(row["session_id"]) if row.get("session_id") else None,
+            "created_at": normalize_datetime(row["created_at"]),
+            "event_type": row["event_type"],
+            "device_id": row["device_id"],
+            "trigger_source": row["trigger_source"],
+            "distance": row["distance"],
+            "sensor": normalize_response_payload(row["sensor_json"]),
+            "state_level": row["state_level"],
+            "state_alerts": normalize_response_payload(row["state_alerts"]),
+            "generated_text": row["generated_text"],
+            "played": row["played"],
+            "meta": normalize_response_payload(row["meta"]),
+        }
+    )

@@ -72,3 +72,53 @@
     border: 2px solid rgba(255, 255, 255, 0.45);
   }
 }
+
+@layer components {
+  .pixel-card {
+    @apply rounded-2xl border-2 border-bark/20 bg-white/70 p-4 shadow-sm;
+  }
+
+  .pixel-input {
+    @apply rounded-xl border-2 border-bark/30 bg-white/80 px-3 py-2 font-dot text-sm text-bark outline-none transition focus:border-grass;
+  }
+
+  .quest-item {
+    @apply flex items-center gap-2 rounded-lg border border-bark/15 bg-white/60 p-2;
+  }
+
+  .quest-icon {
+    @apply flex h-8 w-8 items-center justify-center rounded-lg text-sm;
+  }
+
+  .sensor-card {
+    @apply flex flex-col items-center gap-1 rounded-xl border-2 border-bark/15 bg-white/70 p-3;
+  }
+
+  .sensor-value {
+    @apply font-pixel text-lg;
+  }
+
+  .chat-bubble-npc {
+    @apply rounded-2xl rounded-tl-sm border-2 border-grass/30 bg-grass/10 p-3;
+  }
+
+  .chat-bubble-player {
+    @apply rounded-2xl rounded-tr-sm border-2 border-sky/30 bg-sky/10 p-3;
+  }
+
+  .tts-btn {
+    @apply rounded bg-grass/20 px-2 py-0.5 font-dot text-[10px] text-grass hover:bg-grass/30;
+  }
+
+  .msg-time {
+    @apply mt-1 text-right font-dot text-[10px] text-bark/50;
+  }
+
+  .icon-mic {
+    @apply flex h-10 w-10 items-center justify-center rounded-full border-2 border-bark/30 bg-white text-lg transition active:scale-95;
+  }
+
+  .icon-mic.recording {
+    @apply animate-pulse border-heart-red bg-heart-red/20;
+  }
+}

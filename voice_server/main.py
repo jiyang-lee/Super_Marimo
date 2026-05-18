@@ -2,9 +2,6 @@ import logging
 import os
 import tempfile
 import wave
-from functools import lru_cache
-from pathlib import Path
-from threading import Lock
 from typing import Any
 
 import numpy as np
@@ -16,36 +13,25 @@ from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from config import (
+    MOCK_MODE,
+    STT_COMPUTE_TYPE,
+    STT_DEVICE,
+    STT_MODEL_SIZE,
+    SUPERTONIC_CACHE_DIR,
+    SUPERTONIC_MODEL_DIR,
+    TTS_BACKEND,
+    TTS_LANG,
+    TTS_MODEL_ID,
+    TTS_VOICE_NAME,
+    _STT_CONFIG,
+    _STT_RUNTIME_STATES,
+    _TTS_RUNTIME_STATE,
+    logger,
+)
+from stt_engine import get_stt_model, transcribe_audio
+from tts_engine import get_tts_runtime, synthesize
 
-MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
-STT_MODEL_SIZE = os.getenv("STT_MODEL_SIZE", "small")
-STT_ACCURATE_MODEL_SIZE = os.getenv("STT_ACCURATE_MODEL_SIZE", "medium")
-STT_DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
-STT_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
-TTS_BACKEND = os.getenv("TTS_BACKEND", "supertonic-3")
-TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "Supertone/supertonic-3")
-TTS_VOICE_NAME = os.getenv("TTS_VOICE_NAME", "F1")
-TTS_LANG = os.getenv("TTS_LANG", "ko")
-SUPERTONIC_CACHE_DIR = Path(os.getenv("SUPERTONIC_CACHE_DIR", "/root/.cache/supertonic3"))
-SUPERTONIC_MODEL_DIR = SUPERTONIC_CACHE_DIR / TTS_BACKEND
-
-_STT_CONFIG: dict[str, dict[str, str]] = {
-    "fast": {"size": STT_MODEL_SIZE, "device": STT_DEVICE, "compute_type": STT_COMPUTE_TYPE},
-    "accurate": {"size": STT_ACCURATE_MODEL_SIZE, "device": STT_DEVICE, "compute_type": STT_COMPUTE_TYPE},
-}
-
-_STT_RUNTIME_STATES: dict[str, dict[str, str]] = {}
-_TTS_RUNTIME_STATE: dict[str, Any] = {
-    "loaded": False,
-    "ready": False,
-    "voice_name": TTS_VOICE_NAME,
-    "available_voice_names": [],
-    "error": None,
-}
-_TTS_RUNTIME_LOCK = Lock()
-_TTS_RUNTIME: dict[str, Any] | None = None
-
-logger = logging.getLogger("voice_server")
 
 app = FastAPI(title="Marimo Voice Server", version="0.1.0")
 app.add_middleware(
@@ -83,122 +69,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
             "Access-Control-Allow-Private-Network": "true",
         },
     )
-
-
-@lru_cache(maxsize=2)
-def _load_stt_model(model_key: str):
-    from faster_whisper import WhisperModel
-
-    cfg = _STT_CONFIG[model_key]
-    size = cfg["size"]
-    device = cfg["device"]
-    compute_type = cfg["compute_type"]
-
-    try:
-        model = WhisperModel(size, device=device, compute_type=compute_type)
-        _STT_RUNTIME_STATES[model_key] = {"device": device, "compute_type": compute_type}
-        return model
-    except RuntimeError as exc:
-        message = str(exc)
-        if "libcublas.so.12" not in message and "cannot be loaded" not in message:
-            raise
-        logger.warning("CUDA STT init failed for %s, falling back to CPU: %s", model_key, message)
-        _STT_RUNTIME_STATES[model_key] = {"device": "cpu", "compute_type": "int8"}
-        return WhisperModel(size, device="cpu", compute_type="int8")
-
-
-def get_stt_model(model_key: str = "fast"):
-    return _load_stt_model(model_key)
-
-
-def transcribe_audio(audio_path: str, model_key: str = "fast"):
-    from faster_whisper import WhisperModel
-
-    model = get_stt_model(model_key)
-    try:
-        segments, info = model.transcribe(
-            audio_path,
-            language="ko",
-            beam_size=1,
-            best_of=1,
-            condition_on_previous_text=False,
-            vad_filter=True,
-            temperature=0.0,
-        )
-        return list(segments), info
-    except RuntimeError as exc:
-        message = str(exc)
-        if "libcublas.so.12" not in message and "cannot be loaded" not in message:
-            raise
-
-        cfg = _STT_CONFIG[model_key]
-        logger.warning("CUDA STT transcribe failed for %s, falling back to CPU: %s", model_key, message)
-        _STT_RUNTIME_STATES[model_key] = {"device": "cpu", "compute_type": "int8"}
-        _load_stt_model.cache_clear()
-        cpu_model = WhisperModel(cfg["size"], device="cpu", compute_type="int8")
-        segments, info = cpu_model.transcribe(
-            audio_path,
-            language="ko",
-            beam_size=1,
-            best_of=1,
-            condition_on_previous_text=False,
-            vad_filter=True,
-            temperature=0.0,
-        )
-        return list(segments), info
-
-
-@lru_cache(maxsize=1)
-def get_tts_model():
-    from supertonic import TTS
-
-    return TTS(auto_download=True, model="supertonic-3", model_dir=SUPERTONIC_MODEL_DIR)
-
-
-def select_tts_voice_name(available_voice_names: list[str], requested_voice_name: str | None = None) -> str:
-    requested = (requested_voice_name or "").strip()
-    if requested and requested in available_voice_names:
-        return requested
-    if requested and requested not in available_voice_names:
-        logger.warning("Requested TTS voice '%s' not available; falling back", requested)
-
-    if TTS_VOICE_NAME in available_voice_names:
-        return TTS_VOICE_NAME
-    if available_voice_names:
-        return available_voice_names[0]
-    return requested or TTS_VOICE_NAME
-
-
-def get_tts_runtime() -> dict[str, Any]:
-    global _TTS_RUNTIME
-
-    if _TTS_RUNTIME_STATE["ready"] and _TTS_RUNTIME is not None:
-        return _TTS_RUNTIME
-
-    with _TTS_RUNTIME_LOCK:
-        if _TTS_RUNTIME_STATE["ready"] and _TTS_RUNTIME is not None:
-            return _TTS_RUNTIME
-
-        tts = get_tts_model()
-        available_voice_names = list(getattr(tts, "voice_style_names", []) or [])
-        voice_name = select_tts_voice_name(available_voice_names, TTS_VOICE_NAME)
-        style = tts.get_voice_style(voice_name=voice_name)
-        _TTS_RUNTIME = {
-            "tts": tts,
-            "style": style,
-            "voice_name": voice_name,
-            "available_voice_names": available_voice_names,
-        }
-        _TTS_RUNTIME_STATE.update(
-            {
-                "loaded": True,
-                "ready": True,
-                "voice_name": voice_name,
-                "available_voice_names": available_voice_names,
-                "error": None,
-            }
-        )
-        return _TTS_RUNTIME
 
 
 @app.get("/health")
@@ -303,13 +173,10 @@ def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
         background_tasks.add_task(os.remove, output_path)
         return FileResponse(output_path, media_type="audio/wav", filename="mock_tts.wav")
 
-    runtime = get_tts_runtime()
-    tts = runtime["tts"]
-    available_voice_names = runtime.get("available_voice_names", [])
-    resolved_voice_name = select_tts_voice_name(available_voice_names, payload.voice_name)
-    style = tts.get_voice_style(voice_name=resolved_voice_name)
-    wav, _duration = tts.synthesize(payload.text, voice_style=style, lang=TTS_LANG)
-    tts.save_audio(wav, output_path)
+    wav_bytes, _resolved_voice = synthesize(payload.text, voice_name=payload.voice_name)
+    from supertonic import TTS
+    tts_instance = get_tts_runtime()["tts"]
+    TTS.save_audio(wav_bytes, output_path)
     background_tasks.add_task(os.remove, output_path)
     return FileResponse(output_path, media_type="audio/wav", filename="tts.wav")
 

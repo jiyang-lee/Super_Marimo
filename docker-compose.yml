@@ -124,6 +124,10 @@ services:
       VOICE_SERVER_URL: "http://voice-server:8000"
       LLM_SERVER_URL: "http://llm-server:8000"
       SESSION_FILE: "/tmp/super_marimo_voice_agent_session.json"
+      SHARED_AUDIO_DIR: "/app/shared/audio"
+      EVENT_POLLER_INTERVAL: "1.0"
+    volumes:
+      - ./shared/audio:/app/shared/audio
     depends_on:
       api-server:
         condition: service_healthy

@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
@@ -16,16 +17,43 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from core.api_client import ApiClient
+from core.event_poller import EventPoller
+from core.session_store import SessionStore
+from core.tts_client import TtsClient
+
 
 API_SERVER_URL = os.getenv("API_SERVER_URL", "http://127.0.0.1:8000")
 VOICE_SERVER_URL = os.getenv("VOICE_SERVER_URL", "http://127.0.0.1:8002")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://127.0.0.1:8001")
-SESSION_FILE = Path(os.getenv("SESSION_FILE", "voice_agent.session.json"))
+SESSION_FILE = Path(os.getenv("SESSION_FILE", "/tmp/super_marimo_voice_agent_session.json"))
 DEFAULT_STT_MODEL = os.getenv("STT_MODEL", "fast")
 VOICE_AGENT_PORT = int(os.getenv("VOICE_AGENT_PORT", "8003"))
+SHARED_AUDIO_DIR = os.getenv("SHARED_AUDIO_DIR", "/app/shared/audio")
+EVENT_POLLER_INTERVAL = float(os.getenv("EVENT_POLLER_INTERVAL", "1.0"))
 
 logger = logging.getLogger("voice_agent")
-app = FastAPI(title="Super Marimo Voice Agent", version="0.2.0")
+
+api_client = ApiClient(API_SERVER_URL, VOICE_SERVER_URL, LLM_SERVER_URL)
+session_store = SessionStore(str(SESSION_FILE))
+tts_client = TtsClient(api_client, output_dir=SHARED_AUDIO_DIR)
+event_poller = EventPoller(
+    api_client,
+    tts_client,
+    interval_sec=EVENT_POLLER_INTERVAL,
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Voice Agent starting...")
+    event_poller.start()
+    yield
+    logger.info("Voice Agent shutting down...")
+    event_poller.stop()
+
+
+app = FastAPI(title="Super Marimo Voice Agent", version="0.3.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -80,40 +108,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
-def load_session_id() -> Optional[str]:
-    try:
-        if not SESSION_FILE.exists():
-            return None
-        payload = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
-        session_id = str(payload.get("session_id", "")).strip()
-        return session_id or None
-    except Exception:
-        return None
-
-
-def save_session_id(session_id: str) -> None:
-    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SESSION_FILE.write_text(
-        json.dumps({"session_id": session_id}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def get_json(url: str, timeout: int = 10) -> dict[str, Any]:
-    response = requests.get(url, timeout=timeout)
-    response.raise_for_status()
-    return response.json()
-
-
-def post_json(url: str, payload: dict[str, Any], timeout: int = 120) -> dict[str, Any]:
-    response = requests.post(url, json=payload, timeout=timeout)
-    response.raise_for_status()
-    return response.json()
-
-
 def api_health() -> dict[str, Any]:
     try:
-        data = get_json(f"{API_SERVER_URL}/health")
+        data = api_client.api_health()
         return {"ok": True, "data": data}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
@@ -126,14 +123,7 @@ def ask_api_server(
     persona_memo: Optional[str] = None,
     system_memo: Optional[str] = None,
 ) -> dict[str, Any]:
-    payload = {
-        "text": text,
-        "session_id": session_id,
-        "use_sensor_context": False,
-        "persona_memo": persona_memo,
-        "system_memo": system_memo,
-    }
-    return post_json(f"{API_SERVER_URL}/voice/ask", payload, timeout=120)
+    return api_client.voice_ask(text, session_id, persona_memo=persona_memo, system_memo=system_memo)
 
 
 def extract_answer(api_result: dict[str, Any]) -> str:
@@ -149,43 +139,31 @@ def extract_answer(api_result: dict[str, Any]) -> str:
 
 
 def synthesize_tts(text: str, voice_name: Optional[str] = None) -> Optional[str]:
-    payload: dict[str, Any] = {"text": text}
-    if voice_name:
-        payload["voice_name"] = voice_name
-    response = requests.post(
-        f"{VOICE_SERVER_URL}/tts",
-        json=payload,
-        timeout=120,
-    )
-    response.raise_for_status()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-        tmp.write(response.content)
-        tts_path = tmp.name
-
-    if os.name == "nt":
-        import winsound
-
-        winsound.PlaySound(tts_path, winsound.SND_FILENAME)
-
-    return tts_path
+    try:
+        path = tts_client.synthesize_to_file(text, voice_name=voice_name, prefix="ask")
+        return str(path)
+    except Exception as exc:
+        logger.warning("TTS synthesis failed: %s", exc)
+        return None
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    session_id = load_session_id()
+    session_id = session_store.load()
     return {
         "ok": True,
         "server": "voice-agent",
         "api_server": api_health(),
         "default_stt_model": DEFAULT_STT_MODEL,
         "session_id": session_id,
+        "event_poller_running": event_poller._thread is not None and event_poller._thread.is_alive(),
     }
 
 
 @app.post("/ask", response_model=AskResponse)
 def ask(payload: AskPayload) -> AskResponse:
-    session_id = payload.session_id or load_session_id() or str(uuid.uuid4())
-    save_session_id(session_id)
+    session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
+    session_store.save(session_id)
 
     a_health = api_health()
     if not a_health.get("ok"):
@@ -202,14 +180,11 @@ def ask(payload: AskPayload) -> AskResponse:
     tts_ok = False
 
     if payload.speak:
-        try:
-            tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
-            tts_ok = True
-        except Exception as exc:
-            logger.warning("Audio playback skipped: %s", exc)
+        tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
+        tts_ok = tts_path is not None
 
     resolved_session_id = str(api_result.get("session_id") or session_id)
-    save_session_id(resolved_session_id)
+    session_store.save(resolved_session_id)
 
     return AskResponse(
         saved=bool(api_result.get("saved", False)),

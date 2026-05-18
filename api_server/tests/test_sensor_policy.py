@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
-from services.sensor_service import build_realtime_next_action, judge_realtime_state
+from services.sensor_judge import judge_realtime_state
+from services.sensor_policy import build_realtime_next_action
 
 
 class _DummyConn:

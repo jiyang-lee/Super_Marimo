@@ -160,6 +160,32 @@ export interface SensorLatest {
   latest_merged: SensorReading | null;
 }
 
+export interface DeviceEvent {
+  event_id: number;
+  event_type: string;
+  device_id: string;
+  trigger_source: string;
+  generated_text: string;
+  played: boolean;
+  created_at: string;
+  distance: number | null;
+  state_level: string;
+  [key: string]: unknown;
+}
+
+export async function listEvents(options?: { event_type?: string; played?: boolean; limit?: number; offset?: number }): Promise<{ events: DeviceEvent[]; count: number; limit: number; offset: number }> {
+  const params = new URLSearchParams();
+  if (options?.event_type) params.append('event_type', options.event_type);
+  if (options?.played !== undefined) params.append('played', String(options.played));
+  if (options?.limit !== undefined) params.append('limit', String(options.limit));
+  if (options?.offset !== undefined) params.append('offset', String(options.offset));
+  return fetchJson(`${API}/events?${params.toString()}`);
+}
+
+export async function markEventPlayed(eventId: number): Promise<DeviceEvent> {
+  return fetchJson(`${API}/events/${eventId}/played`, { method: 'POST' });
+}
+
 export async function checkAgentHealth(): Promise<AgentHealth> {
   return fetchJson<AgentHealth>(`${AGENT}/health`);
 }
@@ -187,6 +213,10 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
 
 export async function getLatestSensor(): Promise<SensorLatest> {
   return fetchJson<SensorLatest>(`${API}/sensor/latest`);
+}
+
+export async function getSensorHistory(limit = 24): Promise<{ realtime_history: SensorReading[]; hourly_history: SensorReading[] }> {
+  return fetchJson(`${API}/sensor/history?limit=${limit}`);
 }
 
 export async function askAgent(text: string, sessionId?: string, options?: AskAgentOptions): Promise<AskResult> {

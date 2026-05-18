@@ -4,17 +4,15 @@ from fastapi import APIRouter
 
 from extensions.db import get_db_connection
 from schemas import HourlySensorPayload, RealtimeSensorPayload, SensorPayload
-from services.sensor_service import (
-    build_merged_payload,
-    build_realtime_next_action,
+from services.sensor_judge import judge_hourly_state, judge_realtime_state, judge_sensor_state
+from services.sensor_policy import build_realtime_next_action
+from services.sensor_store import (
     expand_sensor_row,
     get_latest_sensor_row,
     get_recent_sensor_rows,
-    judge_hourly_state,
-    judge_realtime_state,
-    judge_sensor_state,
     save_sensor_reading,
 )
+from services.sensor_utils import build_merged_payload
 from utils import normalize_response_payload
 
 router = APIRouter()

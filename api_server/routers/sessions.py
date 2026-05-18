@@ -4,7 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from extensions.db import get_db_connection
-from services.session_service import ensure_session, end_session, fetch_session_detail, list_sessions
+from services.session_lifecycle import ensure_session, end_session
+from services.session_query import fetch_session_detail, list_sessions
 from utils import normalize_response_payload
 
 router = APIRouter()
