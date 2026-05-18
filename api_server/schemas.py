@@ -5,23 +5,23 @@ from pydantic import BaseModel, Field
 
 
 class SensorPayload(BaseModel):
-    temperature: float = Field(..., description="섭씨 온도")
-    humidity: float = Field(..., description="상대습도 퍼센트")
-    light: float = Field(..., description="조도 센서값")
-    water_level: float = Field(..., description="수위 센서값")
-    distance: float = Field(..., description="초음파 거리 cm")
+    temperature: float = Field(..., description="Temperature")
+    humidity: float = Field(..., description="Humidity")
+    light: float = Field(..., description="Light level")
+    water_level: float = Field(..., description="Water level")
+    distance: float = Field(..., description="Distance in cm")
 
 
 class RealtimeSensorPayload(BaseModel):
-    light: float = Field(..., description="조도 센서값")
-    distance: float = Field(..., description="초음파 거리 cm")
+    light: float = Field(..., description="Light level")
+    distance: float = Field(..., description="Distance in cm")
 
 
 class HourlySensorPayload(BaseModel):
-    temperature: float = Field(..., description="섭씨 온도")
-    humidity: float = Field(..., description="상대습도 퍼센트")
-    water_level: float = Field(..., description="수위 센서값")
-    water_raw: Optional[int] = Field(None, description="수위 센서 raw ADC 평균값")
+    temperature: float = Field(..., description="Temperature")
+    humidity: float = Field(..., description="Humidity")
+    water_level: float = Field(..., description="Water level")
+    water_raw: Optional[int] = Field(None, description="Raw water ADC value")
 
 
 class AskPayload(BaseModel):
@@ -40,14 +40,14 @@ class VoiceAskPayload(BaseModel):
 
 class DeviceEventBasePayload(BaseModel):
     session_id: Optional[UUID] = None
-    device_id: str = Field("", description="기기 식별자")
-    trigger_source: str = Field("manual", description="이벤트 발생 원인")
-    distance: Optional[float] = Field(None, description="이벤트 거리 cm")
+    device_id: str = Field("", description="Device identifier")
+    trigger_source: str = Field("manual", description="Event trigger source")
+    distance: Optional[float] = Field(None, description="Distance in cm")
     sensor: Optional[SensorPayload] = None
     state_level: str = "normal"
     state_alerts: list[str] = Field(default_factory=list)
-    generated_text: str = Field("", description="이벤트와 연결된 생성 텍스트")
-    played: bool = Field(False, description="TTS 출력 여부")
+    generated_text: str = Field("", description="Generated event text")
+    played: bool = Field(False, description="Whether TTS was played")
     meta: dict[str, Any] = Field(default_factory=dict)
 
 

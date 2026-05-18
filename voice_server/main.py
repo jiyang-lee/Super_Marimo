@@ -3,6 +3,8 @@ import os
 import tempfile
 import wave
 from functools import lru_cache
+from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import numpy as np
@@ -24,6 +26,8 @@ TTS_BACKEND = os.getenv("TTS_BACKEND", "supertonic-3")
 TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "Supertone/supertonic-3")
 TTS_VOICE_NAME = os.getenv("TTS_VOICE_NAME", "F1")
 TTS_LANG = os.getenv("TTS_LANG", "ko")
+SUPERTONIC_CACHE_DIR = Path(os.getenv("SUPERTONIC_CACHE_DIR", "/root/.cache/supertonic3"))
+SUPERTONIC_MODEL_DIR = SUPERTONIC_CACHE_DIR / TTS_BACKEND
 
 _STT_CONFIG: dict[str, dict[str, str]] = {
     "fast": {"size": STT_MODEL_SIZE, "device": STT_DEVICE, "compute_type": STT_COMPUTE_TYPE},
@@ -31,6 +35,14 @@ _STT_CONFIG: dict[str, dict[str, str]] = {
 }
 
 _STT_RUNTIME_STATES: dict[str, dict[str, str]] = {}
+_TTS_RUNTIME_STATE: dict[str, Any] = {
+    "loaded": False,
+    "ready": False,
+    "voice_name": TTS_VOICE_NAME,
+    "error": None,
+}
+_TTS_RUNTIME_LOCK = Lock()
+_TTS_RUNTIME: dict[str, Any] | None = None
 
 logger = logging.getLogger("voice_server")
 
@@ -138,7 +150,45 @@ def transcribe_audio(audio_path: str, model_key: str = "fast"):
 def get_tts_model():
     from supertonic import TTS
 
-    return TTS(auto_download=True, model="supertonic-3")
+    return TTS(auto_download=True, model="supertonic-3", model_dir=SUPERTONIC_MODEL_DIR)
+
+
+def get_tts_runtime() -> dict[str, Any]:
+    global _TTS_RUNTIME
+
+    if _TTS_RUNTIME_STATE["ready"] and _TTS_RUNTIME is not None:
+        return _TTS_RUNTIME
+
+    with _TTS_RUNTIME_LOCK:
+        if _TTS_RUNTIME_STATE["ready"] and _TTS_RUNTIME is not None:
+            return _TTS_RUNTIME
+
+        tts = get_tts_model()
+        available_voice_names = list(getattr(tts, "voice_style_names", []) or [])
+        voice_name = TTS_VOICE_NAME if TTS_VOICE_NAME in available_voice_names else None
+
+        if voice_name is None and available_voice_names:
+            voice_name = available_voice_names[0]
+            logger.warning(
+                "Requested TTS voice '%s' not available, falling back to '%s'",
+                TTS_VOICE_NAME,
+                voice_name,
+            )
+
+        if voice_name is None:
+            voice_name = TTS_VOICE_NAME
+
+        style = tts.get_voice_style(voice_name=voice_name)
+        _TTS_RUNTIME = {"tts": tts, "style": style, "voice_name": voice_name}
+        _TTS_RUNTIME_STATE.update(
+            {
+                "loaded": True,
+                "ready": True,
+                "voice_name": voice_name,
+                "error": None,
+            }
+        )
+        return _TTS_RUNTIME
 
 
 @app.get("/health")
@@ -172,6 +222,11 @@ def health() -> dict[str, Any]:
         "tts_model": TTS_MODEL_ID,
         "tts_voice_name": TTS_VOICE_NAME,
         "tts_lang": TTS_LANG,
+        "tts_ready": _TTS_RUNTIME_STATE["ready"],
+        "tts_runtime_voice_name": _TTS_RUNTIME_STATE["voice_name"],
+        "tts_error": _TTS_RUNTIME_STATE["error"],
+        "tts_cache_dir": str(SUPERTONIC_CACHE_DIR),
+        "tts_model_dir": str(SUPERTONIC_MODEL_DIR),
     }
 
 
@@ -237,8 +292,9 @@ def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
         background_tasks.add_task(os.remove, output_path)
         return FileResponse(output_path, media_type="audio/wav", filename="mock_tts.wav")
 
-    tts = get_tts_model()
-    style = tts.get_voice_style(voice_name=TTS_VOICE_NAME)
+    runtime = get_tts_runtime()
+    tts = runtime["tts"]
+    style = runtime["style"]
     wav, _duration = tts.synthesize(payload.text, voice_style=style, lang=TTS_LANG)
     tts.save_audio(wav, output_path)
     background_tasks.add_task(os.remove, output_path)
@@ -261,3 +317,11 @@ def startup_load_stt_models():
                 )
             except Exception as exc:
                 logger.error("Failed to load STT model '%s': %s", key, exc)
+        try:
+            logger.info("Eager-loading TTS model and voice style...")
+            runtime = get_tts_runtime()
+            logger.info("TTS voice style ready: %s", runtime["voice_name"])
+        except Exception as exc:
+            _TTS_RUNTIME_STATE.update({"loaded": False, "ready": False, "error": str(exc)})
+            logger.error("Failed to load TTS model: %s", exc)
+            raise

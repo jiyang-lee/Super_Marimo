@@ -20,7 +20,6 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
     distance = payload.get("distance")
     if distance is None and isinstance(sensor, dict):
         distance = sensor.get("distance")
-
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(

@@ -90,7 +90,7 @@ def init_db() -> None:
                     event_id BIGSERIAL PRIMARY KEY,
                     session_id UUID NULL REFERENCES session(session_id) ON DELETE SET NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    event_type TEXT NOT NULL CHECK (event_type IN ('wakeword', 'manual_test')),
+                    event_type TEXT NOT NULL,
                     device_id TEXT NOT NULL DEFAULT '',
                     trigger_source TEXT NOT NULL DEFAULT 'manual',
                     distance DOUBLE PRECISION NULL,
@@ -101,6 +101,19 @@ def init_db() -> None:
                     played BOOLEAN NOT NULL DEFAULT FALSE,
                     meta JSONB NOT NULL DEFAULT '{}'::jsonb
                 )
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE device_event_log
+                DROP CONSTRAINT IF EXISTS device_event_log_event_type_check
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE device_event_log
+                ADD CONSTRAINT device_event_log_event_type_check
+                CHECK (event_type IN ('wakeword', 'manual_test', 'sensor_warning'))
                 """
             )
             cur.execute(

@@ -55,7 +55,7 @@ services:
       - "8001:8000"
     gpus: all
     environment:
-      MOCK_MODE: "true"
+      MOCK_MODE: "false"
       LLM_MODEL_ID: "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
       LLM_MODEL_REVISION: "c38726a"
     volumes:
@@ -84,7 +84,8 @@ services:
       - "8002:8000"
     gpus: all
     environment:
-      MOCK_MODE: "true"
+      MOCK_MODE: "false"
+      SUPERTONIC_CACHE_DIR: "/root/.cache/supertonic3"
       STT_MODEL_SIZE: "medium"
       STT_ACCURATE_MODEL_SIZE: "medium"
       WHISPER_DEVICE: "cuda"
@@ -95,6 +96,19 @@ services:
       TTS_LANG: "ko"
     volumes:
       - hf-cache:/root/.cache/huggingface
+      - supertonic-cache:/root/.cache/supertonic3
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') and data.get('tts_ready') else 1)",
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
 
   voice-agent:
     build:
@@ -114,10 +128,11 @@ services:
       api-server:
         condition: service_healthy
       voice-server:
-        condition: service_started
+        condition: service_healthy
       llm-server:
         condition: service_healthy
 
 volumes:
   db-data:
   hf-cache:
+  supertonic-cache:

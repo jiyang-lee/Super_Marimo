@@ -1,16 +1,16 @@
 # API Server
 
-`api-server` is the persistence and policy layer for the beta stack.
+`api-server`는 세션, 대화, 이벤트, 센서 상태를 저장하는 백엔드입니다.
 
-## Responsibilities
-- session storage
-- session message storage
-- interaction log storage
-- device event log storage
-- sensor ingest and state judgment
-- downstream LLM orchestration
+## 역할
+- 세션 저장
+- 대화 메시지 저장
+- 호출어 이벤트 저장
+- 수동 테스트 이벤트 저장
+- 센서 상태 저장
+- `llm-server`와의 연결
 
-## Main APIs
+## 주요 API
 - `GET /health`
 - `POST /ask`
 - `POST /voice/ask`
@@ -22,8 +22,8 @@
 - `GET /sessions`
 - `GET /sessions/{session_id}`
 
-## Notes
-- `device_event_log` stores wakeword and manual test events for now.
-- `sensor-warning` is deferred until threshold policy is defined by the user.
-- `interaction_log` stays separate from device events.
-- The service initializes the DB schema on startup.
+## 현재 기준
+- `wakeword`와 `manual-test`는 바로 저장해서 확인할 수 있습니다.
+- `voice/ask`는 텍스트 기반 음성 이벤트 저장과 LLM 연결용입니다.
+- `sensor-warning`와 `proactive_greeting`은 다음 하드웨어가 붙을 때 다시 연결합니다.
+- `interaction_log`와 `device_event_log`는 분리해서 저장합니다.

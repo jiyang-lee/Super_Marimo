@@ -1,21 +1,17 @@
 # Voice Agent
 
-`voice-agent`는 로컬 음성 대화의 오케스트레이션 계층입니다.
+`voice-agent`는 `api-server`, `llm-server`, `voice-server`를 묶는 오케스트레이션 계층입니다.
 
 ## 역할
+- 상태 확인
 - `api-server /voice/ask` 호출
-- 세션 ID 보관
-- `voice-server /tts` 요청
-- `voice-server`, `llm-server`, `api-server` health 확인
+- `voice-server /tts` 호출
+- 필요하면 TTS 파일 재생
 
-## 현재 흐름
-1. 질의를 받는다.
-2. `api-server`로 보내 세션과 대화 로그를 저장한다.
-3. 답변을 받아 필요하면 `voice-server`로 TTS를 만든다.
-4. 호출어 루프는 `arduino/serial_voice_proto.py`가 담당한다.
+## 주요 API
+- `GET /health`
+- `POST /ask`
 
-## 실행
-```powershell
-cd C:\Projects\_active\Super_Marimo
-docker compose up -d --build voice-agent
-```
+## 현재 기준
+- 입력 장치가 아직 단순하므로, 현재는 텍스트 기반 `ask` 흐름을 우선합니다.
+- 실제 음성 인식과 호출어 분리는 나중에 확장합니다.
