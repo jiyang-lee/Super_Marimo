@@ -6,6 +6,7 @@ import io
 import json
 import mimetypes
 import os
+import random
 import re
 import tempfile
 import time
@@ -14,6 +15,7 @@ import wave
 from pathlib import Path
 from urllib import error as urlerror
 from urllib import request as urlrequest
+from urllib.parse import urlsplit, urlunsplit
 
 import winsound
 
@@ -44,6 +46,12 @@ DEFAULT_SYSTEM_MEMO = (
     "\ud638\ucd9c\uc5b4 \ud6c4\uc758 \ub300\ud654\ub97c \uc774\uc5b4\uac00\ub418, "
     "\ud575\uc2ec\ub9cc \uac04\ub2e8\ud788 \ub9d0\ud55c\ub2e4. "
     "\ubaa8\ud638\ud558\uba74 \uc9e7\uac8c \ub2e4\uc2dc \ubb3b\ub294\ub2e4."
+)
+WAKE_GREETINGS = (
+    "\uc548\ub155! \uc624\ub298 \ud558\ub8e8\ub294 \uc5b4\ub5bb\uc5c8\uc5b4?",
+    "\uc548\ub155? \uc9c0\uae08 \ubb50\ud574?",
+    "\ubb34\uc0c8\uc694. \ub9c8\ub9ac\ubaa8\uc608\uc694.",
+    "\uc798 \ubd88\ub800\uc5b4. \ubb50\ub97c \ub3c4\uc640\ub4dc\ub9b4\uae4c?",
 )
 
 
@@ -232,6 +240,22 @@ class VoicePrototype:
             print(f"[session] opened {self.active_session_id}")
         return self.active_session_id
 
+    def end_active_session(self) -> None:
+        session_id = self.active_session_id
+        if not session_id:
+            return
+        try:
+            parsed = urlsplit(self.args.api_endpoint)
+            end_url = urlunsplit((parsed.scheme, parsed.netloc, f"/sessions/{session_id}/end", "", ""))
+            post_json(
+                end_url,
+                {"ended_by": "serial_voice_proto"},
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"[session] end failed: {exc}")
+        self.clear_session_id()
+
     def record_event(
         self,
         event_type: str,
@@ -255,10 +279,12 @@ class VoicePrototype:
             "played": played,
             "state_level": state_level,
             "state_alerts": state_alerts or [],
-            "distance": distance,
-            "sensor": sensor or {},
             "meta": meta or {},
         }
+        if distance is not None:
+            payload["distance"] = distance
+        if sensor is not None:
+            payload["sensor"] = sensor
         try:
             post_json(self.args.events_endpoint, payload, timeout=30)
         except Exception as exc:
@@ -269,6 +295,9 @@ class VoicePrototype:
         if re.fullmatch(r"[\W_]+", value, flags=re.UNICODE):
             return ""
         return value
+
+    def pick_wake_greeting(self) -> str:
+        return random.choice(WAKE_GREETINGS)
 
     def stt(self, pcm_bytes: bytes) -> str:
         wav_bytes = wav_bytes_from_pcm(pcm_bytes)
@@ -343,7 +372,6 @@ class VoicePrototype:
 
         if has_exit_phrase(transcript):
             goodbye = "\uc54c\uaca0\uc5b4\uc694. \ub300\ud654\ub97c \uc885\ub8cc\ud560\uac8c\uc694. \ub2e4\uc74c\uc5d0 \ub2e4\uc2dc \ubd88\ub7ec\uc8fc\uc138\uc694."
-            session_id = self.ensure_active_session()
             print(f"[session] closed by voice {self.active_session_id or '<none>'}")
             try:
                 self.speak(goodbye)
@@ -352,7 +380,7 @@ class VoicePrototype:
                     generated_text=goodbye,
                     played=True,
                     meta={"success": True, "kind": "farewell"},
-                    session_id=session_id,
+                    session_id=self.ensure_active_session(),
                 )
             except Exception as exc:
                 self.record_event(
@@ -360,10 +388,10 @@ class VoicePrototype:
                     generated_text=goodbye,
                     played=False,
                     meta={"success": False, "error": str(exc), "kind": "farewell"},
-                    session_id=session_id,
+                    session_id=self.ensure_active_session(),
                 )
                 print(f"[tts] playback failed: {exc}")
-            self.clear_session_id()
+            self.end_active_session()
             self.reset_conversation()
             return
 
@@ -384,17 +412,16 @@ class VoicePrototype:
                 generated_text=transcript,
                 meta={"tail": tail, "wake_timeout_sec": self.args.wake_timeout_sec},
             )
+            response_text = self.pick_wake_greeting()
+            self.speak(response_text)
+            self.record_event(
+                "tts_played",
+                generated_text=response_text,
+                played=True,
+                meta={"success": True, "kind": "wake_prompt"},
+            )
             if tail:
                 self.answer_turn(tail)
-            else:
-                response_text = "\uB124, \uB4E3\uACE0 \uC788\uC5B4\uc694. \uBB34\uC5C7\uc744 \uB3C4\uC640\uB4DC\uB9B4\uAE4C\uc694?"
-                self.speak(response_text)
-                self.record_event(
-                    "tts_played",
-                    generated_text=response_text,
-                    played=True,
-                    meta={"success": True, "kind": "wake_prompt"},
-                )
             return
 
         if time.time() <= self.armed_until:
