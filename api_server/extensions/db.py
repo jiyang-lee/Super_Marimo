@@ -8,6 +8,7 @@ from psycopg.rows import dict_row
 from config import (
     DATABASE_URL,
     DB_TIMEZONE,
+    DEVICE_EVENT_TYPES,
     REALTIME_CLEANUP_INTERVAL_SECONDS,
     REALTIME_RETENTION_DAYS,
 )
@@ -30,6 +31,7 @@ def init_db() -> None:
     if not DATABASE_URL:
         return
 
+    allowed_event_types_sql = ", ".join(f"'{event_type}'" for event_type in DEVICE_EVENT_TYPES)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -113,8 +115,8 @@ def init_db() -> None:
                 """
                 ALTER TABLE device_event_log
                 ADD CONSTRAINT device_event_log_event_type_check
-                CHECK (event_type IN ('wakeword', 'manual_test', 'sensor_warning'))
-                """
+                CHECK (event_type IN ({allowed_event_types_sql}))
+                """.format(allowed_event_types_sql=allowed_event_types_sql)
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_session_last_seen_at ON session (last_seen_at DESC)"

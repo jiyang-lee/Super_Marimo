@@ -6,6 +6,7 @@ from extensions.db import get_db_connection
 from schemas import HourlySensorPayload, RealtimeSensorPayload, SensorPayload
 from services.sensor_service import (
     build_merged_payload,
+    build_realtime_next_action,
     expand_sensor_row,
     get_latest_sensor_row,
     get_recent_sensor_rows,
@@ -27,13 +28,17 @@ def sensor_status(payload: SensorPayload) -> dict[str, Any]:
 @router.post("/sensor/ingest")
 def sensor_ingest(payload: RealtimeSensorPayload) -> dict[str, Any]:
     state = judge_realtime_state(payload)
-    return save_sensor_reading(payload.model_dump(), "realtime", state)
+    response = save_sensor_reading(payload.model_dump(), "realtime", state)
+    response["next_action"] = build_realtime_next_action(payload)
+    return response
 
 
 @router.post("/sensor/realtime-ingest")
 def sensor_realtime_ingest(payload: RealtimeSensorPayload) -> dict[str, Any]:
     state = judge_realtime_state(payload)
-    return save_sensor_reading(payload.model_dump(), "realtime", state)
+    response = save_sensor_reading(payload.model_dump(), "realtime", state)
+    response["next_action"] = build_realtime_next_action(payload)
+    return response
 
 
 @router.post("/sensor/hourly-ingest")

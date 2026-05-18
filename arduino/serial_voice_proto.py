@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import collections
 import io
@@ -52,7 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stt-endpoint", default="http://127.0.0.1:8002/stt")
     parser.add_argument("--stt-model", default="fast", choices=["fast", "accurate"], help="STT model variant")
     parser.add_argument("--tts-endpoint", default="http://127.0.0.1:8002/tts")
-    parser.add_argument("--api-endpoint", default="http://127.0.0.1:8003/ask")
+    parser.add_argument("--api-endpoint", default="http://127.0.0.1:8000/voice/ask")
+    parser.add_argument("--events-endpoint", default="http://127.0.0.1:8000/events")
     parser.add_argument(
         "--session-state-file",
         default="arduino\\voice_session.json",
@@ -229,6 +232,38 @@ class VoicePrototype:
             print(f"[session] opened {self.active_session_id}")
         return self.active_session_id
 
+    def record_event(
+        self,
+        event_type: str,
+        *,
+        generated_text: str = "",
+        played: bool = False,
+        state_level: str = "chat",
+        state_alerts: list[str] | None = None,
+        sensor: dict[str, object] | None = None,
+        distance: float | None = None,
+        meta: dict[str, object] | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        resolved_session_id = session_id or self.ensure_active_session()
+        payload = {
+            "session_id": resolved_session_id,
+            "device_id": "serial_voice_proto",
+            "trigger_source": "serial_voice_proto",
+            "event_type": event_type,
+            "generated_text": generated_text,
+            "played": played,
+            "state_level": state_level,
+            "state_alerts": state_alerts or [],
+            "distance": distance,
+            "sensor": sensor or {},
+            "meta": meta or {},
+        }
+        try:
+            post_json(self.args.events_endpoint, payload, timeout=30)
+        except Exception as exc:
+            print(f"[event] {event_type} log failed: {exc}")
+
     def sanitize_tail(self, text: str) -> str:
         value = (text or "").strip()
         if re.fullmatch(r"[\W_]+", value, flags=re.UNICODE):
@@ -286,16 +321,50 @@ class VoicePrototype:
             return
 
         debug_wav = save_debug_wav(self.debug_dir, "segment", pcm_bytes)
-        transcript = self.stt(pcm_bytes)
-        print(f"[stt] {transcript or '<empty>'} ({debug_wav.name})")
+        try:
+            transcript = self.stt(pcm_bytes)
+            print(f"[stt] {transcript or '<empty>'} ({debug_wav.name})")
+            self.record_event(
+                "stt_completed",
+                generated_text=transcript,
+                meta={"success": True, "debug_wav": debug_wav.name},
+            )
+        except Exception as exc:
+            self.record_event(
+                "stt_completed",
+                generated_text="",
+                meta={"success": False, "error": str(exc), "debug_wav": debug_wav.name},
+            )
+            print(f"[stt] failed: {exc}")
+            return
+
         if not transcript:
             return
 
         if has_exit_phrase(transcript):
+            goodbye = "\uc54c\uaca0\uc5b4\uc694. \ub300\ud654\ub97c \uc885\ub8cc\ud560\uac8c\uc694. \ub2e4\uc74c\uc5d0 \ub2e4\uc2dc \ubd88\ub7ec\uc8fc\uc138\uc694."
+            session_id = self.ensure_active_session()
             print(f"[session] closed by voice {self.active_session_id or '<none>'}")
+            try:
+                self.speak(goodbye)
+                self.record_event(
+                    "tts_played",
+                    generated_text=goodbye,
+                    played=True,
+                    meta={"success": True, "kind": "farewell"},
+                    session_id=session_id,
+                )
+            except Exception as exc:
+                self.record_event(
+                    "tts_played",
+                    generated_text=goodbye,
+                    played=False,
+                    meta={"success": False, "error": str(exc), "kind": "farewell"},
+                    session_id=session_id,
+                )
+                print(f"[tts] playback failed: {exc}")
             self.clear_session_id()
             self.reset_conversation()
-            self.speak("\uc54c\uaca0\uc5b4\uc694. \ub300\ud654\ub97c \uc885\ub8cc\ud560\uac8c\uc694. \ub2e4\uc74c\uc5d0 \ub2e4\uc2dc \ubd88\ub7ec\uc8fc\uc138\uc694.")
             return
 
         combined = f"{self.transcript_buffer} {transcript}".strip()
@@ -310,10 +379,22 @@ class VoicePrototype:
             )
             self.transcript_buffer = ""
             print("[wake] detected")
+            self.record_event(
+                "wakeword",
+                generated_text=transcript,
+                meta={"tail": tail, "wake_timeout_sec": self.args.wake_timeout_sec},
+            )
             if tail:
                 self.answer_turn(tail)
             else:
-                self.speak("\uB124, \uB4E3\uACE0 \uC788\uC5B4\uC694. \uBB34\uC5C7\uC744 \uB3C4\uC640\uB4DC\uB9B4\uAE4C\uC694?")
+                response_text = "\uB124, \uB4E3\uACE0 \uC788\uC5B4\uc694. \uBB34\uC5C7\uc744 \uB3C4\uC640\uB4DC\uB9B4\uAE4C\uc694?"
+                self.speak(response_text)
+                self.record_event(
+                    "tts_played",
+                    generated_text=response_text,
+                    played=True,
+                    meta={"success": True, "kind": "wake_prompt"},
+                )
             return
 
         if time.time() <= self.armed_until:
@@ -324,7 +405,16 @@ class VoicePrototype:
         if not clean_text:
             return
         print(f"[user] {clean_text}")
-        api_result = self.ask_api(clean_text)
+        try:
+            api_result = self.ask_api(clean_text)
+        except Exception as exc:
+            self.record_event(
+                "llm_completed",
+                generated_text="",
+                meta={"success": False, "error": str(exc), "user_text": clean_text},
+            )
+            print(f"[error] api request failed: {exc}")
+            return
         answer = str(
             api_result.get("answer")
             or api_result.get("tts_text")
@@ -333,10 +423,41 @@ class VoicePrototype:
         ).strip()
         answer = re.sub(r"^(assistant|\uB9C8\uB9AC\uBAA8)\s*[:\-]?\s*", "", answer, flags=re.IGNORECASE)
         if not answer:
-            raise RuntimeError(f"voice api returned no answer: {api_result}")
+            self.record_event(
+                "llm_completed",
+                generated_text="",
+                meta={"success": False, "error": "empty answer", "user_text": clean_text},
+            )
+            print(f"[error] voice api returned no answer: {api_result}")
+            return
         print(f"[agent] session={api_result.get('session_id')}")
         print(f"[marimo] {answer}")
-        self.speak(answer)
+        self.record_event(
+            "llm_completed",
+            generated_text=answer,
+            meta={
+                "success": True,
+                "interaction_id": api_result.get("interaction_id"),
+                "session_id": api_result.get("session_id"),
+                "messages_saved": api_result.get("messages_saved"),
+            },
+        )
+        try:
+            self.speak(answer)
+            self.record_event(
+                "tts_played",
+                generated_text=answer,
+                played=True,
+                meta={"success": True, "answer_source": "voice-server /tts"},
+            )
+        except Exception as exc:
+            self.record_event(
+                "tts_played",
+                generated_text=answer,
+                played=False,
+                meta={"success": False, "error": str(exc)},
+            )
+            print(f"[tts] playback failed: {exc}")
 
 
 def run_capture_loop(args: argparse.Namespace) -> None:
@@ -375,6 +496,10 @@ def run_capture_loop(args: argparse.Namespace) -> None:
                     active_frames = list(pre_roll)
                     silence_hits = 0
                     start_hits = 0
+                    prototype.record_event(
+                        "speech_started",
+                        meta={"rms": rms, "start_frames": args.start_frames},
+                    )
                 continue
 
             active_frames.append(frame)
@@ -384,6 +509,14 @@ def run_capture_loop(args: argparse.Namespace) -> None:
                 silence_hits = 0
 
             if silence_hits >= args.silence_frames or len(active_frames) >= max_active_frames:
+                prototype.record_event(
+                    "speech_ended",
+                    meta={
+                        "frames": len(active_frames),
+                        "silence_frames": silence_hits,
+                        "max_active_frames": max_active_frames,
+                    },
+                )
                 prototype.handle_segment(b"".join(active_frames))
                 active = False
                 active_frames = []

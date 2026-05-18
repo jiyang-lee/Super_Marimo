@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -52,8 +52,12 @@ class DeviceEventBasePayload(BaseModel):
 
 
 class WakewordEventPayload(DeviceEventBasePayload):
-    event_type: str = "wakeword"
+    event_type: Literal["wakeword"] = "wakeword"
 
 
 class ManualTestEventPayload(DeviceEventBasePayload):
-    event_type: str = "manual_test"
+    event_type: Literal["manual_test"] = "manual_test"
+
+
+class DeviceEventPayload(DeviceEventBasePayload):
+    event_type: str = Field(..., description="Device event type")

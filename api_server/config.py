@@ -9,3 +9,20 @@ KST = timezone(timedelta(hours=9), name="KST")
 REALTIME_RETENTION_DAYS = 7
 REALTIME_CLEANUP_INTERVAL_SECONDS = 7 * 24 * 60 * 60
 SESSION_HISTORY_LIMIT = 16
+SENSOR_WARNING_DISTANCE_THRESHOLD_CM = float(os.getenv("SENSOR_WARNING_DISTANCE_THRESHOLD_CM", "10"))
+PROACTIVE_GREETING_COOLDOWN_SECONDS = int(os.getenv("PROACTIVE_GREETING_COOLDOWN_SECONDS", "1800"))
+PROACTIVE_GREETING_TEXT = os.getenv(
+    "PROACTIVE_GREETING_TEXT",
+    "안녕하세요. 마리모가 먼저 인사드릴게요.",
+)
+DEVICE_EVENT_TYPES = (
+    "wakeword",
+    "speech_started",
+    "speech_ended",
+    "stt_completed",
+    "llm_completed",
+    "tts_played",
+    "sensor_warning",
+    "proactive_greeting",
+    "manual_test",
+)

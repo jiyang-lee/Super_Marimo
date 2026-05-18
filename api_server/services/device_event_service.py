@@ -3,23 +3,38 @@ from typing import Any
 from fastapi import HTTPException
 from psycopg.types.json import Json
 
+from config import DEVICE_EVENT_TYPES
 from extensions.db import get_db_connection
 from utils import normalize_datetime, normalize_response_payload
 
-ALLOWED_EVENT_TYPES = {"wakeword", "manual_test"}
+EVENT_TYPE_ALIASES = {
+    "manual-test": "manual_test",
+    "sensor-warning": "sensor_warning",
+}
+
+
+def normalize_event_type(event_type: str) -> str:
+    value = str(event_type or "").strip().lower().replace(" ", "_")
+    value = EVENT_TYPE_ALIASES.get(value, value)
+    return value
 
 
 def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
-    event_type = str(payload.get("event_type") or "").strip()
+    event_type = normalize_event_type(payload.get("event_type") or "")
     if not event_type:
         raise HTTPException(status_code=400, detail="event_type is required")
-    if event_type not in ALLOWED_EVENT_TYPES:
+    if event_type not in DEVICE_EVENT_TYPES:
         raise HTTPException(status_code=400, detail="unsupported event_type")
 
-    sensor = payload.get("sensor") or {}
+    sensor = payload.get("sensor") or payload.get("sensor_json") or {}
     distance = payload.get("distance")
     if distance is None and isinstance(sensor, dict):
         distance = sensor.get("distance")
+    meta = dict(payload.get("meta") or {})
+    next_action = payload.get("next_action")
+    if next_action is not None:
+        meta.setdefault("next_action", next_action)
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -64,7 +79,7 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
                     Json(payload.get("state_alerts") or []),
                     str(payload.get("generated_text") or ""),
                     bool(payload.get("played", False)),
-                    Json(payload.get("meta") or {}),
+                    Json(meta),
                 ),
             )
             row = cur.fetchone()
