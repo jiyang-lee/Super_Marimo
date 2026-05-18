@@ -1,11 +1,16 @@
+from importlib import util
 from pathlib import Path
-import sys
 
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import main as voice_main
+VOICE_MAIN_PATH = Path(__file__).resolve().parents[1] / "main.py"
+spec = util.spec_from_file_location("voice_agent_main", VOICE_MAIN_PATH)
+assert spec is not None and spec.loader is not None
+voice_main = util.module_from_spec(spec)
+spec.loader.exec_module(voice_main)
+voice_main.AskPayload.model_rebuild(_types_namespace=vars(voice_main))
+voice_main.AskResponse.model_rebuild(_types_namespace=vars(voice_main))
 
 
 def test_health_reports_api_and_downstream(monkeypatch) -> None:

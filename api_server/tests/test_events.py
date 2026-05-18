@@ -39,6 +39,43 @@ def test_wakeword_event_routes_to_service(monkeypatch) -> None:
     assert captured["trigger_source"] == "mic-listener"
 
 
+def test_device_event_routes_to_service(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_save_device_event(payload: dict[str, object]) -> dict[str, object]:
+        captured.update(payload)
+        return {
+            "saved": True,
+            "event": {
+                "event_id": 3,
+                "event_type": payload["event_type"],
+                "device_id": payload.get("device_id", ""),
+            },
+        }
+
+    monkeypatch.setattr("routers.events.save_device_event", fake_save_device_event)
+
+    client = TestClient(app)
+    response = client.post(
+        "/events",
+        json={
+            "event_type": "speech_started",
+            "device_id": "serial-01",
+            "trigger_source": "serial_voice_proto",
+            "generated_text": "speech started",
+            "played": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["saved"] is True
+    assert payload["event"]["event_type"] == "speech_started"
+    assert captured["event_type"] == "speech_started"
+    assert captured["device_id"] == "serial-01"
+    assert captured["trigger_source"] == "serial_voice_proto"
+
+
 def test_manual_test_event_routes_to_service(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
