@@ -1,80 +1,44 @@
-# Super_Marimo
+# MARIMO QUEST
 
-로컬 실험용 통합 저장소입니다. 현재 구조는 `voice-agent -> api-server -> db-server` 흐름의 백엔드와 `frontend/` 웹 UI를 함께 포함합니다.
+마리모를 돌보는 반응형 웹앱입니다.  
+현재 기준은 React + Vite 프론트 구조입니다.
 
-## 구성
-- `db-server`: PostgreSQL
-- `api-server`: 세션 / 메시지 / 상호작용 저장
-- `llm-server`: 응답 생성
-- `voice-server`: STT / TTS
-- `voice-agent`: 호출어 이후 대화 오케스트레이션
-- `frontend`: 수동 테스트용 콘솔 UI
+## 현재 기준
 
-## 실행
-백엔드 전체를 올릴 때:
+- 화면은 `src/` 아래의 React 코드가 기준입니다.
+- 옛 정적 `css/`, `js/` 구조는 사용하지 않습니다.
+- 이미지는 `public/images/` 아래에서 관리합니다.
+- 새 이미지는 먼저 `public/images/incoming/`에 넣어두고, 화면 연결할 때 역할별 폴더로 옮깁니다.
 
-```powershell
-cd C:\Projects\_active\Super_Marimo
-docker compose up -d --build db-server api-server llm-server voice-server voice-agent
-```
+## 폴더 역할
 
-현재 compose 기본값은 빠른 로컬 부트스트랩을 위한 `MOCK_MODE=true`입니다. 실제 모델로 바꿔 돌릴 때만 `docker-compose.yml`의 mock 값을 끄면 됩니다.
+- `src/`
+  - 화면 컴포넌트와 데이터, 스타일이 들어갑니다.
+- `public/images/incoming/`
+  - 새 이미지를 잠시 모아두는 임시 폴더입니다.
+- `public/images/logo/`
+  - 로고와 파비콘을 넣습니다.
+- `public/images/character/`
+  - 마리모 캐릭터 이미지를 넣습니다.
+- `public/images/home/`
+  - 홈 화면 배경과 대표 이미지를 넣습니다.
+- `public/images/chat/`
+  - 채팅 아바타 이미지를 넣습니다.
+- `public/images/sensor/`
+  - 센서 아이콘을 넣습니다.
+- `public/images/settings/`
+  - 설정 화면 아이콘을 넣습니다.
+- `public/images/common/`
+  - 로딩, 빈 상태, 에러 안내 이미지를 넣습니다.
 
-프런트엔드가 필요하면 별도로:
+## 실행 방법
 
-```powershell
-cd C:\Projects\_active\Super_Marimo\frontend
-npm install
-npm run dev
-```
+1. 이 폴더에서 `npm install`을 한 번 실행합니다.
+2. `npm run dev`로 개발 화면을 엽니다.
+3. 필요하면 `npm run build`로 배포용 파일도 확인합니다.
 
-## 포트
-- API Server: `http://localhost:8000`
-- LLM Server: `http://localhost:8001`
-- Voice Server: `http://localhost:8002`
-- Voice Agent: `http://localhost:8003`
-- Frontend: `http://localhost:5173`
-- PostgreSQL: `localhost:5432`
+## 작업 규칙
 
-## 주요 API
-### voice-server
-- `GET /health`
-- `POST /stt?model=fast`
-- `POST /tts`
-
-### llm-server
-- `GET /health`
-- `POST /generate`
-
-### voice-agent
-- `GET /health`
-- `POST /ask`
-
-### api-server
-- `GET /health`
-- `POST /ask`
-- `POST /voice/ask`
-- `POST /sensor/realtime-ingest`
-- `POST /sensor/hourly-ingest`
-- `GET /sessions`
-
-## 동작 순서
-1. `voice-agent`가 질문을 받습니다.
-2. `voice-agent`가 `api-server /voice/ask`를 호출합니다.
-3. `api-server`가 `llm-server`에 질문을 보내고 결과를 DB에 저장합니다.
-4. `voice-agent`는 필요하면 `voice-server /tts`로 음성을 만듭니다.
-5. `db-server`에는 `session`, `session_message`, `interaction_log`가 남습니다.
-
-## 메모
-- 호출어 감지는 `arduino/serial_voice_proto.py`의 루프에서 처리합니다.
-- `voice-agent`는 그 뒤의 오케스트레이션 계층입니다.
-
-## 규칙과 문서
-- 프로젝트 규칙: `docs/01_프로젝트_규칙.md`
-- GitHub 운영 규칙: `docs/03_GitHub_운영_규칙.md`
-- 스킬 입력 가이드: `docs/02_스킬_가이드.md`
-- 반복 작업 스킬: `skills/`
-
-## 프론트엔드 작업 노트
-- 현재 웹 UI 작업은 `frontend/jeong` 브랜치 기준으로 진행 중입니다.
-- 참고 이미지: `ref/image.png`, `ref/marimo_character_transparent.png`
+- 폴더명과 파일명은 초보자도 바로 이해할 수 있게 직관적으로 씁니다.
+- 주석은 무엇을 하는지와 왜 필요한지를 함께 적습니다.
+- 백엔드는 이번 작업 범위에서 제외합니다.

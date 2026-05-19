@@ -1,874 +1,588 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 const screens = [
-  { key: "home", label: "Home" },
-  { key: "sensor", label: "Sensor" },
-  { key: "chat", label: "Chat" },
-  { key: "settings", label: "Settings" },
+  { key: "home", label: "홈" },
+  { key: "sensor", label: "센서" },
+  { key: "chat", label: "채팅" },
+  { key: "settings", label: "설정" },
 ];
 
-const homeNotices = [
-  "지금은 화면이 실제로 보이는지 먼저 확인하는 단계예요.",
-  "공지사항, 전체 마리모 이미지, 오늘의 퀘스트 구조를 다시 살렸어요.",
-  "이미지는 아직 비워 두고, 나중에 넣기 쉽게 자리만 준비해 두었어요.",
+const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}월`);
+
+const guideItems = [
+  { icon: "💧", title: "깨끗한 물", text: "항상 맑고 깨끗한 물을 유지해 주세요." },
+  { icon: "☀️", title: "직사광선 X", text: "강한 직사광선은 피하고 부드러운 빛으로 두세요." },
+  { icon: "🔄", title: "가끔 굴러주기", text: "마리모가 고르게 자라도록 가끔 굴려 주세요." },
+  { icon: "💚", title: "사랑 주기", text: "자주 보고 말 걸어 주면 더 정성스럽게 느껴져요." },
 ];
 
-const homeQuests = [
-  { title: "물 상태 확인", description: "센서 값이 안정적인지 먼저 살펴봐요." },
-  { title: "온도 상태 확인", description: "마리모가 지내기 좋은 온도인지 봐요." },
+const sensorRangeItems = [
+  { label: "온도", key: "temperature", max: 100 },
+  { label: "습도", key: "humidity", max: 100 },
+  { label: "수위", key: "water", max: 100 },
+  { label: "조도", key: "light", max: 10000 },
 ];
 
-const hourlyHistory = [
-  { time: "09:00", text: "온도 24°C · 습도 47% · 수위 81% · 조도 410 lux" },
-  { time: "12:00", text: "온도 25°C · 습도 45% · 수위 80% · 조도 620 lux" },
-  { time: "15:00", text: "온도 24°C · 습도 48% · 수위 79% · 조도 540 lux" },
-  { time: "18:00", text: "온도 23°C · 습도 52% · 수위 80% · 조도 360 lux" },
-  { time: "21:00", text: "온도 22°C · 습도 55% · 수위 81% · 조도 240 lux" },
-];
+function makeWeeklySummaries(monthIndex) {
+  const month = monthIndex + 1;
+  const baseTemp = 23.8 + monthIndex * 0.12;
+  const baseHumidity = 47 + monthIndex * 0.4;
+  const baseWater = 79 + monthIndex * 0.25;
+  const baseLight = 420 + monthIndex * 85;
 
-const weeklyByMonth = {
-  "1월": [
-    { range: "01.01.~01.07.", text: "온도 : 24.0도, 습도 : 51%, 수위 : 82%, 조도 : 480lux" },
-    { range: "01.08.~01.14.", text: "온도 : 23.8도, 습도 : 50%, 수위 : 81%, 조도 : 510lux" },
-    { range: "01.15.~01.21.", text: "온도 : 24.2도, 습도 : 49%, 수위 : 83%, 조도 : 530lux" },
-    { range: "01.22.~01.31.", text: "온도 : 24.5도, 습도 : 48%, 수위 : 84%, 조도 : 560lux" },
-  ],
-  "2월": [
-    { range: "02.01.~02.07.", text: "온도 : 24.8도, 습도 : 50%, 수위 : 82%, 조도 : 600lux" },
-    { range: "02.08.~02.14.", text: "온도 : 25.1도, 습도 : 52%, 수위 : 81%, 조도 : 640lux" },
-    { range: "02.15.~02.21.", text: "온도 : 24.9도, 습도 : 49%, 수위 : 82%, 조도 : 620lux" },
-    { range: "02.22.~02.29.", text: "온도 : 24.7도, 습도 : 48%, 수위 : 83%, 조도 : 610lux" },
-  ],
-  "3월": [
-    { range: "03.01.~03.07.", text: "온도 : 24.4도, 습도 : 49%, 수위 : 82%, 조도 : 700lux" },
-    { range: "03.08.~03.14.", text: "온도 : 24.6도, 습도 : 50%, 수위 : 82%, 조도 : 720lux" },
-    { range: "03.15.~03.21.", text: "온도 : 24.8도, 습도 : 51%, 수위 : 83%, 조도 : 740lux" },
-    { range: "03.22.~03.31.", text: "온도 : 25.0도, 습도 : 52%, 수위 : 84%, 조도 : 760lux" },
-  ],
-  "4월": [
-    { range: "04.01.~04.07.", text: "온도 : 24.1도, 습도 : 50%, 수위 : 81%, 조도 : 820lux" },
-    { range: "04.08.~04.14.", text: "온도 : 24.3도, 습도 : 51%, 수위 : 82%, 조도 : 860lux" },
-    { range: "04.15.~04.21.", text: "온도 : 24.5도, 습도 : 50%, 수위 : 82%, 조도 : 900lux" },
-    { range: "04.22.~04.30.", text: "온도 : 24.7도, 습도 : 51%, 수위 : 83%, 조도 : 940lux" },
-  ],
-  "5월": [
-    { range: "05.01.~05.07.", text: "온도 : 24.9도, 습도 : 52%, 수위 : 82%, 조도 : 980lux" },
-    { range: "05.08.~05.14.", text: "온도 : 25.1도, 습도 : 53%, 수위 : 83%, 조도 : 1,020lux" },
-    { range: "05.15.~05.21.", text: "온도 : 25.3도, 습도 : 54%, 수위 : 83%, 조도 : 1,050lux" },
-    { range: "05.22.~05.31.", text: "온도 : 25.5도, 습도 : 55%, 수위 : 84%, 조도 : 1,120lux" },
-  ],
-  "6월": [
-    { range: "06.01.~06.07.", text: "온도 : 24.6도, 습도 : 51%, 수위 : 83%, 조도 : 1,140lux" },
-    { range: "06.08.~06.14.", text: "온도 : 24.8도, 습도 : 52%, 수위 : 83%, 조도 : 1,180lux" },
-    { range: "06.15.~06.21.", text: "온도 : 25.0도, 습도 : 53%, 수위 : 84%, 조도 : 1,220lux" },
-    { range: "06.22.~06.30.", text: "온도 : 25.2도, 습도 : 54%, 수위 : 84%, 조도 : 1,260lux" },
-  ],
-};
+  return [
+    `${String(month).padStart(2, "0")}.01.~${String(month).padStart(2, "0")}.07. 온도 : ${(baseTemp + 0.1).toFixed(1)}도, 습도 : ${Math.round(baseHumidity)}%, 수위 : ${Math.round(baseWater)}%, 조도 : ${Math.round(baseLight)}lux`,
+    `${String(month).padStart(2, "0")}.08.~${String(month).padStart(2, "0")}.14. 온도 : ${(baseTemp + 0.4).toFixed(1)}도, 습도 : ${Math.round(baseHumidity + 1)}%, 수위 : ${Math.round(baseWater + 1)}%, 조도 : ${Math.round(baseLight + 140)}lux`,
+    `${String(month).padStart(2, "0")}.15.~${String(month).padStart(2, "0")}.21. 온도 : ${(baseTemp + 0.7).toFixed(1)}도, 습도 : ${Math.round(baseHumidity + 2)}%, 수위 : ${Math.round(baseWater + 1)}%, 조도 : ${Math.round(baseLight + 240)}lux`,
+    `${String(month).padStart(2, "0")}.22.~${String(month).padStart(2, "0")}.31. 온도 : ${(baseTemp + 0.9).toFixed(1)}도, 습도 : ${Math.round(baseHumidity + 3)}%, 수위 : ${Math.round(baseWater + 2)}%, 조도 : ${Math.round(baseLight + 360)}lux`,
+  ];
+}
 
-const monthSeries = {
-  "1월": [
-    { day: 1, temp: 24, humidity: 48, water: 82, light: 1800 },
-    { day: 5, temp: 24.2, humidity: 49, water: 83, light: 2200 },
-    { day: 10, temp: 24.5, humidity: 50, water: 83, light: 2600 },
-    { day: 15, temp: 24.8, humidity: 51, water: 84, light: 2800 },
-    { day: 20, temp: 24.6, humidity: 50, water: 83, light: 3000 },
-    { day: 25, temp: 24.3, humidity: 49, water: 82, light: 3400 },
-    { day: 30, temp: 24.1, humidity: 48, water: 82, light: 3600 },
-  ],
-  "2월": [
-    { day: 1, temp: 24.5, humidity: 50, water: 82, light: 2600 },
-    { day: 5, temp: 24.7, humidity: 51, water: 82, light: 3000 },
-    { day: 10, temp: 24.9, humidity: 52, water: 83, light: 3400 },
-    { day: 15, temp: 25.0, humidity: 52, water: 83, light: 3800 },
-    { day: 20, temp: 24.8, humidity: 51, water: 83, light: 4200 },
-    { day: 25, temp: 24.6, humidity: 50, water: 82, light: 4600 },
-    { day: 29, temp: 24.5, humidity: 49, water: 82, light: 5000 },
-  ],
-  "3월": [
-    { day: 1, temp: 24.2, humidity: 49, water: 82, light: 3200 },
-    { day: 5, temp: 24.4, humidity: 50, water: 82, light: 3600 },
-    { day: 10, temp: 24.6, humidity: 50, water: 83, light: 4100 },
-    { day: 15, temp: 24.8, humidity: 51, water: 83, light: 4500 },
-    { day: 20, temp: 24.9, humidity: 52, water: 84, light: 4900 },
-    { day: 25, temp: 25.0, humidity: 52, water: 84, light: 5200 },
-    { day: 31, temp: 24.8, humidity: 51, water: 83, light: 5600 },
-  ],
-  "4월": [
-    { day: 1, temp: 24.0, humidity: 50, water: 81, light: 4200 },
-    { day: 5, temp: 24.2, humidity: 51, water: 82, light: 4700 },
-    { day: 10, temp: 24.4, humidity: 51, water: 82, light: 5200 },
-    { day: 15, temp: 24.5, humidity: 52, water: 83, light: 5800 },
-    { day: 20, temp: 24.6, humidity: 52, water: 83, light: 6200 },
-    { day: 25, temp: 24.8, humidity: 51, water: 84, light: 6800 },
-    { day: 30, temp: 24.9, humidity: 50, water: 84, light: 7200 },
-  ],
-  "5월": [
-    { day: 1, temp: 24.8, humidity: 52, water: 82, light: 4800 },
-    { day: 5, temp: 25.0, humidity: 53, water: 83, light: 5200 },
-    { day: 10, temp: 25.2, humidity: 54, water: 83, light: 5800 },
-    { day: 15, temp: 25.4, humidity: 54, water: 84, light: 6400 },
-    { day: 20, temp: 25.3, humidity: 55, water: 84, light: 7000 },
-    { day: 25, temp: 25.1, humidity: 54, water: 84, light: 7600 },
-    { day: 30, temp: 25.0, humidity: 53, water: 83, light: 7800 },
-  ],
-  "6월": [
-    { day: 1, temp: 24.6, humidity: 51, water: 83, light: 5200 },
-    { day: 5, temp: 24.8, humidity: 52, water: 83, light: 5800 },
-    { day: 10, temp: 25.0, humidity: 53, water: 84, light: 6200 },
-    { day: 15, temp: 25.2, humidity: 54, water: 84, light: 6800 },
-    { day: 20, temp: 25.3, humidity: 54, water: 84, light: 7200 },
-    { day: 25, temp: 25.1, humidity: 53, water: 83, light: 7600 },
-    { day: 30, temp: 25.0, humidity: 52, water: 83, light: 8000 },
-  ],
-};
+function makeMonthlySeries(monthIndex) {
+  const month = monthIndex + 1;
+  const daysInMonth = new Date(2026, month, 0).getDate();
+  const rawDays = [1, 5, 10, 15, 20, 25, 30].filter((day) => day <= daysInMonth);
 
-const chartSeries = monthSeries["5월"];
+  return rawDays.map((day, index) => {
+    const wobble = Math.sin((monthIndex + index + 1) * 0.8) * 0.45;
+    return {
+      day,
+      temp: +(24.1 + monthIndex * 0.06 + wobble * 0.8).toFixed(1),
+      humidity: Math.round(46 + monthIndex * 0.5 + index * 1.8 + wobble * 2),
+      water: Math.round(78 + monthIndex * 0.35 + index * 1.4 + wobble * 1.4),
+      light: Math.round(900 + monthIndex * 420 + index * 720 + Math.max(0, wobble * 220)),
+    };
+  });
+}
 
-const chatMessages = [
-  { id: 1, from: "marimo", text: "안녕! 오늘 센서 상태를 함께 볼까?" },
-  { id: 2, from: "user", text: "좋아, 위클릭이랑 머슬릭도 확인해볼게." },
-  { id: 3, from: "marimo", text: "좋아. 화면이 잘 보이면 이제 세부 조정만 남았어." },
-];
+function makeClock() {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
+
+function makeChart(monthIndex) {
+  const series = makeMonthlySeries(monthIndex);
+  const width = 100;
+  const height = 190;
+  const leftAxis = 8;
+  const rightAxis = 92;
+  const top = 14;
+  const bottom = 18;
+  const plotWidth = rightAxis - leftAxis;
+  const plotHeight = height - top - bottom;
+  const count = series.length || 1;
+  const scaleX = (index) => leftAxis + (count === 1 ? plotWidth / 2 : (plotWidth * index) / (count - 1));
+  const scaleY = (value, min, max) => top + plotHeight - ((value - min) / (max - min)) * plotHeight;
+
+  const path = (getter, min, max) =>
+    series.map((point, index) => `${scaleX(index)},${scaleY(getter(point), min, max)}`).join(" ");
+
+  return {
+    series,
+    width,
+    height,
+    top,
+    bottom,
+    scaleX,
+    scaleY,
+    tempPath: path((point) => point.temp, 0, 100),
+    humidityPath: path((point) => point.humidity, 0, 100),
+    waterPath: path((point) => point.water, 0, 100),
+    lightPath: path((point) => point.light, 0, 10000),
+  };
+}
+
+function Panel({ title, chip, children }) {
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <strong>{title}</strong>
+        {chip ? <span className="chip">{chip}</span> : <span />}
+      </div>
+      <div className="panel-body">{children}</div>
+    </section>
+  );
+}
 
 export default function App() {
   const [activeScreen, setActiveScreen] = useState("home");
   const [sensorMode, setSensorMode] = useState("weekly");
-  const [activeMonth, setActiveMonth] = useState("5월");
+  const [selectedWeekMonth, setSelectedWeekMonth] = useState(4);
+  const [selectedChartMonth, setSelectedChartMonth] = useState(4);
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [chatMode, setChatMode] = useState("텍스트");
+  const [chatDraft, setChatDraft] = useState("");
+  const [openModal, setOpenModal] = useState(null);
+  const [clockText, setClockText] = useState(makeClock());
   const [hoverPoint, setHoverPoint] = useState(null);
+  const [sensorRanges, setSensorRanges] = useState({
+    temperatureMin: 0,
+    temperatureMax: 100,
+    humidityMin: 0,
+    humidityMax: 100,
+    waterMin: 0,
+    waterMax: 100,
+    lightMin: 0,
+    lightMax: 10000,
+  });
 
   useEffect(() => {
-    document.getElementById("fallback-root")?.remove();
+    const timer = setInterval(() => setClockText(makeClock()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  const monthlyData = monthSeries[activeMonth] ?? chartSeries;
+  const weeklySummaries = useMemo(() => makeWeeklySummaries(selectedWeekMonth), [selectedWeekMonth]);
+  const chart = useMemo(() => makeChart(selectedChartMonth), [selectedChartMonth]);
+  const currentPoint = hoverPoint ? chart.series[hoverPoint.index] : null;
 
-  const chartMetrics = useMemo(() => {
-    const width = 100;
-    const height = 240;
-    const padding = 28;
-    const plotWidth = width - padding * 2;
-    const plotHeight = height - padding * 2;
-    const tempMax = 30;
-    const tempMin = 20;
-    const lightMax = 10000;
+  function handleChartMove(event) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointerX = ((event.clientX - rect.left) / rect.width) * chart.width;
+    const pointerY = ((event.clientY - rect.top) / rect.height) * chart.height;
 
-    const scaleX = (index, length) =>
-      padding + (length <= 1 ? 0 : (plotWidth * index) / (length - 1));
-    const scaleY = (value, min, max) =>
-      padding + plotHeight - ((value - min) / (max - min)) * plotHeight;
+    const closest = chart.series.reduce(
+      (best, point, index) => {
+        const x = chart.scaleX(index);
+        const distance = Math.abs(pointerX - x);
+        return distance < best.distance ? { index, distance, x } : best;
+      },
+      { index: 0, distance: Number.POSITIVE_INFINITY, x: chart.scaleX(0) },
+    );
 
-    const buildLine = (key, min, max) =>
-      monthlyData
-        .map((point, index) => `${scaleX(index, monthlyData.length)},${scaleY(point[key], min, max)}`)
-        .join(" ");
+    setHoverPoint({
+      index: closest.index,
+      x: pointerX,
+      y: Math.max(chart.top, Math.min(chart.height - 18, pointerY)),
+    });
+  }
 
-    return {
-      width,
-      height,
-      padding,
-      scaleX,
-      scaleY,
-      tempLine: buildLine("temp", tempMin, tempMax),
-      humidityLine: buildLine("humidity", 0, 100),
-      waterLine: buildLine("water", 0, 100),
-      lightLine: buildLine("light", 0, lightMax),
-      tempMin,
-      tempMax,
-      lightMax,
-    };
-  }, [monthlyData]);
+  const homeNotices = [
+    "지금은 화면이 실제로 보이는지 먼저 확인하는 단계예요.",
+    "네비게이션은 가운데로 고정하고, 오른쪽 위에는 실시간 시간을 띄워둘게요.",
+    "기능은 빼고 UI만 단순하게 정리해서 초보자도 보기 쉽게 만들었어요.",
+  ];
+
+  const homeQuests = [
+    { title: "전체 구조 확인", description: "홈, 센서, 채팅, 설정이 한 화면 안에서 잘 나뉘는지 봐요." },
+    { title: "이미지 자리 준비", description: "마리모 캐릭터와 아이콘은 나중에 바로 넣을 수 있게 비워둬요." },
+  ];
+
+  function closeModal() {
+    setOpenModal(null);
+  }
 
   return (
-    <div style={shellStyle}>
-      <header style={headerStyle}>
-        <div>
-          <div style={brandStyle}>MARIMO QUEST</div>
-          <div style={subtitleStyle}>화면을 확인하고 다시 정리하는 기준 화면</div>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="header-brand">
+          <strong className="brand-name">MARIMO QUEST</strong>
+          <span className="brand-subtitle">화면만 먼저 보이도록 단순하게 정리한 앱사이트</span>
         </div>
 
-        <nav style={navStyle} aria-label="주요 화면 이동">
+        <nav className="top-nav" aria-label="주요 화면 이동">
           {screens.map((screen) => (
             <button
               key={screen.key}
               type="button"
-              onClick={() => setActiveScreen(screen.key)}
-              style={navButtonStyle(activeScreen === screen.key)}
+              className={`nav-button ${activeScreen === screen.key ? "is-active" : ""}`}
+              onClick={() => {
+                setActiveScreen(screen.key);
+                setOpenModal(null);
+                setHoverPoint(null);
+              }}
             >
               {screen.label}
             </button>
           ))}
         </nav>
+
+        <div className="clock-chip" aria-label="실시간 시간">
+          {clockText}
+        </div>
       </header>
 
-      <main style={mainStyle}>
+      <main className="app-main">
         {activeScreen === "home" && (
-          <section style={gridThreeStyle}>
+          <section className="home-grid">
             <Panel title="공지사항" chip="초보자용">
-              <p style={leadStyle}>{homeNotices[0]}</p>
-              <ul style={listStyle}>
-                <li style={listItemStyle}>{homeNotices[1]}</li>
-                <li style={listItemStyle}>{homeNotices[2]}</li>
+              <p className="panel-lead">{homeNotices[0]}</p>
+              <ul className="note-list">
+                <li>{homeNotices[1]}</li>
+                <li>{homeNotices[2]}</li>
               </ul>
             </Panel>
 
-            <Panel title="전체 마리모 이미지">
-              <div style={imageSlotStyle}>
-                <strong style={imageStrongStyle}>이미지 자리</strong>
-                <span style={mutedStyle}>나중에 마리모 전체 이미지를 넣을 위치예요.</span>
+            <Panel title="전체 마리모 이미지" chip="이미지 자리">
+              <div className="image-placeholder">
+                <strong>이미지 자리</strong>
+                <span>나중에 전체 마리모 이미지를 넣을 위치예요.</span>
               </div>
             </Panel>
 
             <Panel title="오늘의 퀘스트" chip="DAY 01">
-              {homeQuests.map((quest) => (
-                <div key={quest.title} style={questItemStyle}>
-                  <strong>{quest.title}</strong>
-                  <span style={mutedStyle}>{quest.description}</span>
-                </div>
-              ))}
+              <div className="quest-list">
+                {homeQuests.map((quest) => (
+                  <div key={quest.title} className="quest-item">
+                    <strong>{quest.title}</strong>
+                    <span>{quest.description}</span>
+                  </div>
+                ))}
+              </div>
             </Panel>
           </section>
         )}
 
         {activeScreen === "sensor" && (
-          <section style={screenStackStyle}>
-            <div style={sensorHeroGridStyle}>
+          <section className="sensor-stack">
+            <div className="sensor-top-grid">
               <Panel title="마리모 이미지" chip="캐릭터">
-                <div style={avatarSlotStyle}>
-                  <strong style={imageStrongStyle}>전체 마리모 이미지</strong>
-                  <span style={mutedStyle}>왼쪽에는 나중에 전체 마리모 캐릭터 이미지를 넣을 수 있어요.</span>
+                <div className="image-placeholder tall">
+                  <strong>전체 마리모 이미지</strong>
+                  <span>왼쪽에는 나중에 캐릭터 이미지를 배치할 수 있어요.</span>
                 </div>
               </Panel>
 
               <Panel title="현재 센서 상태" chip="실시간">
-                <div style={sensorGridStyle}>
+                <div className="metric-grid">
                   {[
                     ["온도", "24.0도"],
                     ["습도", "45%"],
                     ["수위", "80%"],
                     ["조도", "500 lux"],
                   ].map(([label, value]) => (
-                    <div key={label} style={sensorCardStyle}>
-                      <span style={mutedStyle}>{label}</span>
-                      <strong style={sensorValueStyle}>{value}</strong>
+                    <div key={label} className="metric-card">
+                      <span>{label}</span>
+                      <strong>{value}</strong>
                     </div>
                   ))}
                 </div>
-                <p style={leadStyle}>현재 값은 예시예요. 실제 센서가 연결되면 이 숫자만 자동으로 바뀌게 됩니다.</p>
+                <p className="panel-lead">현재 값은 예시예요. 실제 센서가 연결되면 이 카드만 바뀌게 만들 수 있어요.</p>
               </Panel>
             </div>
 
             <Panel title="시간별 센서 이력" chip="기록">
-              <div style={historyBoxStyle}>
-                {hourlyHistory.map((item) => (
-                  <div key={item.time} style={historyRowStyle}>
-                    <strong>{item.time}</strong>
-                    <span style={mutedStyle}>{item.text}</span>
-                  </div>
-                ))}
+              <div className="history-list scrollable-history">
+                {Array.from({ length: 18 }, (_, index) => {
+                  const hour = String(6 + index).padStart(2, "0");
+                  const temperature = 23 + (index % 4);
+                  const humidity = 45 + (index % 8);
+                  const water = 79 + (index % 5);
+                  const light = 240 + index * 60;
+                  return (
+                    <div key={hour} className="history-row">
+                      <strong>{hour}:00</strong>
+                      <span>
+                        온도 {temperature}°C · 습도 {humidity}% · 수위 {water}% · 조도 {light} lux
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </Panel>
 
             <Panel title="위클릭 / 머슬릭 자료" chip="주간 / 월간">
-              <div style={modeSwitchStyle}>
+              <div className="mode-switch">
                 <button
                   type="button"
-                  onClick={() => setSensorMode("weekly")}
-                  style={modeButtonStyle(sensorMode === "weekly")}
+                  className={`mode-button ${sensorMode === "weekly" ? "is-active" : ""}`}
+                  onClick={() => {
+                    setSensorMode("weekly");
+                    setHoverPoint(null);
+                  }}
                 >
                   위클릭
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSensorMode("monthly")}
-                  style={modeButtonStyle(sensorMode === "monthly")}
+                  className={`mode-button ${sensorMode === "monthly" ? "is-active" : ""}`}
+                  onClick={() => {
+                    setSensorMode("monthly");
+                    setHoverPoint(null);
+                  }}
                 >
                   머슬릭
                 </button>
               </div>
 
-              {sensorMode === "weekly" ? (
-                <div style={weeklyListStyle}>
-                  {weeklySummaries.map((week) => (
-                    <div key={week.range} style={weeklyCardStyle}>
-                      <strong style={weeklyTitleStyle}>{week.range}</strong>
-                      <div style={weeklyTextStyle}>{week.text}</div>
-                      <div style={weeklyNoteStyle}>{week.note}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={monthlyLayoutStyle}>
-                  <div style={monthGridStyle}>
-                    {Object.keys(monthSeries).map((month) => (
-                      <button
-                        key={month}
-                        type="button"
-                        onClick={() => setActiveMonth(month)}
-                        style={monthButtonStyle(activeMonth === month)}
-                      >
-                        {month}
-                      </button>
-                    ))}
+              <div className="month-grid">
+                {monthLabels.map((month, index) => (
+                  <button
+                    key={month}
+                    type="button"
+                    className={`month-button ${index === (sensorMode === "weekly" ? selectedWeekMonth : selectedChartMonth) ? "is-active" : ""}`}
+                    onClick={() => {
+                      if (sensorMode === "weekly") {
+                        setSelectedWeekMonth(index);
+                      } else {
+                        setSelectedChartMonth(index);
+                        setHoverPoint(null);
+                      }
+                    }}
+                  >
+                    {month}
+                  </button>
+                ))}
+              </div>
+
+              <div className="sensor-switch-panel">
+                {sensorMode === "weekly" ? (
+                  <div className="weekly-list">
+                    {weeklySummaries.map((text) => {
+                      const [range, ...rest] = text.split(" ");
+                      return (
+                        <article key={range} className="weekly-card">
+                          <strong className="weekly-range">{range}</strong>
+                          <span className="weekly-text">{rest.join(" ")}</span>
+                        </article>
+                      );
+                    })}
                   </div>
-
-                  <div style={graphBoxStyle}>
-                    <div style={graphHeaderStyle}>
-                      <strong>{activeMonth} 그래프</strong>
-                      <span style={mutedStyle}>온도 / 습도 / 수위 / 조도</span>
+                ) : (
+                  <div className="chart-card">
+                    <div className="chart-header">
+                      <strong>{monthLabels[selectedChartMonth]} 머슬릭 그래프</strong>
+                      <span>온도 / 습도 / 수위 / 조도</span>
                     </div>
 
-                    <div style={graphSvgWrapStyle}>
-                      <svg
-                        viewBox={`0 0 ${chartMetrics.width} ${chartMetrics.height}`}
-                        style={svgStyle}
+                    <div className="chart-panel">
+                      <div className="chart-axis axis-left">
+                        {[10000, 7500, 5000, 2500, 0].map((tick) => (
+                          <span key={tick} style={{ top: `${chart.scaleY(tick, 0, 10000)}px` }}>
+                            {tick}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div
+                        className="chart-viewport"
+                        id="chartViewport"
                         onMouseLeave={() => setHoverPoint(null)}
-                        onMouseMove={(event) => {
-                          const rect = event.currentTarget.getBoundingClientRect();
-                          const x = ((event.clientX - rect.left) / rect.width) * chartMetrics.width;
-                          const nearestIndex = monthlyData.reduce(
-                            (best, point, index) => {
-                              const pointX = chartMetrics.scaleX(index, monthlyData.length);
-                              const distance = Math.abs(pointX - x);
-                              return distance < best.distance
-                                ? { index, distance, pointX }
-                                : best;
-                            },
-                            { index: 0, distance: Number.POSITIVE_INFINITY, pointX: 0 },
-                          );
-                          setHoverPoint(nearestIndex);
-                        }}
+                        onMouseMove={handleChartMove}
                       >
-                        {[0, 25, 50, 75, 100].map((tick) => {
-                          const y = chartMetrics.scaleY(tick, 0, 100);
-                          return (
-                            <g key={`temp-${tick}`}>
-                              <line x1="28" x2="72" y1={y} y2={y} stroke="#ffffff" strokeOpacity="0.2" />
-                              <text x="10" y={y + 4} fontSize="4" fill="#846a2a">
-                                {tick}
-                              </text>
-                            </g>
-                          );
-                        })}
+                        <svg className="chart-svg" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none">
+                          {[0, 25, 50, 75, 100].map((tick) => {
+                            const y = chart.scaleY(tick, 0, 100);
+                            return <line key={tick} x1="8" x2="92" y1={y} y2={y} className="chart-grid" />;
+                          })}
+                          <polyline className="line temp-line" points={chart.tempPath} />
+                          <polyline className="line humidity-line" points={chart.humidityPath} />
+                          <polyline className="line water-line" points={chart.waterPath} />
+                          <polyline className="line light-line" points={chart.lightPath} />
 
-                        {[0, 2500, 5000, 7500, 10000].map((tick) => {
-                          const y = chartMetrics.scaleY(tick, 0, chartMetrics.lightMax);
-                          return (
-                            <text key={`light-${tick}`} x="75" y={y + 4} fontSize="4" fill="#da8f00">
-                              {tick}
-                            </text>
-                          );
-                        })}
-
-                        <polyline fill="none" stroke="#ff8f4d" strokeWidth="1.8" points={chartMetrics.tempLine} />
-                        <polyline fill="none" stroke="#4f9cff" strokeWidth="1.8" points={chartMetrics.humidityLine} />
-                        <polyline fill="none" stroke="#55b95b" strokeWidth="1.8" points={chartMetrics.waterLine} />
-                        <polyline fill="none" stroke="#d4a012" strokeWidth="1.8" points={chartMetrics.lightLine} />
-
-                        {hoverPoint && monthlyData[hoverPoint.index] ? (
-                          <>
+                          {currentPoint ? (
                             <line
-                              x1={hoverPoint.pointX}
-                              x2={hoverPoint.pointX}
-                              y1="28"
-                              y2="212"
-                              stroke="#2d4f6b"
-                              strokeWidth="0.8"
-                              strokeDasharray="2 2"
+                              x1={hoverPoint.x}
+                              x2={hoverPoint.x}
+                              y1={chart.top}
+                              y2={chart.height - chart.bottom}
+                              className="chart-crosshair"
                             />
-                            <circle
-                              cx={hoverPoint.pointX}
-                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].temp, 20, 30)}
-                              r="1.8"
-                              fill="#ff8f4d"
-                            />
-                            <circle
-                              cx={hoverPoint.pointX}
-                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].humidity, 0, 100)}
-                              r="1.8"
-                              fill="#4f9cff"
-                            />
-                            <circle
-                              cx={hoverPoint.pointX}
-                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].water, 0, 100)}
-                              r="1.8"
-                              fill="#55b95b"
-                            />
-                            <circle
-                              cx={hoverPoint.pointX}
-                              cy={chartMetrics.scaleY(monthlyData[hoverPoint.index].light, 0, chartMetrics.lightMax)}
-                              r="1.8"
-                              fill="#d4a012"
-                            />
-                          </>
-                        ) : null}
-                      </svg>
+                          ) : null}
+                        </svg>
 
-                      <div style={legendStyle}>
-                        <span><i style={{ ...legendDotStyle, background: "#ff8f4d" }} />온도</span>
-                        <span><i style={{ ...legendDotStyle, background: "#4f9cff" }} />습도</span>
-                        <span><i style={{ ...legendDotStyle, background: "#55b95b" }} />수위</span>
-                        <span><i style={{ ...legendDotStyle, background: "#d4a012" }} />조도</span>
+                        <div className="chart-legend">
+                          <span><i className="dot temp-dot" />온도</span>
+                          <span><i className="dot humidity-dot" />습도</span>
+                          <span><i className="dot water-dot" />수위</span>
+                          <span><i className="dot light-dot" />조도</span>
+                        </div>
+
+                        {currentPoint ? (
+                          <div
+                            className="chart-tooltip"
+                            style={{
+                              left: `${Math.min(hoverPoint.x + 12, 66)}%`,
+                              top: `${Math.min(hoverPoint.y - 48, 120)}px`,
+                            }}
+                          >
+                            <strong>
+                              {monthLabels[selectedChartMonth]} / {currentPoint.day}일
+                            </strong>
+                            <span>온도 {currentPoint.temp}°C</span>
+                            <span>습도 {currentPoint.humidity}%</span>
+                            <span>수위 {currentPoint.water}%</span>
+                            <span>조도 {currentPoint.light.toLocaleString()} lux</span>
+                          </div>
+                        ) : null}
                       </div>
 
-                      <div style={tooltipStyle}>
-                        {hoverPoint && monthlyData[hoverPoint.index] ? (
-                          <>
-                            <strong>
-                              {activeMonth} / {monthlyData[hoverPoint.index].day}일
-                            </strong>
-                            <span style={tooltipLineStyle}>온도 {monthlyData[hoverPoint.index].temp}°C</span>
-                            <span style={tooltipLineStyle}>습도 {monthlyData[hoverPoint.index].humidity}%</span>
-                            <span style={tooltipLineStyle}>수위 {monthlyData[hoverPoint.index].water}%</span>
-                            <span style={tooltipLineStyle}>조도 {monthlyData[hoverPoint.index].light.toLocaleString()} lux</span>
-                          </>
-                        ) : (
-                          <span style={mutedStyle}>그래프 선 위에 마우스를 올리면 해당 날짜의 값을 볼 수 있어요.</span>
-                        )}
+                      <div className="chart-axis axis-right">
+                        {[0, 25, 50, 75, 100].map((tick) => (
+                          <span key={`right-${tick}`} style={{ top: `${chart.scaleY(tick, 0, 100)}px` }}>
+                            {tick}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </Panel>
           </section>
         )}
 
         {activeScreen === "chat" && (
-          <Panel title="마리모와 대화하기" chip="채팅">
-            <div style={chatPreviewStyle}>
-              {chatMessages.map((message) => (
-                <div
-                  key={message.id}
-                  style={chatBubbleStyle(message.from === "marimo")}
-                >
-                  {message.text}
-                </div>
-              ))}
-            </div>
+          <section className="chat-card">
+            <Panel title="마리모와 대화하기" chip="채팅">
+              <div className="chat-list">
+                {[
+                  { id: 1, from: "marimo", text: "안녕! 오늘은 어떤 걸 확인해 볼까?" },
+                  { id: 2, from: "user", text: "화면 구조부터 천천히 보고 싶어." },
+                  { id: 3, from: "marimo", text: "좋아. 텍스트나 음성 모드를 바꿔도 입력 내용은 그대로 남겨둘게." },
+                ].map((message) => (
+                  <div key={message.id} className={`chat-row ${message.from}`}>
+                    {message.from === "marimo" ? <span className="chat-avatar">M</span> : null}
+                    <div className={`chat-bubble ${message.from}`}>{message.text}</div>
+                  </div>
+                ))}
+              </div>
 
-            <div style={chatInputBarStyle}>
-              <input
-                type="text"
-                readOnly
-                defaultValue="메시지를 입력해 보세요"
-                aria-label="메시지 입력"
-                style={chatInputStyle}
-              />
-              <button type="button" style={sendButtonStyle}>
-                전송
-              </button>
-            </div>
-          </Panel>
+              <div className="chat-bar">
+                <input
+                  className="chat-input"
+                  type="text"
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  placeholder="메시지를 입력해 주세요"
+                />
+                <button type="button" className="send-button">
+                  전송
+                </button>
+                <button
+                  type="button"
+                  className={`mode-button ${chatMode === "음성" ? "is-active" : ""}`}
+                  onClick={() => setChatMode((current) => (current === "음성" ? "텍스트" : "음성"))}
+                >
+                  음성
+                </button>
+              </div>
+            </Panel>
+          </section>
         )}
 
         {activeScreen === "settings" && (
-          <section style={gridTwoStyle}>
-            <Panel title="초보자용 설정" chip="안내">
-              <div style={settingRowStyle}>이미지 보관: incoming 폴더에 먼저 넣고 나중에 분리하면 돼요.</div>
-              <div style={settingRowStyle}>화면 기준: Home, Sensor, Chat, Settings 순으로 하나씩 다듬으면 돼요.</div>
+          <section className="settings-grid">
+            <Panel title="상태" chip="ON / OFF">
+              <button
+                type="button"
+                className={`notification-toggle ${notificationEnabled ? "is-on" : "is-off"}`}
+                onClick={() => setNotificationEnabled((current) => !current)}
+              >
+                {notificationEnabled ? "on" : "off"}
+              </button>
             </Panel>
 
-            <Panel title="작업 메모" chip="체크">
-              <div style={settingRowStyle}>브랜치: frontend/jeong에서 작업을 이어가면 돼요.</div>
-              <div style={settingRowStyle}>커밋: 큰 수정 후에는 체크포인트를 남기면 안전해요.</div>
+            <Panel title="센서" chip="범위 설정">
+              <button
+                type="button"
+                className="setting-open-button"
+                onClick={() => setOpenModal("sensor")}
+              >
+                온도 / 습도 / 수위 / 조도 범위 보기
+              </button>
+            </Panel>
+
+            <Panel title="가이드" chip="안내">
+              <button
+                type="button"
+                className="setting-open-button"
+                onClick={() => setOpenModal("guide")}
+              >
+                관리 가이드 열기
+              </button>
             </Panel>
           </section>
         )}
       </main>
+
+      {openModal ? (
+        <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && closeModal()}>
+          <div className="modal-card" role="dialog" aria-modal="true">
+            <div className="modal-head">
+              <strong>{openModal === "sensor" ? "센서 범위" : "가이드"}</strong>
+              <button type="button" className="modal-close" onClick={closeModal}>
+                닫기
+              </button>
+            </div>
+
+            {openModal === "sensor" ? (
+              <div className="range-grid">
+                {sensorRangeItems.map((item) => {
+                  const minKey = `${item.key}Min`;
+                  const maxKey = `${item.key}Max`;
+                  const minValue = sensorRanges[minKey];
+                  const maxValue = sensorRanges[maxKey];
+
+                  return (
+                    <div key={item.key} className="range-row">
+                      <strong>{item.label}</strong>
+                      <div className="range-slider">
+                        <div className="range-track">
+                          <div
+                            className="range-fill"
+                            style={{
+                              left: `${(minValue / item.max) * 100}%`,
+                              width: `${((maxValue - minValue) / item.max) * 100}%`,
+                            }}
+                          />
+                          <span
+                            className="range-thumb left"
+                            style={{ left: `${(minValue / item.max) * 100}%` }}
+                          />
+                          <span
+                            className="range-thumb right"
+                            style={{ left: `${(maxValue / item.max) * 100}%` }}
+                          />
+                        </div>
+                        <div className="range-inputs">
+                          <input
+                            type="range"
+                            min="0"
+                            max={item.max}
+                            value={minValue}
+                            onChange={(event) => {
+                              const nextValue = Math.min(Number(event.target.value), sensorRanges[maxKey]);
+                              setSensorRanges((current) => ({ ...current, [minKey]: nextValue }));
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min="0"
+                            max={item.max}
+                            value={maxValue}
+                            onChange={(event) => {
+                              const nextValue = Math.max(Number(event.target.value), sensorRanges[minKey]);
+                              setSensorRanges((current) => ({ ...current, [maxKey]: nextValue }));
+                            }}
+                          />
+                        </div>
+                        <div className="range-values">
+                          <span>{minValue}</span>
+                          <span>{maxValue}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="guide-grid">
+                {guideItems.map((item) => (
+                  <article key={item.title} className="guide-item">
+                    <span className="guide-icon">{item.icon}</span>
+                    <strong>{item.title}</strong>
+                    <span>{item.text}</span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
-
-function Panel({ title, chip, children }) {
-  return (
-    <section style={panelStyle}>
-      <div style={panelHeadStyle}>
-        <strong style={panelTitleStyle}>{title}</strong>
-        {chip ? <span style={chipStyle}>{chip}</span> : <span />}
-      </div>
-      <div>{children}</div>
-    </section>
-  );
-}
-
-function chatBubbleStyle(isMarimo) {
-  return {
-    alignSelf: isMarimo ? "start" : "end",
-    justifySelf: isMarimo ? "start" : "end",
-    maxWidth: "78%",
-    padding: "14px 15px",
-    borderRadius: isMarimo ? "18px 18px 18px 4px" : "18px 18px 4px 18px",
-    background: isMarimo
-      ? "rgba(255,255,255,0.7)"
-      : "linear-gradient(to bottom, #fff9cc, #ffe26d)",
-    border: "1px solid rgba(123,90,45,0.14)",
-  };
-}
-
-const shellStyle = {
-  minHeight: "100vh",
-  color: "#17311c",
-  background:
-    "linear-gradient(to bottom, #d7f3ff 0%, #8fd3ff 58%, #76c56b 58%, #59ae55 100%)",
-  backgroundAttachment: "fixed",
-};
-
-const headerStyle = {
-  position: "sticky",
-  top: 0,
-  zIndex: 20,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "16px",
-  padding: "16px 20px",
-  background: "linear-gradient(to bottom, rgba(17, 66, 31, 0.98), rgba(15, 57, 25, 0.96))",
-  color: "#fff",
-  boxShadow: "0 8px 20px rgba(0, 0, 0, 0.18)",
-};
-
-const brandStyle = {
-  fontSize: "1.15rem",
-  fontWeight: 800,
-  letterSpacing: "0.08em",
-};
-
-const subtitleStyle = {
-  marginTop: "4px",
-  fontSize: "0.9rem",
-  color: "rgba(255, 255, 255, 0.78)",
-};
-
-const navStyle = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const navButtonStyle = (active) => ({
-  border: "1px solid transparent",
-  borderRadius: "999px",
-  padding: "10px 16px",
-  background: "transparent",
-  color: active ? "#ffffff" : "rgba(255, 255, 255, 0.88)",
-  cursor: "pointer",
-  outline: active ? "1px solid rgba(255, 255, 255, 0.18)" : "none",
-  boxShadow: "none",
-});
-
-const mainStyle = {
-  width: "min(1280px, calc(100vw - 24px))",
-  margin: "0 auto",
-  padding: "18px 0 88px",
-};
-
-const gridThreeStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-  gap: "18px",
-};
-
-const gridTwoStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-  gap: "18px",
-};
-
-const screenStackStyle = {
-  display: "grid",
-  gap: "18px",
-};
-
-const sensorHeroGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-  gap: "18px",
-};
-
-const panelStyle = {
-  minHeight: "280px",
-  border: "3px solid #7b5a2d",
-  borderRadius: "26px",
-  background: "linear-gradient(to bottom, #fff8e8, #fff4cf)",
-  boxShadow: "0 18px 40px rgba(29, 44, 25, 0.18)",
-  padding: "18px",
-};
-
-const panelHeadStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "12px",
-  marginBottom: "16px",
-};
-
-const panelTitleStyle = {
-  fontSize: "1.1rem",
-};
-
-const chipStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: "999px",
-  border: "2px solid #7b5a2d",
-  padding: "6px 10px",
-  background: "#fff7d9",
-  fontWeight: 700,
-  fontSize: "0.78rem",
-};
-
-const leadStyle = {
-  margin: "0 0 14px",
-  color: "#5f6b62",
-  lineHeight: 1.7,
-};
-
-const mutedStyle = {
-  color: "#5f6b62",
-  lineHeight: 1.55,
-};
-
-const listStyle = {
-  margin: 0,
-  paddingLeft: "18px",
-  display: "grid",
-  gap: "10px",
-  lineHeight: 1.6,
-};
-
-const listItemStyle = {
-  color: "#28342a",
-};
-
-const imageSlotStyle = {
-  minHeight: "200px",
-  borderRadius: "22px",
-  border: "2px dashed rgba(47, 127, 48, 0.24)",
-  background: "rgba(255, 248, 230, 0.78)",
-  display: "grid",
-  placeItems: "center",
-  gap: "8px",
-  textAlign: "center",
-  padding: "20px",
-};
-
-const avatarSlotStyle = {
-  minHeight: "200px",
-  borderRadius: "22px",
-  border: "2px dashed rgba(47, 127, 48, 0.24)",
-  background: "rgba(255, 248, 230, 0.78)",
-  display: "grid",
-  placeItems: "center",
-  gap: "8px",
-  textAlign: "center",
-  padding: "20px",
-};
-
-const imageStrongStyle = {
-  fontSize: "1.08rem",
-};
-
-const questItemStyle = {
-  padding: "14px 16px",
-  borderRadius: "16px",
-  background: "rgba(255, 255, 255, 0.58)",
-  border: "1px solid rgba(123, 90, 45, 0.14)",
-  marginBottom: "12px",
-  display: "grid",
-  gap: "4px",
-};
-
-const sensorGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "12px",
-};
-
-const sensorCardStyle = {
-  display: "grid",
-  gap: "4px",
-  padding: "14px",
-  borderRadius: "16px",
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid rgba(123,90,45,0.16)",
-};
-
-const sensorValueStyle = {
-  fontSize: "1.18rem",
-};
-
-const historyBoxStyle = {
-  display: "grid",
-  gap: "12px",
-};
-
-const historyRowStyle = {
-  display: "grid",
-  gridTemplateColumns: "88px 1fr",
-  gap: "12px",
-  padding: "12px 14px",
-  borderRadius: "16px",
-  background: "rgba(255,255,255,0.7)",
-  border: "1px solid rgba(123,90,45,0.14)",
-};
-
-const modeSwitchStyle = {
-  display: "inline-flex",
-  gap: "10px",
-  padding: "6px",
-  borderRadius: "999px",
-  background: "rgba(255,255,255,0.56)",
-  marginBottom: "14px",
-};
-
-const modeButtonStyle = (active) => ({
-  border: "none",
-  borderRadius: "999px",
-  padding: "10px 18px",
-  background: active ? "linear-gradient(to bottom, #7bd469, #3d8d34)" : "transparent",
-  color: active ? "#fff" : "#26362a",
-  fontWeight: 700,
-  cursor: "pointer",
-});
-
-const weeklyListStyle = {
-  display: "grid",
-  gap: "12px",
-};
-
-const weeklyCardStyle = {
-  display: "grid",
-  gap: "8px",
-  padding: "14px 16px",
-  borderRadius: "16px",
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid rgba(123,90,45,0.14)",
-};
-
-const weeklyTitleStyle = {
-  color: "#2e8f2c",
-};
-
-const weeklyTextStyle = {
-  lineHeight: 1.55,
-};
-
-const weeklyNoteStyle = {
-  color: "#5f6b62",
-  fontSize: "0.95rem",
-};
-
-const monthlyLayoutStyle = {
-  display: "grid",
-  gap: "14px",
-};
-
-const monthGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
-  gap: "10px",
-};
-
-const monthButtonStyle = (active) => ({
-  border: "1px solid rgba(123, 90, 45, 0.16)",
-  borderRadius: "14px",
-  padding: "10px 12px",
-  background: active ? "linear-gradient(to bottom, #7bd469, #3d8d34)" : "rgba(255,255,255,0.72)",
-  color: active ? "#fff" : "#28342a",
-  fontWeight: 700,
-  cursor: "pointer",
-});
-
-const graphBoxStyle = {
-  display: "grid",
-  gap: "12px",
-};
-
-const graphHeaderStyle = {
-  display: "flex",
-  alignItems: "baseline",
-  justifyContent: "space-between",
-  gap: "12px",
-};
-
-const graphSvgWrapStyle = {
-  display: "grid",
-  gap: "10px",
-};
-
-const svgStyle = {
-  width: "100%",
-  height: "260px",
-  display: "block",
-  background: "linear-gradient(180deg, rgba(234, 247, 255, 0.95) 0%, rgba(255,255,255,0.82) 100%)",
-  borderRadius: "16px",
-};
-
-const legendStyle = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "14px",
-  fontSize: "14px",
-  alignItems: "center",
-};
-
-const legendDotStyle = {
-  display: "inline-block",
-  width: "10px",
-  height: "10px",
-  borderRadius: "999px",
-  marginRight: "6px",
-  verticalAlign: "middle",
-};
-
-const tooltipStyle = {
-  display: "grid",
-  gap: "4px",
-  background: "#fff7e3",
-  border: "1px solid #e4cb8a",
-  borderRadius: "14px",
-  padding: "12px 14px",
-  minHeight: "92px",
-};
-
-const tooltipLineStyle = {
-  color: "#43321a",
-};
-
-const chatPreviewStyle = {
-  display: "grid",
-  gap: "10px",
-  marginBottom: "14px",
-};
-
-const chatInputBarStyle = {
-  display: "flex",
-  gap: "10px",
-  alignItems: "center",
-};
-
-const chatInputStyle = {
-  flex: 1,
-  borderRadius: "14px",
-  border: "1px solid #d8c4a1",
-  padding: "12px 14px",
-  fontSize: "16px",
-};
-
-const sendButtonStyle = {
-  borderRadius: "14px",
-  border: "1px solid #8d5a24",
-  background: "linear-gradient(180deg, #ffe089 0%, #f2b73e 100%)",
-  padding: "12px 18px",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const settingRowStyle = {
-  padding: "14px 16px",
-  border: "1px solid rgba(123,90,45,0.16)",
-  borderRadius: "18px",
-  background: "rgba(255,255,255,0.72)",
-  marginBottom: "12px",
-};
