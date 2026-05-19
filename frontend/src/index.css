@@ -2,145 +2,278 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ═══════════════════════════════════════════
-   IMMERSIVE PC GAME STAGE (16:9)
-   ═══════════════════════════════════════════ */
-
 @layer base {
-  * { cursor: url('https://cur.cursors-4u.net/games/gam-4/gam387.cur'), auto; }
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-height: 100%;
+    background: #07111f;
+  }
+
   body {
-    @apply m-0 p-0 overflow-hidden bg-[#1a1a1a];
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    overflow-x: hidden;
+    color: #e5eefb;
     font-family: 'DotGothic16', sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 38%),
+      radial-gradient(circle at 85% 10%, rgba(251, 191, 36, 0.12), transparent 30%),
+      linear-gradient(180deg, #0a1730 0%, #07111f 48%, #05101a 100%);
+  }
+
+  button,
+  textarea {
+    font: inherit;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
   }
 }
 
 @layer components {
-  /* ── 16:9 Game Container ── */
-  .game-container {
-    @apply relative mx-auto overflow-hidden shadow-2xl;
-    aspect-ratio: 16 / 9;
-    max-height: 100vh;
-    width: auto;
-    background: #81d4fa;
+  .app-shell {
+    position: relative;
+    isolation: isolate;
+    background:
+      linear-gradient(180deg, rgba(6, 15, 28, 0.85), rgba(6, 15, 28, 0.65)),
+      url('/images/incoming/home-background.png') center bottom / cover no-repeat fixed;
   }
 
-  /* ── Top HUD ── */
-  .top-hud {
-    @apply h-16 flex items-center justify-between px-6 z-[100] relative;
-    background: #2e7d32;
-    border-bottom: 4px solid #1b5e20;
-    box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+  .app-shell__overlay {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(125, 211, 252, 0.14), transparent 26%),
+      radial-gradient(circle at 80% 20%, rgba(255, 214, 102, 0.1), transparent 24%),
+      linear-gradient(180deg, rgba(9, 18, 34, 0.2), rgba(9, 18, 34, 0.55));
+    backdrop-filter: blur(1px);
   }
 
-  .hud-logo {
-    @apply font-pixel text-xl text-[#ffeb3b] tracking-tighter;
-    text-shadow: 2px 2px 0 #1b5e20;
+  .page-shell {
+    position: relative;
+    z-index: 1;
   }
 
-  .hud-nav {
-    @apply flex gap-2;
+  .panel-surface {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 2rem;
+    background: linear-gradient(180deg, rgba(14, 26, 46, 0.88), rgba(8, 16, 30, 0.78));
+    box-shadow:
+      0 24px 80px rgba(1, 5, 15, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px);
   }
 
-  .nav-tab {
-    @apply px-4 py-1 font-pixel text-[0.6rem] text-white/70 transition-all rounded-sm;
-    &.active {
-      @apply bg-[#ffeb3b] text-[#1b5e20] shadow-[0_4px_0_#c6a700];
-      transform: translateY(-2px);
-    }
+  .panel-surface::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 26%),
+      radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 25%);
+    opacity: 0.95;
   }
 
-  .hud-stats {
-    @apply flex items-center gap-6 text-white font-pixel text-[0.5rem];
-  }
-
-  /* ── Layered Backdrop ── */
-  .stage-backdrop {
-    @apply absolute inset-0 pointer-events-none;
-  }
-
-  .layer-sky {
-    @apply absolute inset-0 bg-gradient-to-b from-[#4fc3f7] to-[#81d4fa];
-  }
-
-  .layer-clouds {
-    @apply absolute inset-0 opacity-40;
-    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMjAwIDEwMCI+PGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iMjAiIGZpbGw9IndoaXRlIiAvPjxjaXJjbGUgY3g9IjcwIiBjeT0iNDAiIHI9IjMwIiBmaWxsPSJ3aGl0ZSIgLz48Y2lyY2xlIGN4PSIxMDAiIGN5PSI0MCIgcj0iMTUiIGZpbGw9IndoaXRlIiAvPjwvc3ZnPg==');
-    background-repeat: space;
-    animation: clouds-drift 60s linear infinite;
-  }
-
-  .layer-hills {
-    @apply absolute bottom-[20%] left-0 right-0 h-40 opacity-60;
-    background: repeating-linear-gradient(90deg, #aed581 0px, #aed581 100px, transparent 100px, transparent 200px);
-    mask-image: linear-gradient(to top, black, transparent);
-    clip-path: polygon(0 100%, 15% 40%, 30% 70%, 50% 20%, 70% 80%, 85% 30%, 100% 100%);
-  }
-
-  .layer-grass {
-    @apply absolute bottom-[18%] left-0 right-0 h-10 z-10;
-    background: #8bc34a;
-    box-shadow: 0 -4px 0 #689f38;
-  }
-
-  .layer-soil {
-    @apply absolute bottom-0 left-0 right-0 h-[18%] z-20;
-    background: #5d4037;
-    border-top: 4px solid #3e2723;
-  }
-
-  /* ── Boards ── */
-  .board-panel {
-    @apply bg-[#fdf5e6] border-4 border-[#3e2723] rounded-sm p-4 shadow-[6px_6px_0_rgba(0,0,0,0.1)];
+  .hero-panel {
     position: relative;
   }
 
-  .board-header {
-    @apply font-dot font-bold text-[#3e2723] mb-3 flex items-center gap-2 border-b-2 border-[#3e2723]/20 pb-2;
+  .metric-pill {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 7.5rem;
+    padding: 0.9rem 1rem;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
-  /* ── PC Scene Elements ── */
-  .quest-row {
-    @apply flex items-center justify-between py-2 border-b border-[#3e2723]/10;
+  .metric-pill__label {
+    font-size: 0.65rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(226, 232, 240, 0.68);
   }
 
-  .btn-game {
-    @apply px-3 py-1 font-pixel text-[0.4rem] rounded-sm border-2 border-[#3e2723] shadow-[0_3px_0_#3e2723] transition-all active:translate-y-1 active:shadow-none;
-    &.done { @apply bg-[#8bc34a] text-white; }
-    &.todo { @apply bg-[#ffeb3b] text-[#3e2723]; }
+  .metric-pill__value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
   }
 
-  /* ── MapleStyle Bubble ── */
-  .maple-bubble {
-    @apply relative bg-white rounded-2xl p-4 text-sm border-2 border-[#4a3321];
-    filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.05));
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: -10px;
-      left: 50%;
-      transform: translateX(-50%);
-      border-top: 10px solid #4a3321;
-      border-left: 10px solid transparent;
-      border-right: 10px solid transparent;
-    }
+  .mini-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 1rem;
+    border-radius: 1.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .mini-stat__icon {
+    width: 2.6rem;
+    height: 2.6rem;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.24));
+  }
+
+  .scene-wrap {
+    position: relative;
+    min-height: 34rem;
+    overflow: hidden;
+    border-radius: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(6, 15, 28, 0.25);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .scene-wrap__bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(1.1) contrast(1.03);
+  }
+
+  .scene-wrap__veil {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(2, 7, 18, 0.08) 0%, rgba(4, 15, 28, 0.18) 58%, rgba(4, 15, 28, 0.5) 100%),
+      radial-gradient(circle at 55% 22%, rgba(255, 255, 255, 0.08), transparent 30%);
+  }
+
+  .scene-board {
+    position: absolute;
+    inset: 10% 8% 8%;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+  }
+
+  .scene-board__frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.3));
+  }
+
+  .scene-board__content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: min(100%, 68%);
+    padding: 12% 8% 16%;
+    text-align: left;
+  }
+
+  .scene-wrap__marimo {
+    position: absolute;
+    right: 1rem;
+    bottom: 0.2rem;
+    width: min(44%, 22rem);
+    max-width: 100%;
+    transform: translateY(8%);
+    filter: drop-shadow(0 20px 30px rgba(0, 0, 0, 0.38));
+    animation: marimo-hover 4s ease-in-out infinite;
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.95rem 1rem;
+    border-radius: 1.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .prompt-chip {
+    border: 1px solid rgba(125, 211, 252, 0.2);
+    border-radius: 999px;
+    padding: 0.65rem 0.95rem;
+    font-size: 0.86rem;
+    color: #e2f5ff;
+    background: rgba(8, 24, 44, 0.55);
+    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  }
+
+  .prompt-chip:hover {
+    transform: translateY(-1px);
+    border-color: rgba(125, 211, 252, 0.45);
+    background: rgba(12, 34, 58, 0.78);
+  }
+
+  .primary-action,
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding: 0.85rem 1.2rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-weight: 700;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+  }
+
+  .primary-action {
+    color: #052031;
+    background: linear-gradient(135deg, #67e8f9, #a7f3d0);
+    box-shadow: 0 18px 30px rgba(103, 232, 249, 0.18);
+  }
+
+  .primary-action:hover:not(:disabled),
+  .secondary-action:hover {
+    transform: translateY(-1px);
+  }
+
+  .primary-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+  }
+
+  .secondary-action {
+    color: #eef7ff;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
   }
 }
 
-/* ── Animations ── */
-@keyframes clouds-drift {
-  from { background-position: 0% 0%; }
-  to { background-position: 100% 0%; }
-}
+@keyframes marimo-hover {
+  0%,
+  100% {
+    transform: translateY(8%);
+  }
 
-@keyframes marimo-idle {
-  0%, 100% { transform: scale(1, 1) translateY(0); }
-  50% { transform: scale(1.05, 0.95) translateY(5px); }
-}
-
-.animate-marimo-idle { animation: marimo-idle 3s ease-in-out infinite; }
-.animate-float { animation: float 4s ease-in-out infinite; }
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  50% {
+    transform: translateY(3%);
+  }
 }

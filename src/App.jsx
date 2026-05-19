@@ -1,19 +1,42 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { MarimoImage } from "./components/MarimoImage";
 
 const screens = [
-  { key: "home", label: "홈" },
-  { key: "sensor", label: "센서" },
-  { key: "chat", label: "채팅" },
-  { key: "settings", label: "설정" },
+  { key: "home", label: "HOME" },
+  { key: "sensor", label: "SENSOR" },
+  { key: "chat", label: "CHAT" },
+  { key: "settings", label: "SETTINGS" },
 ];
 
 const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}월`);
 
-const guideItems = [
-  { icon: "💧", title: "깨끗한 물", text: "항상 맑고 깨끗한 물을 유지해 주세요." },
-  { icon: "☀️", title: "직사광선 X", text: "강한 직사광선은 피하고 부드러운 빛으로 두세요." },
-  { icon: "🔄", title: "가끔 굴러주기", text: "마리모가 고르게 자라도록 가끔 굴려 주세요." },
-  { icon: "💚", title: "사랑 주기", text: "자주 보고 말 걸어 주면 더 정성스럽게 느껴져요." },
+const homeNotices = [
+  "오늘의 마리모 상태를 확인하고 작은 퀘스트를 완료해 주세요.",
+  "빛, 물, 습도 기록은 센서 화면에서 확인할 수 있어요.",
+  "체크한 퀘스트는 오늘의 돌봄 기록처럼 남겨둘 수 있어요.",
+];
+
+const questItems = [
+  {
+    id: "water",
+    icon: "/images/incoming/icon-water.png",
+    title: "물 상태 확인",
+  },
+  {
+    id: "light",
+    icon: "/images/incoming/icon-light.png",
+    title: "빛 상태 확인",
+  },
+  {
+    id: "humidity",
+    icon: "/images/incoming/icon-humidity.png",
+    title: "습도 확인",
+  },
+  {
+    id: "heart",
+    icon: "/images/incoming/heart_object.png",
+    title: "오늘의 성장 체크",
+  },
 ];
 
 const sensorRangeItems = [
@@ -21,6 +44,26 @@ const sensorRangeItems = [
   { label: "습도", key: "humidity", max: 100 },
   { label: "수위", key: "water", max: 100 },
   { label: "조도", key: "light", max: 10000 },
+];
+
+const sensorRows = [
+  { title: "온도", value: "24°C", note: "마리모가 편안하게 지내는 범위입니다." },
+  { title: "습도", value: "45%", note: "주변 공기가 안정적인 상태입니다." },
+  { title: "수위", value: "80%", note: "물이 충분히 채워져 있습니다." },
+  { title: "조도", value: "500 lux", note: "부드러운 빛을 받고 있습니다." },
+];
+
+const guideItems = [
+  { icon: "1", title: "홈", text: "마리모와 오늘의 퀘스트를 확인합니다." },
+  { icon: "2", title: "센서", text: "온도, 습도, 수위, 조도 기록을 봅니다." },
+  { icon: "3", title: "채팅", text: "마리모에게 현재 상태를 물어봅니다." },
+  { icon: "4", title: "설정", text: "알림과 센서 범위를 조정합니다." },
+];
+
+const chatStarterMessages = [
+  { id: "bot-1", role: "bot", text: "오늘도 돌봄 퀘스트를 시작해 볼까?", time: "14:31" },
+  { id: "user-1", role: "user", text: "오늘 마리모 상태를 알려줘.", time: "14:32" },
+  { id: "bot-2", role: "bot", text: "좋아. 물과 빛 상태를 먼저 체크해 보자.", time: "14:32" },
 ];
 
 function makeWeeklySummaries(monthIndex) {
@@ -31,10 +74,10 @@ function makeWeeklySummaries(monthIndex) {
   const baseLight = 420 + monthIndex * 85;
 
   return [
-    `${String(month).padStart(2, "0")}.01.~${String(month).padStart(2, "0")}.07. 온도 : ${(baseTemp + 0.1).toFixed(1)}도, 습도 : ${Math.round(baseHumidity)}%, 수위 : ${Math.round(baseWater)}%, 조도 : ${Math.round(baseLight)}lux`,
-    `${String(month).padStart(2, "0")}.08.~${String(month).padStart(2, "0")}.14. 온도 : ${(baseTemp + 0.4).toFixed(1)}도, 습도 : ${Math.round(baseHumidity + 1)}%, 수위 : ${Math.round(baseWater + 1)}%, 조도 : ${Math.round(baseLight + 140)}lux`,
-    `${String(month).padStart(2, "0")}.15.~${String(month).padStart(2, "0")}.21. 온도 : ${(baseTemp + 0.7).toFixed(1)}도, 습도 : ${Math.round(baseHumidity + 2)}%, 수위 : ${Math.round(baseWater + 1)}%, 조도 : ${Math.round(baseLight + 240)}lux`,
-    `${String(month).padStart(2, "0")}.22.~${String(month).padStart(2, "0")}.31. 온도 : ${(baseTemp + 0.9).toFixed(1)}도, 습도 : ${Math.round(baseHumidity + 3)}%, 수위 : ${Math.round(baseWater + 2)}%, 조도 : ${Math.round(baseLight + 360)}lux`,
+    `${String(month).padStart(2, "0")}.01.~${String(month).padStart(2, "0")}.07. 온도 : ${(baseTemp + 0.1).toFixed(1)}°C, 습도 : ${Math.round(baseHumidity)}%, 수위 : ${Math.round(baseWater)}%, 조도 : ${Math.round(baseLight)}lux`,
+    `${String(month).padStart(2, "0")}.08.~${String(month).padStart(2, "0")}.14. 온도 : ${(baseTemp + 0.4).toFixed(1)}°C, 습도 : ${Math.round(baseHumidity + 1)}%, 수위 : ${Math.round(baseWater + 1)}%, 조도 : ${Math.round(baseLight + 140)}lux`,
+    `${String(month).padStart(2, "0")}.15.~${String(month).padStart(2, "0")}.21. 온도 : ${(baseTemp + 0.7).toFixed(1)}°C, 습도 : ${Math.round(baseHumidity + 2)}%, 수위 : ${Math.round(baseWater + 1)}%, 조도 : ${Math.round(baseLight + 240)}lux`,
+    `${String(month).padStart(2, "0")}.22.~${String(month).padStart(2, "0")}.31. 온도 : ${(baseTemp + 0.9).toFixed(1)}°C, 습도 : ${Math.round(baseHumidity + 3)}%, 수위 : ${Math.round(baseWater + 2)}%, 조도 : ${Math.round(baseLight + 360)}lux`,
   ];
 }
 
@@ -77,7 +120,6 @@ function makeChart(monthIndex) {
   const count = series.length || 1;
   const scaleX = (index) => leftAxis + (count === 1 ? plotWidth / 2 : (plotWidth * index) / (count - 1));
   const scaleY = (value, min, max) => top + plotHeight - ((value - min) / (max - min)) * plotHeight;
-
   const path = (getter, min, max) =>
     series.map((point, index) => `${scaleX(index)},${scaleY(getter(point), min, max)}`).join(" ");
 
@@ -96,13 +138,15 @@ function makeChart(monthIndex) {
   };
 }
 
-function Panel({ title, chip, children }) {
+function Panel({ title, chip, children, className = "" }) {
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <strong>{title}</strong>
-        {chip ? <span className="chip">{chip}</span> : <span />}
-      </div>
+    <section className={`panel ${className}`.trim()}>
+      {title ? (
+        <div className="panel-head">
+          <strong>{title}</strong>
+          {chip ? <span className="chip">{chip}</span> : <span />}
+        </div>
+      ) : null}
       <div className="panel-body">{children}</div>
     </section>
   );
@@ -119,6 +163,7 @@ export default function App() {
   const [openModal, setOpenModal] = useState(null);
   const [clockText, setClockText] = useState(makeClock());
   const [hoverPoint, setHoverPoint] = useState(null);
+  const [checkedQuests, setCheckedQuests] = useState({});
   const [sensorRanges, setSensorRanges] = useState({
     temperatureMin: 0,
     temperatureMax: 100,
@@ -143,7 +188,6 @@ export default function App() {
     const rect = event.currentTarget.getBoundingClientRect();
     const pointerX = ((event.clientX - rect.left) / rect.width) * chart.width;
     const pointerY = ((event.clientY - rect.top) / rect.height) * chart.height;
-
     const closest = chart.series.reduce(
       (best, point, index) => {
         const x = chart.scaleX(index);
@@ -160,16 +204,9 @@ export default function App() {
     });
   }
 
-  const homeNotices = [
-    "지금은 화면이 실제로 보이는지 먼저 확인하는 단계예요.",
-    "네비게이션은 가운데로 고정하고, 오른쪽 위에는 실시간 시간을 띄워둘게요.",
-    "기능은 빼고 UI만 단순하게 정리해서 초보자도 보기 쉽게 만들었어요.",
-  ];
-
-  const homeQuests = [
-    { title: "전체 구조 확인", description: "홈, 센서, 채팅, 설정이 한 화면 안에서 잘 나뉘는지 봐요." },
-    { title: "이미지 자리 준비", description: "마리모 캐릭터와 아이콘은 나중에 바로 넣을 수 있게 비워둬요." },
-  ];
+  function toggleQuest(questId) {
+    setCheckedQuests((current) => ({ ...current, [questId]: !current[questId] }));
+  }
 
   function closeModal() {
     setOpenModal(null);
@@ -178,59 +215,82 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="header-brand">
-          <strong className="brand-name">MARIMO QUEST</strong>
-          <span className="brand-subtitle">화면만 먼저 보이도록 단순하게 정리한 앱사이트</span>
-        </div>
+        <div className="header-inner">
+          <div className="brand-block">
+            <img className="brand-logo" src="/images/incoming/transparent_rogo_2_.png" alt="마리모 퀘스트" />
+          </div>
 
-        <nav className="top-nav" aria-label="주요 화면 이동">
-          {screens.map((screen) => (
-            <button
-              key={screen.key}
-              type="button"
-              className={`nav-button ${activeScreen === screen.key ? "is-active" : ""}`}
-              onClick={() => {
-                setActiveScreen(screen.key);
-                setOpenModal(null);
-                setHoverPoint(null);
-              }}
-            >
-              {screen.label}
-            </button>
-          ))}
-        </nav>
+          <nav className="top-nav" aria-label="주요 화면 이동">
+            {screens.map((screen) => (
+              <button
+                key={screen.key}
+                type="button"
+                className={`nav-button ${activeScreen === screen.key ? "is-active" : ""}`}
+                onClick={() => {
+                  setActiveScreen(screen.key);
+                  setOpenModal(null);
+                  setHoverPoint(null);
+                }}
+              >
+                {screen.label}
+              </button>
+            ))}
+          </nav>
 
-        <div className="clock-chip" aria-label="실시간 시간">
-          {clockText}
+          <div className="header-status">
+            <div className="status-hearts" aria-hidden="true">
+              <img className={notificationEnabled ? "heart on" : "heart"} src="/images/incoming/heart_object.png" alt="" />
+              <img className="heart on" src="/images/incoming/heart_object.png" alt="" />
+              <img className="heart on" src="/images/incoming/heart_object.png" alt="" />
+            </div>
+            <div className="status-clock">{clockText}</div>
+          </div>
         </div>
       </header>
 
       <main className="app-main">
         {activeScreen === "home" && (
           <section className="home-grid">
-            <Panel title="공지사항" chip="초보자용">
-              <p className="panel-lead">{homeNotices[0]}</p>
-              <ul className="note-list">
-                <li>{homeNotices[1]}</li>
-                <li>{homeNotices[2]}</li>
-              </ul>
-            </Panel>
-
-            <Panel title="전체 마리모 이미지" chip="이미지 자리">
-              <div className="image-placeholder">
-                <strong>이미지 자리</strong>
-                <span>나중에 전체 마리모 이미지를 넣을 위치예요.</span>
+            <Panel title="공지사항" className="panel--notice panel--transparent">
+              <div className="notice-copy">
+                {homeNotices.map((notice) => (
+                  <p key={notice}>{notice}</p>
+                ))}
               </div>
             </Panel>
 
-            <Panel title="오늘의 퀘스트" chip="DAY 01">
+            <Panel className="panel--hero panel--transparent">
+              <div className="hero-stage">
+                <img className="hero-bubble" src="/images/incoming/speech-bubble-horizontal.png" alt="" aria-hidden="true" />
+                <div className="hero-bubble-copy">오늘도 잘 부탁해!</div>
+                <MarimoImage size="large" alt="중앙 마리모 캐릭터" className="hero-marimo" />
+              </div>
+            </Panel>
+
+            <Panel title="오늘의 퀘스트" className="panel--quest panel--transparent">
               <div className="quest-list">
-                {homeQuests.map((quest) => (
-                  <div key={quest.title} className="quest-item">
-                    <strong>{quest.title}</strong>
-                    <span>{quest.description}</span>
-                  </div>
-                ))}
+                {questItems.map((quest) => {
+                  const isChecked = Boolean(checkedQuests[quest.id]);
+                  return (
+                    <label key={quest.id} className={`quest-item ${isChecked ? "is-checked" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleQuest(quest.id)}
+                        aria-label={`${quest.title} 완료`}
+                      />
+                      <span className="quest-icon">
+                        <img src={quest.icon} alt="" aria-hidden="true" />
+                      </span>
+                      <span className="quest-copy">
+                        <strong>{quest.title}</strong>
+                      </span>
+                      <span className="quest-checkmark" aria-hidden="true">
+                        {isChecked ? "완료" : "확인"}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </Panel>
           </section>
@@ -239,52 +299,28 @@ export default function App() {
         {activeScreen === "sensor" && (
           <section className="sensor-stack">
             <div className="sensor-top-grid">
-              <Panel title="마리모 이미지" chip="캐릭터">
-                <div className="image-placeholder tall">
-                  <strong>전체 마리모 이미지</strong>
-                  <span>왼쪽에는 나중에 캐릭터 이미지를 배치할 수 있어요.</span>
+              <Panel title="마리모 이미지" className="panel--marimo">
+                <div className="marimo-stage">
+                  <MarimoImage size="medium" alt="센서 화면 마리모 캐릭터" className="sensor-marimo" />
                 </div>
               </Panel>
 
-              <Panel title="현재 센서 상태" chip="실시간">
-                <div className="metric-grid">
-                  {[
-                    ["온도", "24.0도"],
-                    ["습도", "45%"],
-                    ["수위", "80%"],
-                    ["조도", "500 lux"],
-                  ].map(([label, value]) => (
-                    <div key={label} className="metric-card">
-                      <span>{label}</span>
-                      <strong>{value}</strong>
+              <Panel title="현재 센서 상태" className="panel--announcement panel--announcement-one">
+                <div className="sensor-summary">
+                  {sensorRows.map((row) => (
+                    <div key={row.title} className="sensor-summary-row">
+                      <div>
+                        <strong>{row.title}</strong>
+                        <span>{row.note}</span>
+                      </div>
+                      <div className="sensor-value">{row.value}</div>
                     </div>
                   ))}
                 </div>
-                <p className="panel-lead">현재 값은 예시예요. 실제 센서가 연결되면 이 카드만 바뀌게 만들 수 있어요.</p>
               </Panel>
             </div>
 
-            <Panel title="시간별 센서 이력" chip="기록">
-              <div className="history-list scrollable-history">
-                {Array.from({ length: 18 }, (_, index) => {
-                  const hour = String(6 + index).padStart(2, "0");
-                  const temperature = 23 + (index % 4);
-                  const humidity = 45 + (index % 8);
-                  const water = 79 + (index % 5);
-                  const light = 240 + index * 60;
-                  return (
-                    <div key={hour} className="history-row">
-                      <strong>{hour}:00</strong>
-                      <span>
-                        온도 {temperature}°C · 습도 {humidity}% · 수위 {water}% · 조도 {light} lux
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-
-            <Panel title="위클릭 / 머슬릭 자료" chip="주간 / 월간">
+            <Panel title="주간 / 월간 자료" className="panel--announcement panel--announcement-two">
               <div className="mode-switch">
                 <button
                   type="button"
@@ -344,7 +380,7 @@ export default function App() {
                 ) : (
                   <div className="chart-card">
                     <div className="chart-header">
-                      <strong>{monthLabels[selectedChartMonth]} 머슬릭 그래프</strong>
+                      <strong>{monthLabels[selectedChartMonth]} 월간 그래프</strong>
                       <span>온도 / 습도 / 수위 / 조도</span>
                     </div>
 
@@ -357,12 +393,7 @@ export default function App() {
                         ))}
                       </div>
 
-                      <div
-                        className="chart-viewport"
-                        id="chartViewport"
-                        onMouseLeave={() => setHoverPoint(null)}
-                        onMouseMove={handleChartMove}
-                      >
+                      <div className="chart-viewport" onMouseLeave={() => setHoverPoint(null)} onMouseMove={handleChartMove}>
                         <svg className="chart-svg" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none">
                           {[0, 25, 50, 75, 100].map((tick) => {
                             const y = chart.scaleY(tick, 0, 100);
@@ -372,15 +403,8 @@ export default function App() {
                           <polyline className="line humidity-line" points={chart.humidityPath} />
                           <polyline className="line water-line" points={chart.waterPath} />
                           <polyline className="line light-line" points={chart.lightPath} />
-
                           {currentPoint ? (
-                            <line
-                              x1={hoverPoint.x}
-                              x2={hoverPoint.x}
-                              y1={chart.top}
-                              y2={chart.height - chart.bottom}
-                              className="chart-crosshair"
-                            />
+                            <line x1={hoverPoint.x} x2={hoverPoint.x} y1={chart.top} y2={chart.height - chart.bottom} className="chart-crosshair" />
                           ) : null}
                         </svg>
 
@@ -399,9 +423,7 @@ export default function App() {
                               top: `${Math.min(hoverPoint.y - 48, 120)}px`,
                             }}
                           >
-                            <strong>
-                              {monthLabels[selectedChartMonth]} / {currentPoint.day}일
-                            </strong>
+                            <strong>{monthLabels[selectedChartMonth]} / {currentPoint.day}일</strong>
                             <span>온도 {currentPoint.temp}°C</span>
                             <span>습도 {currentPoint.humidity}%</span>
                             <span>수위 {currentPoint.water}%</span>
@@ -427,16 +449,18 @@ export default function App() {
 
         {activeScreen === "chat" && (
           <section className="chat-card">
-            <Panel title="마리모와 대화하기" chip="채팅">
+            <Panel title="마리모와 대화하기" className="panel--chat">
               <div className="chat-list">
-                {[
-                  { id: 1, from: "marimo", text: "안녕! 오늘은 어떤 걸 확인해 볼까?" },
-                  { id: 2, from: "user", text: "화면 구조부터 천천히 보고 싶어." },
-                  { id: 3, from: "marimo", text: "좋아. 텍스트나 음성 모드를 바꿔도 입력 내용은 그대로 남겨둘게." },
-                ].map((message) => (
-                  <div key={message.id} className={`chat-row ${message.from}`}>
-                    {message.from === "marimo" ? <span className="chat-avatar">M</span> : null}
-                    <div className={`chat-bubble ${message.from}`}>{message.text}</div>
+                {chatStarterMessages.map((message) => (
+                  <div key={message.id} className={`chat-row ${message.role}`}>
+                    {message.role === "bot" ? <MarimoImage size="small" alt="작은 마리모" className="chat-marimo" /> : null}
+                    <div className={`chat-bubble ${message.role}`}>
+                      {message.role === "bot" ? (
+                        <img src="/images/incoming/speech-bubble-medium.png" alt="" aria-hidden="true" className="chat-bubble-frame" />
+                      ) : null}
+                      <p>{message.text}</p>
+                      <span className="msg-time">{message.time}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -447,17 +471,15 @@ export default function App() {
                   type="text"
                   value={chatDraft}
                   onChange={(event) => setChatDraft(event.target.value)}
-                  placeholder="메시지를 입력해 주세요"
+                  placeholder="메시지를 입력해 보세요"
                 />
-                <button type="button" className="send-button">
-                  전송
-                </button>
+                <button type="button" className="send-button">전송</button>
                 <button
                   type="button"
-                  className={`mode-button ${chatMode === "음성" ? "is-active" : ""}`}
-                  onClick={() => setChatMode((current) => (current === "음성" ? "텍스트" : "음성"))}
+                  className={`mode-button ${chatMode === "텍스트" ? "is-active" : ""}`}
+                  onClick={() => setChatMode((current) => (current === "텍스트" ? "음성" : "텍스트"))}
                 >
-                  음성
+                  {chatMode}
                 </button>
               </div>
             </Panel>
@@ -466,7 +488,7 @@ export default function App() {
 
         {activeScreen === "settings" && (
           <section className="settings-grid">
-            <Panel title="상태" chip="ON / OFF">
+            <Panel title="상태">
               <button
                 type="button"
                 className={`notification-toggle ${notificationEnabled ? "is-on" : "is-off"}`}
@@ -476,23 +498,15 @@ export default function App() {
               </button>
             </Panel>
 
-            <Panel title="센서" chip="범위 설정">
-              <button
-                type="button"
-                className="setting-open-button"
-                onClick={() => setOpenModal("sensor")}
-              >
+            <Panel title="센서">
+              <button type="button" className="setting-open-button" onClick={() => setOpenModal("sensor")}>
                 온도 / 습도 / 수위 / 조도 범위 보기
               </button>
             </Panel>
 
-            <Panel title="가이드" chip="안내">
-              <button
-                type="button"
-                className="setting-open-button"
-                onClick={() => setOpenModal("guide")}
-              >
-                관리 가이드 열기
+            <Panel title="가이드">
+              <button type="button" className="setting-open-button" onClick={() => setOpenModal("guide")}>
+                사용 가이드 열기
               </button>
             </Panel>
           </section>
@@ -503,10 +517,8 @@ export default function App() {
         <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && closeModal()}>
           <div className="modal-card" role="dialog" aria-modal="true">
             <div className="modal-head">
-              <strong>{openModal === "sensor" ? "센서 범위" : "가이드"}</strong>
-              <button type="button" className="modal-close" onClick={closeModal}>
-                닫기
-              </button>
+              <strong>{openModal === "sensor" ? "센서 범위" : "마리모 가이드"}</strong>
+              <button type="button" className="modal-close" onClick={closeModal}>닫기</button>
             </div>
 
             {openModal === "sensor" ? (
@@ -529,14 +541,8 @@ export default function App() {
                               width: `${((maxValue - minValue) / item.max) * 100}%`,
                             }}
                           />
-                          <span
-                            className="range-thumb left"
-                            style={{ left: `${(minValue / item.max) * 100}%` }}
-                          />
-                          <span
-                            className="range-thumb right"
-                            style={{ left: `${(maxValue / item.max) * 100}%` }}
-                          />
+                          <span className="range-thumb left" style={{ left: `${(minValue / item.max) * 100}%` }} />
+                          <span className="range-thumb right" style={{ left: `${(maxValue / item.max) * 100}%` }} />
                         </div>
                         <div className="range-inputs">
                           <input

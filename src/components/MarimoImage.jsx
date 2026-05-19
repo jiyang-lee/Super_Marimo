@@ -1,8 +1,10 @@
+import React from "react";
+
 export function MarimoImage({ size = "medium", alt, className = "" }) {
   const imageSourceBySize = {
-    large: "/images/character/marimo-large.png",
-    medium: "/images/character/marimo-medium.png",
-    small: "/images/character/marimo-small.png",
+    large: "/images/incoming/marimo-shadow-large.png",
+    medium: "/images/incoming/marimo-main.png",
+    small: "/images/incoming/marimo-small.png",
   };
 
   function handleFallback(event) {
