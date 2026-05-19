@@ -217,7 +217,7 @@ export default function App() {
       <header className="app-header">
         <div className="header-inner">
           <div className="brand-block">
-            <img className="brand-logo" src="/images/incoming/transparent_rogo_2_.png" alt="마리모 퀘스트" />
+            <img className="brand-logo" src="/images/incoming/transparent_rogo_3.png" alt="마리모 퀘스트" />
           </div>
 
           <nav className="top-nav" aria-label="주요 화면 이동">
