@@ -1,3 +1,4 @@
+import '../styles/settings.css';
 import { useEffect, useState } from 'react';
 import { MarimoSpeech } from '../components/MarimoSpeech';
 import { PixelCard } from '../components/PixelCard';
@@ -59,7 +60,7 @@ export function SettingsPage() {
     : [];
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="settings-page mx-auto flex max-w-4xl flex-col gap-4">
       <MarimoSpeech text="운영 모드를 여기서 바꿀 수 있어요." />
       {error ? <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       <PixelCard title="실시간 설정">

@@ -1,3 +1,4 @@
+import '../styles/home.css';
 import { MarimoImage } from '../components/MarimoImage';
 
 const homeNotices = [

@@ -1,3 +1,4 @@
+import '../styles/sensor.css';
 import { useEffect, useState } from 'react';
 import { getLatestSensor, getSensorHistory, type SensorLatest, type SensorReading } from '../api';
 
@@ -260,7 +261,7 @@ export function SensorPage() {
   const activePoint = hoveredIndex !== null ? points[hoveredIndex] : null;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="sensor-page flex flex-col gap-5">
       {/* Header section */}
       <section className="rounded-[2rem] border-4 border-bark/10 bg-white/90 p-5 shadow-[0_18px_0_rgba(15,23,42,0.05)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
