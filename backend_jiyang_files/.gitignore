@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Audio captures
+arduino/captures/*.wav
+
+# Temp files
+_tiny_test.wav
+
+# Frontend build
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.pytest_cache/
+
+# Voice agent state
+voice_agent.session.json
+

@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    font-family:
+      ui-rounded,
+      'Apple SD Gothic Neo',
+      'Noto Sans KR',
+      system-ui,
+      sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(244, 114, 182, 0.18), transparent 28%),
+      radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 26%),
+      radial-gradient(circle at bottom left, rgba(52, 211, 153, 0.14), transparent 28%),
+      linear-gradient(135deg, #fff7fb 0%, #ecfeff 42%, #f5f3ff 100%);
+  }
+
+  html {
+    min-height: 100%;
+    background: linear-gradient(135deg, #fff7fb 0%, #ecfeff 42%, #f5f3ff 100%);
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(244, 114, 182, 0.18), transparent 28%),
+      radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 26%),
+      radial-gradient(circle at bottom left, rgba(52, 211, 153, 0.14), transparent 28%),
+      linear-gradient(135deg, #fff7fb 0%, #ecfeff 42%, #f5f3ff 100%);
+    color: #0f172a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(236, 72, 153, 0.22);
+    color: #0f172a;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(236, 72, 153, 0.45) rgba(255, 255, 255, 0.35);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(236, 72, 153, 0.55), rgba(56, 189, 248, 0.55));
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+  }
+}
+
+@layer components {
+  .pixel-card {
+    @apply rounded-2xl border-2 border-bark/20 bg-white/70 p-4 shadow-sm;
+  }
+
+  .pixel-input {
+    @apply rounded-xl border-2 border-bark/30 bg-white/80 px-3 py-2 font-dot text-sm text-bark outline-none transition focus:border-grass;
+  }
+
+  .quest-item {
+    @apply flex items-center gap-2 rounded-lg border border-bark/15 bg-white/60 p-2;
+  }
+
+  .quest-icon {
+    @apply flex h-8 w-8 items-center justify-center rounded-lg text-sm;
+  }
+
+  .sensor-card {
+    @apply flex flex-col items-center gap-1 rounded-xl border-2 border-bark/15 bg-white/70 p-3;
+  }
+
+  .sensor-value {
+    @apply font-pixel text-lg;
+  }
+
+  .chat-bubble-npc {
+    @apply rounded-2xl rounded-tl-sm border-2 border-grass/30 bg-grass/10 p-3;
+  }
+
+  .chat-bubble-player {
+    @apply rounded-2xl rounded-tr-sm border-2 border-sky/30 bg-sky/10 p-3;
+  }
+
+  .tts-btn {
+    @apply rounded bg-grass/20 px-2 py-0.5 font-dot text-[10px] text-grass hover:bg-grass/30;
+  }
+
+  .msg-time {
+    @apply mt-1 text-right font-dot text-[10px] text-bark/50;
+  }
+
+  .icon-mic {
+    @apply flex h-10 w-10 items-center justify-center rounded-full border-2 border-bark/30 bg-white text-lg transition active:scale-95;
+  }
+
+  .icon-mic.recording {
+    @apply animate-pulse border-heart-red bg-heart-red/20;
+  }
+}

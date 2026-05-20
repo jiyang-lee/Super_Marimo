@@ -1,0 +1,21 @@
+# Super Marimo - GPU Mode Overlay
+# Explicit GPU runtime overlay for the default full-model stack.
+
+services:
+  api-server:
+    env_file:
+      - .env.gpu
+
+  llm-server:
+    env_file:
+      - .env.gpu
+    gpus: all
+
+  voice-server:
+    env_file:
+      - .env.gpu
+    gpus: all
+
+  voice-agent:
+    env_file:
+      - .env.gpu

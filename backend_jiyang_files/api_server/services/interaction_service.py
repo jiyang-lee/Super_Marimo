@@ -1,0 +1,246 @@
+from typing import Any, Optional
+from uuid import UUID, uuid4
+
+import httpx
+from fastapi import HTTPException
+from psycopg.types.json import Json
+
+from config import LLM_SERVER_URL
+from extensions.db import get_db_connection
+from schemas import SensorPayload
+from services.runtime_action_service import apply_runtime_action, resolve_runtime_action
+from services.runtime_settings import get_runtime_settings, save_runtime_settings_history, RUNTIME_SETTINGS_KEY
+from services.llm_action_contract import compose_final_answer, normalize_llm_action_proposal
+from services.sensor_judge import judge_sensor_state
+from services.sensor_store import load_latest_sensor_payload
+from services.session_lifecycle import ensure_session, update_session_meta, update_session_turn
+from services.session_message import fetch_recent_session_messages, save_session_message
+
+from utils import normalize_datetime, normalize_response_payload
+
+
+DEFAULT_PERSONA_MEMO = (
+    "한국인 꼬마 같은 말투를 쓰되 예의 바르고 다정하게 말한다. "
+    "짧고 자연스럽게 답하고, 너무 유치하지 않게 부드러운 톤을 유지한다."
+)
+
+
+def build_session_summary(history: list[dict[str, str]]) -> str:
+    if not history:
+        return "최근 세션 요약 없음"
+
+    recent = history[-6:]
+    parts: list[str] = []
+    for item in recent:
+        role = (item.get("role") or "").strip().lower()
+        content = (item.get("content") or "").strip()
+        if not content:
+            continue
+        label = "사용자" if role == "user" else "어시스턴트" if role == "assistant" else "시스템"
+        parts.append(f"{label}: {content[:120]}")
+    return " / ".join(parts) if parts else "최근 세션 요약 없음"
+
+
+async def request_llm(
+    question: str,
+    sensor: Optional[SensorPayload],
+    state: Optional[dict[str, Any]],
+    runtime_settings: Optional[dict[str, Any]],
+    use_sensor_context: bool,
+    history: Optional[list[dict[str, str]]] = None,
+    session_summary: Optional[str] = None,
+    action_result: Optional[dict[str, Any]] = None,
+    persona_memo: Optional[str] = None,
+    system_memo: Optional[str] = None,
+) -> dict[str, Any]:
+    resolved_persona_memo = (persona_memo or DEFAULT_PERSONA_MEMO).strip()
+    resolved_system_memo = system_memo.strip() if system_memo else None
+    request_body = {
+        "question": question,
+        "sensor": sensor.model_dump() if sensor is not None else None,
+        "state": state,
+        "runtime_settings": runtime_settings,
+        "history": history or [],
+        "session_summary": session_summary,
+        "action_result": action_result,
+        "use_sensor_context": use_sensor_context,
+        "persona_memo": resolved_persona_memo,
+        "system_memo": resolved_system_memo,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f"{LLM_SERVER_URL}/generate", json=request_body)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM server error: {exc}") from exc
+    return response.json()
+
+
+async def handle_interaction(
+    *,
+    session_id: Optional[UUID],
+    text: str,
+    sensor: Optional[SensorPayload],
+    use_sensor_context: bool,
+    source: str,
+    persona_memo: Optional[str] = None,
+    system_memo: Optional[str] = None,
+    is_test: bool = False,
+) -> dict[str, Any]:
+    resolved_session_id = session_id or uuid4()
+    active_sensor: Optional[SensorPayload] = sensor
+    state: dict[str, Any] = {"level": "chat", "alerts": []}
+    runtime_settings = get_runtime_settings()
+    resolved_persona_memo = (persona_memo or DEFAULT_PERSONA_MEMO).strip()
+    resolved_system_memo = system_memo.strip() if system_memo else None
+    session_summary = "최근 세션 요약 없음"
+    action_result: Optional[dict[str, Any]] = None
+
+    if use_sensor_context:
+        active_sensor = active_sensor or load_latest_sensor_payload()
+        state = judge_sensor_state(active_sensor)
+
+    with get_db_connection() as conn:
+        session_row, session_created = ensure_session(conn, resolved_session_id)
+        if is_test:
+            session_row = update_session_meta(conn, resolved_session_id, {"is_test": True})
+        history = fetch_recent_session_messages(conn, resolved_session_id)
+        session_summary = build_session_summary(history)
+        save_session_message(
+            conn,
+            resolved_session_id,
+            "user",
+            text,
+            meta={
+                "source": source,
+                "use_sensor_context": use_sensor_context,
+                "session_summary": session_summary,
+            },
+        )
+
+        llm = await request_llm(
+            text,
+            active_sensor,
+            state,
+            runtime_settings,
+            use_sensor_context=use_sensor_context,
+            history=history,
+            session_summary=session_summary,
+            action_result=action_result,
+            persona_memo=resolved_persona_memo,
+            system_memo=resolved_system_memo,
+        )
+        answer = str(llm.get("answer", "")).strip()
+        if not answer:
+            raise HTTPException(status_code=502, detail="LLM response has no answer")
+
+        action_request = normalize_llm_action_proposal(llm.get("action_proposal"))
+        if action_request is None:
+            action_request = resolve_runtime_action(
+                text,
+                runtime_settings=runtime_settings,
+            )
+
+        if action_request is not None:
+            action_request["before"] = runtime_settings
+            action_result = apply_runtime_action(action_request, conn=conn)
+            runtime_settings = get_runtime_settings(conn=conn)
+            answer = compose_final_answer(answer, action_result)
+            llm["action_result"] = action_result
+            llm["final_answer"] = answer
+            llm["executed_action"] = action_request
+            save_runtime_settings_history(
+                conn,
+                setting_key=RUNTIME_SETTINGS_KEY,
+                previous_value=action_request.get("before"),
+                new_value=runtime_settings,
+                changed_by=str(resolved_session_id),
+                action_type=action_result.get("action_type"),
+                summary=action_result.get("summary"),
+            )
+            session_row = update_session_meta(
+                conn,
+                resolved_session_id,
+                {
+                    "last_agent_action": action_result,
+                    "last_sensor_summary": {
+                        "sensor": normalize_response_payload(active_sensor.model_dump() if active_sensor is not None else None),
+                        "state": normalize_response_payload(state),
+                        "runtime_settings": normalize_response_payload(runtime_settings),
+                    },
+                    "last_llm_contract": normalize_response_payload(llm),
+                },
+            )
+        else:
+            llm["final_answer"] = answer
+
+        save_session_message(
+            conn,
+            resolved_session_id,
+            "assistant",
+            answer,
+            meta={
+                "source": source,
+                "session_summary": session_summary,
+                "action_result": action_result,
+            },
+        )
+
+        interaction_payload = active_sensor.model_dump() if active_sensor is not None else {}
+        alerts = state.get("alerts") or []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO interaction_log (
+                    session_id, stt_text, llm_answer, tts_text, sensor_json, state_level, state_alerts, meta
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING interaction_id, created_at
+                """,
+                (
+                    resolved_session_id,
+                    text,
+                    answer,
+                    answer,
+                    Json(interaction_payload),
+                    state["level"],
+                    Json(alerts),
+                    Json(
+                        {
+                            "source": source,
+                            "session_created": session_created,
+                            "session_summary": session_summary,
+                            "action_result": action_result,
+                            "runtime_settings": runtime_settings,
+                        }
+                    ),
+                ),
+            )
+            interaction_row = cur.fetchone()
+
+        if interaction_row is None:
+            raise HTTPException(status_code=500, detail="interaction log could not be saved")
+
+        session_row = update_session_turn(conn, resolved_session_id)
+        conn.commit()
+
+    return {
+        "saved": True,
+        "session_id": str(resolved_session_id),
+        "session_created": session_created,
+        "interaction_id": interaction_row["interaction_id"],
+        "created_at": normalize_datetime(interaction_row["created_at"]),
+        "messages_saved": 2,
+        "history_count": len(history),
+        "stt_text": text,
+        "llm_answer": answer,
+        "tts_text": answer,
+        "use_sensor_context": use_sensor_context,
+        "runtime_settings": normalize_response_payload(runtime_settings),
+        "session_summary": session_summary,
+        "action_result": normalize_response_payload(action_result),
+        "sensor": normalize_response_payload(active_sensor.model_dump() if active_sensor is not None else None),
+        "state": normalize_response_payload(state),
+        "llm": normalize_response_payload(llm),
+        "session": normalize_response_payload(session_row),
+    }

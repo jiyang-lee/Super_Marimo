@@ -1,0 +1,115 @@
+services:
+  db-server:
+    image: postgres:16-alpine
+    container_name: super-marimo-db-server
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: "marimo"
+      POSTGRES_USER: "marimo"
+      POSTGRES_PASSWORD: "marimo"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marimo -d marimo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api-server:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: api_server
+        REQUIREMENTS_FILE: requirements-api.txt
+    container_name: super-marimo-api-server
+    depends_on:
+      db-server:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  llm-server:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: llm_server
+        REQUIREMENTS_FILE: requirements-llm.txt
+    container_name: super-marimo-llm-server
+    ports:
+      - "8001:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  voice-server:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: voice_server
+        REQUIREMENTS_FILE: requirements-voice.txt
+    container_name: super-marimo-voice-server
+    ports:
+      - "8002:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+      - supertonic-cache:/root/.cache/supertonic3
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  voice-agent:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: voice_agent
+        REQUIREMENTS_FILE: requirements-voice-agent.txt
+    container_name: super-marimo-voice-agent
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./shared/audio:/app/shared/audio
+    depends_on:
+      api-server:
+        condition: service_healthy
+      voice-server:
+        condition: service_healthy
+      llm-server:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  hf-cache:
+  supertonic-cache:

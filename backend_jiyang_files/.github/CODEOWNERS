@@ -1,0 +1,22 @@
+# CODEOWNERS
+#
+# 백엔드와 공통 문서는 현재 소유자인 @jiyang-lee 기준으로 관리한다.
+# 프론트 담당자 GitHub 아이디가 정해지면 frontend/** 라인을 그 아이디로 바꾼다.
+
+* @jiyang-lee
+
+# 백엔드 변경은 현재 소유자 검토 대상
+api_server/** @jiyang-lee
+db_server/** @jiyang-lee
+llm_server/** @jiyang-lee
+voice_server/** @jiyang-lee
+voice_agent/** @jiyang-lee
+
+# 문서와 운영 파일은 현재 소유자 검토 대상
+docs/** @jiyang-lee
+skills/** @jiyang-lee
+README.md @jiyang-lee
+.github/** @jiyang-lee
+
+# 프론트는 팀원 아이디로 교체 필요
+frontend/** @govl3773-spe
