@@ -1,0 +1,9 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="120" fill="#DFF7D8"/>
+  <circle cx="256" cy="214" r="120" fill="#67C95E"/>
+  <circle cx="214" cy="190" r="22" fill="#16201A"/>
+  <circle cx="298" cy="190" r="22" fill="#16201A"/>
+  <path d="M202 266C226 292 286 292 310 266" stroke="#16201A" stroke-width="14" stroke-linecap="round"/>
+  <path d="M140 330C172 304 212 292 256 292C300 292 340 304 372 330" stroke="#3E8E3D" stroke-width="18" stroke-linecap="round"/>
+  <text x="256" y="420" fill="#2F5E30" font-family="Arial, sans-serif" font-size="32" font-weight="700" text-anchor="middle">MARIMO</text>
+</svg>

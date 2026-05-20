@@ -1,25 +1,34 @@
-import { MarimoSpeech } from '../components/MarimoSpeech';
-import { PixelCard } from '../components/PixelCard';
+const weeklyRows = [
+  ['06:00', '23°C', '49%', '82%', '280 lux'],
+  ['09:00', '24°C', '47%', '81%', '410 lux'],
+  ['12:00', '25°C', '45%', '80%', '620 lux'],
+  ['15:00', '24°C', '48%', '79%', '540 lux'],
+  ['18:00', '23°C', '52%', '80%', '360 lux'],
+  ['21:00', '22°C', '55%', '81%', '240 lux'],
+];
 
 export function ReportPage() {
   return (
-    <div className="flex flex-col gap-4">
-      <MarimoSpeech text="이번 주 리포트야!" />
-      <div className="flex gap-2 justify-center">
-        <button className="nav-tab active">Weekly</button>
-        <button className="nav-tab inactive">Monthly</button>
-      </div>
-      <PixelCard title="📈 센서 추이">
-        <div className="h-32 bg-sky/20 border border-bark/20 rounded flex items-end justify-around p-2 gap-1">
-          {['월','화','수','목','금','토','일'].map((d, i) => {
-            const h = [60, 75, 65, 80, 70, 85, 78][i];
-            return <div key={d} className="flex flex-col items-center gap-0.5 flex-1">
-              <div className="w-full bg-grass rounded-sm" style={{ height: `${h}%` }} />
-              <span className="font-dot text-[0.5rem] text-bark/60">{d}</span>
-            </div>;
-          })}
+    <section className="sensor-stack report-screen">
+      <article className="sensor-switch-panel">
+        <div className="panel-head">
+          <h1 className="panel-title">주간 리포트</h1>
+          <div className="mode-switch">
+            <button type="button" className="mode-button is-active">Weekly</button>
+            <button type="button" className="mode-button">Monthly</button>
+          </div>
         </div>
-      </PixelCard>
-    </div>
+        <div className="panel-body">
+          <div className="weekly-list">
+            {weeklyRows.map(([time, temp, humidity, water, light]) => (
+              <article key={time} className="weekly-card">
+                <span className="weekly-date">{time}</span>
+                <span className="weekly-text">온도 {temp} / 습도 {humidity} / 수위 {water} / 조도 {light}</span>
+              </article>
+            ))}
+          </div>
+        </div>
+      </article>
+    </section>
   );
 }
