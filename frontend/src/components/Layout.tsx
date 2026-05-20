@@ -42,6 +42,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    if (location.pathname === '/chat') {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    }
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, [location.pathname]);
+
   const toggleMode = async () => {
     if (loading || !settings) return;
     setLoading(true);
@@ -100,7 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="app-main">{children}</main>
+      <main className={`app-main ${location.pathname === '/chat' ? 'is-chat' : ''}`}>{children}</main>
     </div>
   );
 }

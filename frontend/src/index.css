@@ -24,9 +24,9 @@
     color: #e5eefb;
     font-family: 'DotGothic16', sans-serif;
     background:
-      radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 38%),
-      radial-gradient(circle at 85% 10%, rgba(251, 191, 36, 0.12), transparent 30%),
-      linear-gradient(180deg, #0a1730 0%, #07111f 48%, #05101a 100%);
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 38%),
+      radial-gradient(circle at 85% 10%, rgba(251, 191, 36, 0.08), transparent 30%),
+      linear-gradient(180deg, #eef3f7 0%, #dfe8ee 48%, #d6e0e8 100%);
   }
 
   button,
@@ -44,10 +44,12 @@
   .app-shell {
     position: relative;
     isolation: isolate;
-    min-height: 100vh;
-    background:
-      linear-gradient(180deg, rgba(6, 15, 28, 0.85), rgba(6, 15, 28, 0.65)),
-      url('/images/incoming/home-background.png') center bottom / cover no-repeat fixed;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: url('/images/incoming/home-background.png') center bottom / cover no-repeat fixed;
   }
 
   .app-shell__overlay {
@@ -55,11 +57,8 @@
     position: fixed;
     inset: 0;
     z-index: -1;
-    background:
-      radial-gradient(circle at 20% 15%, rgba(125, 211, 252, 0.14), transparent 26%),
-      radial-gradient(circle at 80% 20%, rgba(255, 214, 102, 0.1), transparent 24%),
-      linear-gradient(180deg, rgba(9, 18, 34, 0.2), rgba(9, 18, 34, 0.55));
-    backdrop-filter: blur(1px);
+    background: transparent;
+    backdrop-filter: none;
   }
 
   .page-shell {
@@ -197,9 +196,22 @@
   }
 
   .app-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
     width: min(1320px, calc(100vw - 24px));
     margin: 0 auto;
-    padding: 20px 0 88px;
+    padding: 20px 0 24px;
+  }
+
+  .app-main.is-chat {
+    padding-bottom: 20px;
+  }
+
+  .app-main > * {
+    min-height: 0;
   }
 }
 
