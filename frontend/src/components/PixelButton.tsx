@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, PropsWithChildren } from 'react';
+import '../styles/ui.css';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'gold' | 'green' | 'red';

@@ -5,10 +5,7 @@ import { getRuntimeSettings, updateRuntimeSettings, type RuntimeSettings } from 
 const NAV_ITEMS = [
   { path: '/', label: 'HOME' },
   { path: '/sensor', label: 'SENSOR' },
-  { path: '/chat', label: 'CHAT' },
   { path: '/settings', label: 'SETTINGS' },
-  { path: '/lab', label: 'LAB' },
-  { path: '/report', label: 'REPORT' },
 ];
 
 function makeClock() {

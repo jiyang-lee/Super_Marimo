@@ -1,0 +1,33 @@
+.card-parchment {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.75rem;
+  background: rgba(253, 245, 230, 0.92);
+  color: #5d3a1a;
+  box-shadow: 0 18px 44px rgba(1, 5, 15, 0.24);
+}
+
+.btn-game,
+.btn-gold,
+.btn-green {
+  border: 2px solid rgba(61, 36, 16, 0.24);
+  border-radius: 0.55rem;
+  font-weight: 800;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.btn-game:hover,
+.btn-gold:hover,
+.btn-green:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.btn-gold {
+  background: #fdd835;
+  color: #3d2410;
+}
+
+.btn-green {
+  background: #2d7a32;
+  color: #f8fff4;
+}
