@@ -73,6 +73,8 @@ export function DashboardPage() {
   }, []);
 
   const merged = sensor?.latest_merged ?? null;
+  const runtimeSettings = sensor?.runtime_settings ?? null;
+  const latestEvent = events[0] ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -114,7 +116,7 @@ export function DashboardPage() {
             { label: 'Temperature', value: merged?.temperature ?? '-', suffix: '°C' },
             { label: 'Humidity', value: merged?.humidity ?? '-', suffix: '%' },
             { label: 'Light', value: merged?.light ?? '-', suffix: '' },
-            { label: 'Water', value: merged?.water_level ?? '-', suffix: '%' },
+            { label: 'Water(raw)', value: merged?.water_level ?? '-', suffix: '' },
             { label: 'Distance', value: merged?.distance ?? '-', suffix: 'cm' },
             { label: 'Level', value: merged?.state_level ?? 'no data', suffix: '' },
           ].map((s) => (
@@ -126,6 +128,45 @@ export function DashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="pixel-card">
+          <h2 className="font-pixel text-sm text-bark">Runtime Settings</h2>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { label: 'wake', value: runtimeSettings?.wake_enabled ? 'ON' : 'OFF' },
+              { label: 'distance', value: runtimeSettings?.distance_detection_enabled ? 'ON' : 'OFF' },
+              { label: 'web voice', value: runtimeSettings?.web_voice_enabled ? 'ON' : 'OFF' },
+              { label: 'threshold', value: `${runtimeSettings?.distance_threshold_cm ?? '-'} cm` },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-bark/20 bg-white/60 p-2">
+                <div className="font-dot text-[10px] uppercase tracking-wider text-bark/60">{item.label}</div>
+                <div className="font-pixel text-sm text-bark">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="pixel-card">
+          <h2 className="font-pixel text-sm text-bark">Latest Action</h2>
+          {latestEvent ? (
+            <div className="mt-3 rounded-lg border border-bark/15 bg-white/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-dot text-[10px] uppercase text-bark/60">{latestEvent.event_type}</span>
+                <span className={['font-dot text-[10px]', latestEvent.played ? 'text-grass' : 'text-gold'].join(' ')}>
+                  {latestEvent.status ?? (latestEvent.played ? 'played' : 'pending')}
+                </span>
+              </div>
+              <div className="mt-2 font-dot text-xs text-bark">{latestEvent.generated_text?.slice(0, 80) || '-'}</div>
+              <div className="mt-1 font-dot text-[10px] text-bark/50">
+                {latestEvent.distance ?? '-'}cm · {latestEvent.trigger_source || '-'}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 font-dot text-xs text-bark/50">No recent action yet.</div>
+          )}
         </div>
       </div>
 
@@ -146,7 +187,7 @@ export function DashboardPage() {
                 <span className="font-dot text-xs text-bark">{ev.generated_text?.slice(0, 30) || '-'}</span>
               </div>
               <span className={['font-dot text-[10px]', ev.played ? 'text-grass' : 'text-gold'].join(' ')}>
-                {ev.played ? 'played' : 'pending'}
+                {ev.status ?? (ev.played ? 'played' : 'pending')}
               </span>
             </div>
           ))}

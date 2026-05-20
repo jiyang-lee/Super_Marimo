@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import sys
 import types
@@ -5,11 +7,13 @@ import types
 
 fastapi = sys.modules.setdefault("fastapi", types.ModuleType("fastapi"))
 
+
 class _HTTPException(Exception):
     def __init__(self, status_code: int, detail: str):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
 
 if not hasattr(fastapi, "HTTPException"):
     fastapi.HTTPException = _HTTPException
@@ -60,6 +64,7 @@ if not hasattr(fastapi_responses, "JSONResponse"):
 
 pydantic = sys.modules.setdefault("pydantic", types.ModuleType("pydantic"))
 
+
 class _BaseModel:
     def __init__(self, **data):
         for name, value in self.__class__.__dict__.items():
@@ -82,6 +87,7 @@ def _Field(*args, **kwargs):
     if default_factory is not None:
         return default_factory()
     return kwargs.get("default")
+
 
 pydantic.BaseModel = _BaseModel
 pydantic.Field = _Field
@@ -154,18 +160,20 @@ def test_request_llm_includes_persona_and_system_memo(monkeypatch) -> None:
 
     result = asyncio.run(
         interaction_service.request_llm(
-            "지금 뭐해?",
+            "hello",
             sensor=None,
             state={"level": "chat"},
+            runtime_settings={},
             use_sensor_context=False,
             history=[],
-            persona_memo="한국인 꼬마 같은 말투",
-            system_memo="짧고 자연스럽게",
+            persona_memo="custom persona",
+            system_memo="custom system",
         )
     )
 
     assert result["answer"] == "ok"
     assert client.url == "http://llm-server:8000/generate"
     assert client.payload is not None
-    assert client.payload["persona_memo"] == "한국인 꼬마 같은 말투"
-    assert client.payload["system_memo"] == "짧고 자연스럽게"
+    assert client.payload["persona_memo"] == "custom persona"
+    assert client.payload["system_memo"] == "custom system"
+    assert client.payload["runtime_settings"] == {}

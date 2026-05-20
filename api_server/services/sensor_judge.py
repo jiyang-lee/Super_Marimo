@@ -32,10 +32,26 @@ def judge_realtime_state(payload: RealtimeSensorPayload) -> dict[str, Any]:
     current_hour = now_kst().hour
     is_night_ignore = NIGHT_LIGHT_IGNORE_START_HOUR <= current_hour < NIGHT_LIGHT_IGNORE_END_HOUR
 
+    water_level = getattr(payload, "water_level", None)
+    temperature = getattr(payload, "temperature", None)
+    humidity = getattr(payload, "humidity", None)
+
     if payload.light <= LIGHT_DARK_THRESHOLD_LUX and not is_night_ignore:
-        alerts.append("조도가 낮음")
+        alerts.append("어두움")
     if payload.distance <= SENSOR_WARNING_DISTANCE_THRESHOLD_CM:
         alerts.append("물체가 가까움")
+    if water_level is not None and water_level <= 70:
+        alerts.append("수위가 낮음")
+    if temperature is not None:
+        if temperature >= 27:
+            alerts.append("기온이 높음")
+        elif temperature <= 20:
+            alerts.append("기온이 낮음")
+    if humidity is not None:
+        if humidity >= 60:
+            alerts.append("습도가 높음")
+        elif humidity <= 30:
+            alerts.append("습도가 낮음")
 
     level = _level_from_alerts(alerts)
     return {
@@ -43,8 +59,11 @@ def judge_realtime_state(payload: RealtimeSensorPayload) -> dict[str, Any]:
         "rag": _rag_from_level(level),
         "alerts": alerts,
         "details": {
-            "light": "night_ignored" if payload.light <= LIGHT_DARK_THRESHOLD_LUX and is_night_ignore else None,
             "distance_threshold_cm": SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
+            "water_level": water_level,
+            "temperature": temperature,
+            "humidity": humidity,
+            "night_light_ignored": bool(payload.light <= LIGHT_DARK_THRESHOLD_LUX and is_night_ignore),
         },
     }
 
@@ -53,9 +72,9 @@ def judge_hourly_state(payload: HourlySensorPayload) -> dict[str, Any]:
     alerts: list[str] = []
 
     if payload.temperature >= 27:
-        alerts.append("온도가 높음")
+        alerts.append("기온이 높음")
     elif payload.temperature <= 20:
-        alerts.append("온도가 낮음")
+        alerts.append("기온이 낮음")
 
     if payload.humidity >= 60:
         alerts.append("습도가 높음")
@@ -72,31 +91,17 @@ def judge_hourly_state(payload: HourlySensorPayload) -> dict[str, Any]:
         "alerts": alerts,
         "details": {
             "water_level_band": "low" if payload.water_level <= 70 else ("normal" if payload.water_level < 85 else "high"),
-            "water_raw": payload.water_raw,
         },
     }
 
 
 def judge_sensor_state(sensor: SensorPayload) -> dict[str, Any]:
-    realtime_state = judge_realtime_state(
+    return judge_realtime_state(
         RealtimeSensorPayload(
-            light=sensor.light,
-            distance=sensor.distance,
-        )
-    )
-    hourly_state = judge_hourly_state(
-        HourlySensorPayload(
             temperature=sensor.temperature,
             humidity=sensor.humidity,
+            light=sensor.light,
+            distance=sensor.distance,
             water_level=sensor.water_level,
         )
     )
-
-    alerts = realtime_state["alerts"] + hourly_state["alerts"]
-    level = "normal"
-    if len(alerts) >= 3:
-        level = "danger"
-    elif alerts:
-        level = "warning"
-
-    return {"level": level, "rag": _rag_from_level(level), "alerts": alerts}

@@ -146,7 +146,13 @@ def ask_api_server(
     system_memo: Optional[str] = None,
 ) -> dict[str, Any]:
     try:
-        return api_client.voice_ask(text, session_id, persona_memo=persona_memo, system_memo=system_memo)
+        return api_client.voice_ask(
+            text,
+            session_id,
+            persona_memo=persona_memo,
+            system_memo=system_memo,
+            use_sensor_context=True,
+        )
     except requests.HTTPError as exc:
         logger.error("[ask] api-server returned HTTP error: %s | url=%s | status=%s", exc, exc.request.url if exc.request else "N/A", exc.response.status_code if exc.response else "N/A")
         raise HTTPException(status_code=502, detail=f"api-server error: {exc}") from exc

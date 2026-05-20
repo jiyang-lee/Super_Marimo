@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -92,9 +94,9 @@ def _resolve_greeting_text() -> str:
 
         greetings = [
             PROACTIVE_GREETING_TEXT,
-            "안녕? 오늘 하루 어때?",
-            "어서 와. 오늘은 어떤 하루였어?",
-            "안녕. 잠깐 쉬어가도 좋아.",
+            "안녕하세요. 마리모가 먼저 인사드릴게요.",
+            "여기에 있어요. 오늘은 어떤 기분이에요?",
+            "안녕하세요. 조금 가까이 오셨어요.",
         ]
         return choice([text for text in greetings if text])
 
@@ -125,10 +127,7 @@ def build_realtime_next_action(
     device_id: str = "",
     trigger_source: str = "sensor",
 ) -> dict[str, Any]:
-    from config import (
-        PROACTIVE_GREETING_COOLDOWN_SECONDS,
-        SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
-    )
+    from config import PROACTIVE_GREETING_COOLDOWN_SECONDS, SENSOR_WARNING_DISTANCE_THRESHOLD_CM
 
     state = judge_realtime_state(payload)
     settings = get_runtime_settings()
@@ -168,6 +167,39 @@ def build_realtime_next_action(
     set_distance_inside_threshold(True)
 
     with get_db_connection() as conn:
+        if session_id:
+            try:
+                from uuid import UUID
+                db_session_id = UUID(str(session_id))
+            except ValueError:
+                db_session_id = session_id
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT last_seen_at, ended_at
+                    FROM session
+                    WHERE session_id = %s
+                    """,
+                    (db_session_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    last_seen_at = row["last_seen_at"]
+                    ended_at = row["ended_at"]
+                    if ended_at is None and last_seen_at:
+                        now_utc = datetime.now(timezone.utc)
+                        last_seen_utc = last_seen_at.replace(tzinfo=timezone.utc) if last_seen_at.tzinfo is None else last_seen_at
+                        elapsed_seconds = (now_utc - last_seen_utc).total_seconds()
+                        if elapsed_seconds < 30.0:
+                            return {
+                                "type": "none",
+                                "reason": "session_active_conversing",
+                                "threshold_cm": threshold_cm,
+                                "distance_cm": payload.distance,
+                            }
+
+        greeting_policy = can_emit_proactive_greeting(conn)
         warning_policy = can_emit_sensor_warning(conn, device_id)
 
     warning_meta = {
@@ -190,12 +222,22 @@ def build_realtime_next_action(
             "sensor": payload.model_dump(),
             "state_level": state["level"],
             "state_alerts": state["alerts"],
-            "generated_text": "거리 센서가 사용자를 감지했습니다.",
-            "played": True,
-            "status": "played",
+            "generated_text": "거리가 가까워졌습니다.",
+            "played": False,
+            "status": "tts_generated",
             "meta": warning_meta,
         }
     )
+
+    if not greeting_policy["allowed"]:
+        return {
+            "type": "sensor_warning",
+            "threshold_cm": threshold_cm,
+            "distance_cm": payload.distance,
+            "warning_event": warning_event["event"],
+            "cooldown_seconds": PROACTIVE_GREETING_COOLDOWN_SECONDS,
+            "cooldown_remaining_sec": greeting_policy["cooldown_remaining_sec"],
+        }
 
     greeting_text = _resolve_greeting_text()
 
@@ -211,6 +253,7 @@ def build_realtime_next_action(
             "state_alerts": state["alerts"],
             "generated_text": greeting_text,
             "played": False,
+            "status": "pending",
             "meta": {
                 "policy": "distance_threshold",
                 "threshold_cm": threshold_cm,

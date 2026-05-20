@@ -17,6 +17,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Marimo Voice Bridge (Windows Host)")
     parser.add_argument("--port", default="COM4", help="Serial port, e.g. COM4")
     parser.add_argument("--baudrate", type=int, default=921600, help="Serial baudrate")
+    parser.add_argument(
+        "--source",
+        default="serial",
+        choices=["serial", "mic"],
+        help="Audio source: serial (RP2040 mic) or mic (local PC/notebook mic)",
+    )
     # Windows Host 주소 기준 (Bridge는 Docker 외부에서 실행됨)
     parser.add_argument("--stt-endpoint", default="http://127.0.0.1:8002/stt")
     parser.add_argument("--stt-model", default="fast", choices=["fast", "accurate"])
@@ -42,5 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Max number of debug WAV files to keep per prefix",
     )
     parser.add_argument("--poll-interval-ms", type=int, default=200, help="Audio player polling interval")
-    parser.add_argument("--distance-followup-timeout-sec", type=int, default=30, help="Seconds to keep conversation open after proactive greeting playback")
+    parser.add_argument(
+        "--distance-followup-timeout-sec",
+        type=int,
+        default=30,
+        help="Seconds to keep conversation open after proactive greeting playback",
+    )
     return parser

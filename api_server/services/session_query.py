@@ -22,7 +22,7 @@ def list_sessions(conn, limit: int = 20) -> list[dict[str, Any]]:
                     FROM session_message sm
                     WHERE sm.session_id = s.session_id
                       AND sm.role = 'user'
-                    ORDER BY sm.created_at ASC
+                    ORDER BY sm.message_id ASC
                     LIMIT 1
                 ) AS first_user_message,
                 (
@@ -45,6 +45,7 @@ def list_sessions(conn, limit: int = 20) -> list[dict[str, Any]]:
                     WHERE sm.session_id = s.session_id
                 ) AS message_count
             FROM session s
+            WHERE s.meta IS NULL OR COALESCE((s.meta->>'is_test')::boolean, false) = false
             ORDER BY s.last_seen_at DESC
             LIMIT %s
             """,
@@ -92,7 +93,7 @@ def fetch_session_detail(conn, session_id: UUID) -> dict[str, Any]:
             SELECT message_id, session_id, role, content, created_at, meta
             FROM session_message
             WHERE session_id = %s
-            ORDER BY created_at ASC
+            ORDER BY message_id ASC
             """,
             (session_id,),
         )

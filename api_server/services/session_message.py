@@ -40,7 +40,7 @@ def fetch_recent_session_messages(
             SELECT role, content
             FROM session_message
             WHERE session_id = %s
-            ORDER BY created_at DESC
+            ORDER BY message_id ASC
             LIMIT %s
             """,
             (session_id, limit),
@@ -48,7 +48,7 @@ def fetch_recent_session_messages(
         rows = cur.fetchall() or []
 
     history: list[dict[str, str]] = []
-    for row in reversed(rows):
+    for row in rows:
         role = (row.get("role") or "").strip().lower()
         content = (row.get("content") or "").strip()
         if role in {"user", "assistant", "system"} and content:

@@ -13,18 +13,19 @@ class SensorPayload(BaseModel):
 
 
 class RealtimeSensorPayload(BaseModel):
+    temperature: Optional[float] = Field(None, description="Temperature")
+    humidity: Optional[float] = Field(None, description="Humidity")
     light: float = Field(..., description="Light level")
     distance: float = Field(..., description="Distance in cm")
-    light_raw: Optional[int] = Field(None, description="Raw light sensor value (BH1750 16bit)")
-    water_raw: Optional[int] = Field(None, description="Raw water ADC value")
+    water_level: Optional[float] = Field(None, description="Water level")
+
+
 
 
 class HourlySensorPayload(BaseModel):
     temperature: float = Field(..., description="Temperature")
     humidity: float = Field(..., description="Humidity")
     water_level: float = Field(..., description="Water level")
-    water_raw: Optional[int] = Field(None, description="Raw water ADC value")
-    light_raw: Optional[int] = Field(None, description="Raw light sensor value")
 
 
 class RuntimeSettingsPayload(BaseModel):
@@ -42,13 +43,14 @@ class AskPayload(BaseModel):
     use_sensor_context: bool = True
     persona_memo: Optional[str] = None
     system_memo: Optional[str] = None
+    is_test: Optional[bool] = None
 
 
 class VoiceAskPayload(BaseModel):
     text: str
     sensor: Optional[SensorPayload] = None
     session_id: Optional[UUID] = None
-    use_sensor_context: bool = False
+    use_sensor_context: bool = True
     persona_memo: Optional[str] = None
     system_memo: Optional[str] = None
 

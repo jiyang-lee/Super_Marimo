@@ -1,11 +1,11 @@
-﻿from typing import Any
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from extensions.db import get_db_connection
-from services.session_lifecycle import ensure_session, end_session
+from services.session_lifecycle import ensure_session, end_session, delete_session
 from services.session_message import fetch_recent_session_messages, save_session_message
 from services.session_query import fetch_session_detail, list_sessions
 from utils import normalize_response_payload
@@ -97,3 +97,15 @@ def session_get_messages(session_id: UUID, limit: int = 50) -> dict[str, Any]:
         "count": len(history),
         "messages": history,
     })
+
+
+@router.delete("/sessions/{session_id}")
+def session_delete(session_id: UUID) -> dict[str, Any]:
+    with get_db_connection() as conn:
+        success = delete_session(conn, session_id)
+        conn.commit()
+    from fastapi import HTTPException
+    if not success:
+        raise HTTPException(status_code=404, detail="session not found")
+    return {"deleted": True, "session_id": str(session_id)}
+

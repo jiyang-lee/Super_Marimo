@@ -81,13 +81,13 @@ class ApiBridge:
         self.active_session_id = resolved
         return result
 
-    def speak(self, text: str) -> dict[str, Any]:
+    def speak(self, text: str, save_message: bool = True) -> dict[str, Any]:
         session_id = self.ensure_session()
         url = f"{self.voice_agent_url}/speak"
         payload = {
             "text": text,
             "session_id": session_id,
-            "save_message": True,
+            "save_message": save_message,
         }
         result = _post_json(url, payload, timeout=120)
         resolved = str(result.get("session_id") or session_id)

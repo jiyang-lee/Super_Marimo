@@ -175,6 +175,23 @@ def init_db() -> None:
             )
             cur.execute(
                 """
+                CREATE TABLE IF NOT EXISTS runtime_settings_history (
+                    history_id BIGSERIAL PRIMARY KEY,
+                    setting_key TEXT NOT NULL,
+                    previous_value JSONB,
+                    new_value JSONB NOT NULL,
+                    changed_by TEXT,
+                    changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    action_type TEXT,
+                    summary TEXT
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_runtime_settings_history_key_created_at ON runtime_settings_history (setting_key, changed_at DESC)"
+            )
+            cur.execute(
+                """
                 ALTER TABLE device_event_log
                 ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending'
                 """
@@ -259,6 +276,17 @@ def cleanup_expired_events(force: bool = False) -> dict[str, int]:
                 (days,),
             )
             results["manual_test"] = cur.rowcount
+
+            # runtime_settings_history
+            history_days = EVENT_RETENTION_DAYS.get("runtime_settings_history", 365)
+            cur.execute(
+                """
+                DELETE FROM runtime_settings_history
+                WHERE changed_at < NOW() - (%s * INTERVAL '1 day')
+                """,
+                (history_days,),
+            )
+            results["runtime_settings_history"] = cur.rowcount
 
         conn.commit()
     return results

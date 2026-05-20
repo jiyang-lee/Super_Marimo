@@ -16,6 +16,7 @@ EVENT_RETENTION_DAYS = {
     "interaction_log": 365,
     "proactive_greeting": 30,
     "manual_test": 7,
+    "runtime_settings_history": 365,
 }
 EVENT_CLEANUP_INTERVAL_SECONDS = int(os.getenv("EVENT_CLEANUP_INTERVAL_SECONDS", "3600"))
 SESSION_HISTORY_LIMIT = 16

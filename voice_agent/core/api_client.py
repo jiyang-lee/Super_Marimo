@@ -93,11 +93,12 @@ class ApiClient:
         session_id: Optional[str] = None,
         persona_memo: Optional[str] = None,
         system_memo: Optional[str] = None,
+        use_sensor_context: bool = True,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "text": text,
             "session_id": session_id,
-            "use_sensor_context": False,
+            "use_sensor_context": use_sensor_context,
         }
         if persona_memo:
             payload["persona_memo"] = persona_memo

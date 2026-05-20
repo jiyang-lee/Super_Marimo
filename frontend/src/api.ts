@@ -1,7 +1,7 @@
-const AGENT = '/agent';
-const API = '/api';
-const VOICE = '/voice';
-const LLM = '/llm';
+const AGENT = import.meta.env.VITE_AGENT_BASE_URL ?? '/agent';
+const API = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const VOICE = import.meta.env.VITE_VOICE_BASE_URL ?? '/voice';
+const LLM = import.meta.env.VITE_LLM_BASE_URL ?? '/llm';
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -102,6 +102,15 @@ export interface AskResult {
   interaction_id?: number | null;
   session_created?: boolean | null;
   messages_saved?: number | null;
+  runtime_settings?: RuntimeSettings;
+  session_summary?: string;
+  action_result?: {
+    action_type?: string;
+    summary?: string;
+    patch?: Record<string, unknown>;
+    before?: Record<string, unknown> | null;
+    after?: { settings?: RuntimeSettings } | null;
+  } | null;
 }
 
 export interface AskAgentOptions {
@@ -153,7 +162,6 @@ export interface SensorReading {
   light?: number;
   water_level?: number;
   distance?: number;
-  water_raw?: number;
   state_level?: string;
   rag?: string;
   alerts?: string[];
@@ -161,7 +169,6 @@ export interface SensorReading {
 
 export interface SensorLatest {
   latest_realtime: SensorReading | null;
-  latest_hourly: SensorReading | null;
   latest_merged: SensorReading | null;
   runtime_settings?: RuntimeSettings;
   distance_inside_threshold?: boolean;
@@ -176,12 +183,6 @@ export interface RuntimeSettings {
   updated_at?: string;
 }
 
-export interface WaterRawSample {
-  sample_id: number;
-  created_at: string;
-  raw_value: number;
-}
-
 export interface DeviceEvent {
   event_id: number;
   event_type: string;
@@ -189,6 +190,7 @@ export interface DeviceEvent {
   trigger_source: string;
   generated_text: string;
   played: boolean;
+  status?: string;
   created_at: string;
   distance: number | null;
   state_level: string;
@@ -233,16 +235,19 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
   return fetchJson<SessionDetail>(`${API}/sessions/${sessionId}`);
 }
 
+export async function deleteSession(sessionId: string): Promise<{ deleted: boolean; session_id: string }> {
+  return fetchJson<{ deleted: boolean; session_id: string }>(`${API}/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+}
+
+
 export async function getLatestSensor(): Promise<SensorLatest> {
   return fetchJson<SensorLatest>(`${API}/sensor/latest`);
 }
 
 export async function getSensorHistory(limit = 24): Promise<{ realtime_history: SensorReading[]; hourly_history: SensorReading[] }> {
   return fetchJson(`${API}/sensor/history?limit=${limit}`);
-}
-
-export async function getWaterRawSamples(limit = 24): Promise<{ limit: number; samples: WaterRawSample[] }> {
-  return fetchJson(`${API}/sensor/water-raw-samples?limit=${limit}`);
 }
 
 export async function getRuntimeSettings(): Promise<{ settings: RuntimeSettings }> {
@@ -257,6 +262,21 @@ export async function updateRuntimeSettings(patch: Partial<RuntimeSettings>): Pr
   });
 }
 
+export interface RuntimeSettingsHistory {
+  history_id: number;
+  setting_key: string;
+  previous_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown>;
+  changed_by: string | null;
+  changed_at: string;
+  action_type: string | null;
+  summary: string | null;
+}
+
+export async function getRuntimeSettingsHistory(limit = 20): Promise<{ history: RuntimeSettingsHistory[]; limit: number }> {
+  return fetchJson(`${API}/sensor/runtime-settings/history?limit=${limit}`);
+}
+
 export async function ingestRealtimeSensor(payload: { light: number; distance: number }): Promise<unknown> {
   return fetchJson(`${API}/sensor/realtime-ingest`, {
     method: 'POST',
@@ -265,14 +285,15 @@ export async function ingestRealtimeSensor(payload: { light: number; distance: n
   });
 }
 
-export async function askChat(text: string, sessionId?: string): Promise<AskResult> {
+export async function askChat(text: string, sessionId?: string, isTest?: boolean): Promise<AskResult> {
   return fetchJson<AskResult>(`${API}/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       question: text,
       session_id: sessionId ?? null,
-      use_sensor_context: false,
+      use_sensor_context: true,
+      is_test: isTest ?? null,
     }),
   });
 }

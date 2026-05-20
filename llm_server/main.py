@@ -47,10 +47,16 @@ class GeneratePayload(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list)
     sensor: dict[str, Any] | None = None
     state: dict[str, Any] | None = None
+    runtime_settings: dict[str, Any] | None = None
     session_id: str | None = None
+    session_summary: str | None = None
+    action_result: dict[str, Any] | None = None
     persona_memo: str | None = None
     system_memo: str | None = None
     use_sensor_context: bool = False
+
+
+GeneratePayload.model_rebuild()
 
 
 @app.exception_handler(Exception)
@@ -118,9 +124,18 @@ def ready() -> JSONResponse:
 
 @app.post("/generate")
 def generate(payload: GeneratePayload) -> dict[str, Any]:
-    answer = get_chain().invoke(payload)
-    return {
-        "answer": answer.strip(),
-        "mock": MOCK_MODE,
-        "framework": "langchain",
-    }
+    contract = get_chain().invoke(payload)
+    if not isinstance(contract, dict):
+        contract = {
+            "answer": str(contract or "").strip(),
+            "action_proposal": None,
+            "confidence": 0.0,
+            "reason": "chain_returned_non_dict",
+        }
+    contract.setdefault("answer", "")
+    contract.setdefault("action_proposal", None)
+    contract.setdefault("confidence", 0.0)
+    contract.setdefault("reason", "")
+    contract["mock"] = MOCK_MODE
+    contract["framework"] = "langchain"
+    return contract

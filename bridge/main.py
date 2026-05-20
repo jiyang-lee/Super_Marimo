@@ -6,6 +6,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
+from typing import Any, Optional
 
 from bridge.config import build_parser, DEFAULT_PERSONA_MEMO, DEFAULT_SYSTEM_MEMO
 from bridge.core.api_bridge import ApiBridge
@@ -48,8 +49,19 @@ class Bridge:
             args.poll_interval_ms,
             api_bridge=self.api_bridge,
             on_played=self._on_audio_played,
+            should_suppress_proactive=self.is_conversation_active,
         )
-        self.serial_listener = SerialListener(args)
+        
+        # 오디오 입력 소스 전환 지원 (serial 또는 mic)
+        self.source_type = getattr(args, "source", "serial")
+        if self.source_type == "mic":
+            from bridge.core.microphone_listener import MicrophoneListener
+            self.audio_listener = MicrophoneListener(args)
+            print("[bridge] Configured to use local microphone as input source.")
+        else:
+            self.audio_listener = SerialListener(args)
+            print(f"[bridge] Configured to use serial port {args.port} as input source.")
+            
         self.armed_until = 0.0
         self.distance_followup_until = 0.0
         self.transcript_buffer = ""
@@ -77,10 +89,11 @@ class Bridge:
         if not bool(settings.get("wake_enabled", True)):
             print("[wake] ignored because wake mode is off")
             return False
-        if bool(settings.get("distance_detection_enabled", True)) and bool(status.get("distance_inside_threshold")):
-            print("[wake] ignored because distance greeting zone is active")
-            return False
         return True
+
+    def is_conversation_active(self) -> bool:
+        # 현재 armed_until 이 유효하거나 distance_followup_until 이 유효하면 대화가 활성화된 상태
+        return time.time() <= self.armed_until or time.time() <= self.distance_followup_until
 
     def _is_inside_distance_followup(self) -> bool:
         return time.time() <= self.distance_followup_until
@@ -144,7 +157,8 @@ class Bridge:
 
         response_text = pick_wake_greeting()
         try:
-            self.api_bridge.speak(response_text)
+            # Wake Greeting 인사의 경우 save_message=False를 넘겨 세션 메시지 DB에 중복 누적되지 않도록 필터링!
+            self.api_bridge.speak(response_text, save_message=False)
             self.keep_conversation_open()
             self.event_logger.log(
                 "tts_played",
@@ -329,7 +343,7 @@ class Bridge:
         if self.api_bridge.active_session_id:
             print(f"[session] resumed {self.api_bridge.active_session_id}")
 
-        self.serial_listener.run(
+        self.audio_listener.run(
             on_segment=self.handle_segment,
             on_speech_started=lambda rms: self.event_logger.log(
                 "speech_started",
