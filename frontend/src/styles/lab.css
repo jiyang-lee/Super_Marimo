@@ -1,27 +1,503 @@
+/* LabPage theme — based on report.css + site.css tokens */
+
 .lab-page {
   display: grid;
-  gap: 1rem;
+  gap: 18px;
 }
 
-.panel-surface {
-  position: relative;
+/* ── Main panel (report sensor-switch-panel look) ── */
+.lab-panel {
+  min-height: 420px;
+  border: 3px solid #8b5e24;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #fff9e3, #fff3cc);
+  box-shadow: 0 16px 28px rgba(78, 45, 12, 0.18);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 2rem;
-  background: linear-gradient(180deg, rgba(14, 26, 46, 0.88), rgba(8, 16, 30, 0.78));
-  box-shadow:
-    0 24px 80px rgba(1, 5, 15, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(18px);
 }
 
-.panel-surface::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 26%),
-    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 25%);
-  opacity: 0.95;
+.lab-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 10px;
+}
+
+.lab-panel-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #355338;
+}
+
+.lab-panel-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(53, 83, 56, 0.7);
+}
+
+.lab-panel-body {
+  padding: 16px 20px 20px;
+}
+
+/* ── Tab switch (report mode-switch) ── */
+.lab-mode-switch {
+  display: inline-flex;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  flex-wrap: wrap;
+}
+
+.lab-mode-button {
+  min-width: 102px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #23301a;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  font-family: inherit;
+}
+
+.lab-mode-button:hover {
+  transform: translateY(-1px);
+}
+
+.lab-mode-button.is-active {
+  background: linear-gradient(180deg, #7bd469, #3d8d34);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(61, 141, 52, 0.22);
+}
+
+/* ── Info cards (report weekly-card) ── */
+.lab-card {
+  min-height: 2cm;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(148, 99, 37, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 16px;
+}
+
+.lab-card-column {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.lab-card-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(68, 61, 45, 0.6);
+  margin-bottom: 4px;
+}
+
+.lab-card-value {
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 20px;
+  font-weight: 900;
+  color: #355338;
+}
+
+.lab-card-value-lg {
+  font-size: 28px;
+}
+
+/* ── Status strip (site.css status-strip adapted) ── */
+.lab-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.lab-status-card {
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(148, 99, 37, 0.14);
+}
+
+.lab-status-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: rgba(68, 61, 45, 0.6);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lab-status-value {
+  margin-top: 8px;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #443d2d;
+}
+
+.lab-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #98a2b3;
+  flex: 0 0 auto;
+}
+
+.lab-status-dot.ok {
+  background: #067647;
+  box-shadow: 0 0 6px rgba(6, 118, 71, 0.45);
+}
+
+.lab-status-dot.bad {
+  background: #b42318;
+  box-shadow: 0 0 6px rgba(180, 35, 24, 0.45);
+}
+
+.lab-status-dot.warn {
+  background: #b54708;
+}
+
+/* ── Sub-panel (site.css panel adapted) ── */
+.lab-sub-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(221, 211, 194, 0.9);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(27, 34, 44, 0.09);
+  overflow: hidden;
+}
+
+.lab-sub-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(221, 211, 194, 0.9);
+}
+
+.lab-sub-panel-head h2 {
+  margin: 0;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.lab-sub-panel-head p {
+  margin: 3px 0 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.lab-sub-panel-body {
+  padding: 16px;
+}
+
+/* ── Log list (site.css log-list adapted) ── */
+.lab-log-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lab-log-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(221, 211, 194, 0.8);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1f2937;
+}
+
+.lab-log-item .lab-log-time {
+  color: #667085;
+  font-size: 12px;
+  margin-right: 8px;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.lab-log-item.ok {
+  border-color: rgba(6, 118, 71, 0.25);
+  background: rgba(6, 118, 71, 0.06);
+}
+
+.lab-log-item.warn {
+  border-color: rgba(181, 71, 8, 0.25);
+  background: rgba(181, 71, 8, 0.06);
+}
+
+.lab-log-item.bad {
+  border-color: rgba(180, 35, 24, 0.25);
+  background: rgba(180, 35, 24, 0.06);
+}
+
+.lab-log-item.alert {
+  border-color: rgba(180, 35, 24, 0.4);
+  background: rgba(180, 35, 24, 0.1);
+}
+
+/* ── Table (site.css table-wrap adapted) ── */
+.lab-table-wrap {
+  overflow: auto;
+  max-height: 420px;
+  border: 1px solid rgba(221, 211, 194, 0.9);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.lab-table-wrap table {
+  min-width: 640px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lab-table-wrap th,
+.lab-table-wrap td {
+  border-bottom: 1px solid rgba(221, 211, 194, 0.75);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.lab-table-wrap th {
+  color: #667085;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: rgba(221, 211, 194, 0.2);
+}
+
+.lab-table-wrap td code {
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+/* ── Action button (site.css button primary adapted) ── */
+.lab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.lab-btn:hover {
+  transform: translateY(-1px);
+}
+
+.lab-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.lab-btn-primary {
+  background: #006b5f;
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(0, 107, 95, 0.18);
+}
+
+.lab-btn-secondary {
+  background: #ffffff;
+  color: #006b5f;
+  border-color: #ddd3c2;
+}
+
+.lab-btn-neutral {
+  background: #faf7f0;
+  color: #1f2937;
+  border-color: #ddd3c2;
+}
+
+/* ── Pill badge ── */
+.lab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0, 107, 95, 0.08);
+  color: #006b5f;
+  border: 1px solid rgba(0, 107, 95, 0.15);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lab-pill-ok {
+  background: rgba(6, 118, 71, 0.1);
+  color: #067647;
+  border-color: rgba(6, 118, 71, 0.2);
+}
+
+.lab-pill-warn {
+  background: rgba(181, 71, 8, 0.1);
+  color: #b54708;
+  border-color: rgba(181, 71, 8, 0.2);
+}
+
+.lab-pill-bad {
+  background: rgba(180, 35, 24, 0.1);
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.2);
+}
+
+/* ── Quick action cards (TestPage) ── */
+.lab-quick-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(148, 99, 37, 0.14);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+
+.lab-quick-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(78, 45, 12, 0.1);
+}
+
+.lab-quick-card:active {
+  transform: scale(0.98);
+}
+
+.lab-quick-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Input (site.css input adapted) ── */
+.lab-input {
+  width: 100%;
+  border: 1px solid #ddd3c2;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f2937;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lab-input:focus {
+  border-color: #006b5f;
+  box-shadow: 0 0 0 3px rgba(0, 107, 95, 0.12);
+}
+
+/* ── Alert / notice box ── */
+.lab-notice {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(0, 107, 95, 0.06);
+  border: 1px solid rgba(0, 107, 95, 0.18);
+  color: #355338;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lab-notice strong {
+  color: #006b5f;
+}
+
+/* ── Grid helpers ── */
+.lab-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.lab-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lab-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lab-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.lab-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lab-flex-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1180px) {
+  .lab-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .lab-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .lab-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lab-grid-3,
+  .lab-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lab-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .lab-status-strip,
+  .lab-grid-3,
+  .lab-grid-4 {
+    grid-template-columns: 1fr;
+  }
 }
