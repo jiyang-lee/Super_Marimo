@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import re
+import unicodedata
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
@@ -8,23 +12,31 @@ from psycopg.types.json import Json
 from config import LLM_SERVER_URL
 from extensions.db import get_db_connection
 from schemas import SensorPayload
-from services.runtime_action_service import apply_runtime_action, resolve_runtime_action
-from services.runtime_settings import get_runtime_settings, save_runtime_settings_history, RUNTIME_SETTINGS_KEY
+from services.device_event_service import save_device_event
 from services.llm_action_contract import compose_final_answer, normalize_llm_action_proposal
+from services.runtime_action_service import apply_runtime_action, resolve_runtime_action
+from services.runtime_settings import RUNTIME_SETTINGS_KEY, get_runtime_settings, save_runtime_settings_history
 from services.sensor_judge import judge_sensor_state
 from services.sensor_store import load_latest_sensor_payload
+from services.session_kind import infer_session_kind
 from services.session_lifecycle import ensure_session, update_session_meta, update_session_turn
 from services.session_message import fetch_recent_session_messages, save_session_message
-from services.device_event_service import save_device_event
-from services.session_kind import infer_session_kind
-
 from utils import normalize_datetime, normalize_response_payload
 
 
 DEFAULT_PERSONA_MEMO = (
-    "한국인 꼬마 같은 말투를 쓰되 예의 바르고 다정하게 말한다. "
-    "짧고 자연스럽게 답하고, 너무 유치하지 않게 부드러운 톤을 유지한다."
+    "마리모는 Super Marimo의 조용한 안내자다. "
+    "과장하지 않고, 현재 상태를 짧고 분명하게 설명한다."
 )
+
+
+def sanitize_tts_text(text: str) -> str:
+    cleaned = unicodedata.normalize("NFKC", text or "")
+    cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", cleaned)
+    cleaned = re.sub(r"[^0-9가-힣\s]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
 
 
 def build_session_summary(history: list[dict[str, str]]) -> str:
@@ -110,6 +122,7 @@ async def handle_interaction(
             session_row = update_session_meta(conn, resolved_session_id, {"is_test": True})
         history = fetch_recent_session_messages(conn, resolved_session_id)
         session_summary = build_session_summary(history)
+
         save_session_message(
             conn,
             resolved_session_id,
@@ -122,8 +135,7 @@ async def handle_interaction(
                 "session_summary": session_summary,
             },
         )
-        
-        # Create stt_completed event for voice interactions
+
         if source in ("voice", "voice_agent"):
             save_device_event(
                 {
@@ -162,7 +174,6 @@ async def handle_interaction(
         )
         answer = str(llm.get("answer", "")).strip()
         if not answer:
-            # Create failure event when LLM returns no answer
             if source in ("voice", "voice_agent"):
                 save_device_event(
                     {
@@ -227,6 +238,8 @@ async def handle_interaction(
         else:
             llm["final_answer"] = answer
 
+        tts_text = sanitize_tts_text(answer) or answer
+
         save_session_message(
             conn,
             resolved_session_id,
@@ -237,10 +250,10 @@ async def handle_interaction(
                 "session_kind": resolved_session_kind,
                 "session_summary": session_summary,
                 "action_result": action_result,
+                "tts_text": tts_text,
             },
         )
-        
-        # Create llm_completed event for voice interactions
+
         if source in ("voice", "voice_agent"):
             save_device_event(
                 {
@@ -261,6 +274,7 @@ async def handle_interaction(
                         "session_summary": session_summary,
                         "action_result": action_result,
                         "runtime_settings": runtime_settings,
+                        "tts_text": tts_text,
                     },
                 }
             )
@@ -280,7 +294,7 @@ async def handle_interaction(
                     resolved_session_id,
                     text,
                     answer,
-                    answer,
+                    tts_text,
                     Json(interaction_payload),
                     state["level"],
                     Json(alerts),
@@ -292,6 +306,7 @@ async def handle_interaction(
                             "session_summary": session_summary,
                             "action_result": action_result,
                             "runtime_settings": runtime_settings,
+                            "tts_text": tts_text,
                         }
                     ),
                 ),
@@ -314,7 +329,7 @@ async def handle_interaction(
         "history_count": len(history),
         "stt_text": text,
         "llm_answer": answer,
-        "tts_text": answer,
+        "tts_text": tts_text,
         "use_sensor_context": use_sensor_context,
         "runtime_settings": normalize_response_payload(runtime_settings),
         "session_summary": session_summary,

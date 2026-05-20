@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 import wave
 import sys
@@ -65,6 +66,15 @@ app.add_middleware(PrivateNetworkCorsMiddleware)
 class TtsPayload(BaseModel):
     text: str
     voice_name: str | None = None
+
+
+def sanitize_tts_text(text: str) -> str:
+    cleaned = text or ""
+    cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", cleaned)
+    cleaned = re.sub(r"[^0-9가-힣\s]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
 
 
 @app.exception_handler(Exception)
@@ -207,7 +217,8 @@ async def stt(audio: UploadFile = File(...), model: str = "fast", session_id: st
 
 @app.post("/tts")
 def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
-    if not payload.text.strip():
+    sanitized_text = sanitize_tts_text(payload.text)
+    if not sanitized_text:
         raise HTTPException(status_code=400, detail="text is required")
 
     output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
@@ -219,7 +230,7 @@ def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
         background_tasks.add_task(os.remove, output_path)
         return FileResponse(output_path, media_type="audio/wav", filename="mock_tts.wav")
 
-    wav_bytes, _resolved_voice = synthesize(payload.text, voice_name=payload.voice_name)
+    wav_bytes, _resolved_voice = synthesize(sanitized_text, voice_name=payload.voice_name)
     tts_instance = get_tts_runtime()["tts"]
     tts_instance.save_audio(wav_bytes, output_path)
     background_tasks.add_task(os.remove, output_path)

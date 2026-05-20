@@ -76,14 +76,15 @@ def _runtime_settings(**overrides):
     return value
 
 
-def test_judge_realtime_state_uses_distance_threshold(monkeypatch) -> None:
+def test_judge_realtime_state_ignores_distance_for_alerts(monkeypatch) -> None:
     monkeypatch.setattr("config.SENSOR_WARNING_DISTANCE_THRESHOLD_CM", 12.0)
 
     state = judge_realtime_state(SimpleNamespace(light=501.0, distance=11.5))
 
-    assert state["level"] == "warning"
-    assert state["rag"] == "amber"
-    assert "물체가 가까움" in state["alerts"]
+    assert state["level"] == "normal"
+    assert state["rag"] == "green"
+    assert state["alerts"] == []
+    assert state["details"]["distance_role"] == "trigger_only"
 
 
 def test_judge_realtime_state_includes_water_temperature_and_humidity() -> None:
@@ -92,7 +93,7 @@ def test_judge_realtime_state_includes_water_temperature_and_humidity() -> None:
             light=600.0,
             distance=100.0,
             water_level=69.0,
-            temperature=28.0,
+            temperature=31.0,
             humidity=29.0,
         )
     )
@@ -100,12 +101,13 @@ def test_judge_realtime_state_includes_water_temperature_and_humidity() -> None:
     assert state["level"] == "danger"
     assert state["rag"] == "red"
     assert state["alerts"] == ["수위가 낮음", "기온이 높음", "습도가 낮음"]
+    assert state["details"]["water_level_meaning"] == "higher is better"
 
 
 def test_judge_hourly_state_uses_requested_thresholds() -> None:
     state = judge_hourly_state(
         SimpleNamespace(
-            temperature=28.0,
+            temperature=31.0,
             humidity=29.0,
             water_level=70.0,
         )
@@ -114,6 +116,55 @@ def test_judge_hourly_state_uses_requested_thresholds() -> None:
     assert state["level"] == "danger"
     assert state["rag"] == "red"
     assert state["alerts"] == ["기온이 높음", "습도가 낮음", "수위가 낮음"]
+    assert state["details"]["water_level_meaning"] == "higher is better"
+
+
+def test_judge_realtime_state_temperature_threshold_is_30() -> None:
+    normal_state = judge_realtime_state(
+        SimpleNamespace(
+            light=600.0,
+            distance=100.0,
+            water_level=80.0,
+            temperature=29.0,
+            humidity=40.0,
+        )
+    )
+    hot_state = judge_realtime_state(
+        SimpleNamespace(
+            light=600.0,
+            distance=100.0,
+            water_level=80.0,
+            temperature=30.0,
+            humidity=40.0,
+        )
+    )
+
+    assert normal_state["level"] == "normal"
+    assert hot_state["level"] == "warning"
+    assert "기온이 높음" in hot_state["alerts"]
+
+
+def test_judge_realtime_state_uses_rolling_averages() -> None:
+    state = judge_realtime_state(
+        SimpleNamespace(
+            light=100.0,
+            distance=40.0,
+            water_level=95.0,
+            temperature=24.0,
+            humidity=40.0,
+        ),
+        metrics={
+            "current_hour": 14,
+            "water_level_recent_avg_2h": 62.0,
+            "light_daytime_avg_13_18": 420.0,
+        },
+    )
+
+    assert state["level"] == "danger"
+    assert "수위가 낮음" in state["alerts"]
+    assert "조도가 낮음" in state["alerts"]
+    assert state["details"]["water_level_recent_avg_2h"] == 62.0
+    assert state["details"]["light_daytime_avg_13_18"] == 420.0
 
 
 def test_build_realtime_next_action_returns_proactive_greeting_on_distance_entry(monkeypatch) -> None:
@@ -193,7 +244,7 @@ def test_build_realtime_next_action_emits_greeting_even_with_recent_session(monk
         "services.sensor_policy.can_emit_proactive_greeting",
         lambda conn: {"allowed": True, "last_greeting_at": None, "cooldown_remaining_sec": 0},
     )
-    monkeypatch.setattr("services.sensor_policy._resolve_greeting_text", lambda: "안녕하세요. 가까이 오셨네요.")
+    monkeypatch.setattr("services.sensor_policy._resolve_greeting_text", lambda: "가까이 와 주셔서 고마워요.")
 
     payload = SimpleNamespace(
         light=501.0,
@@ -209,7 +260,7 @@ def test_build_realtime_next_action_emits_greeting_even_with_recent_session(monk
     )
 
     assert result["type"] == "proactive_greeting"
-    assert result["text"] == "안녕하세요. 가까이 오셨네요."
+    assert result["text"] == "가까이 와 주셔서 고마워요."
     assert inside_updates == [True]
     assert [event["event_type"] for event in saved_events] == ["sensor_warning", "proactive_greeting"]
 

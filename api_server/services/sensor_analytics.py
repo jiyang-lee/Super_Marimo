@@ -4,9 +4,8 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from config import DB_TIMEZONE
 from schemas import HourlySensorPayload, RealtimeSensorPayload, SensorPayload
-from utils import now_kst, normalize_response_payload
+from utils import now_kst
 
 
 DAYLIGHT_START_HOUR = 13
@@ -18,9 +17,7 @@ WATER_AVG_WINDOW_HOURS = 2
 
 
 def _coerce_float(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    if isinstance(value, bool):
+    if value is None or isinstance(value, bool):
         return None
     try:
         return float(value)
@@ -29,10 +26,7 @@ def _coerce_float(value: Any) -> Optional[float]:
 
 
 def _payload_float(payload: dict[str, Any], key: str) -> Optional[float]:
-    value = payload.get(key)
-    if value is None:
-        return None
-    return _coerce_float(value)
+    return _coerce_float(payload.get(key))
 
 
 def _avg(values: list[float]) -> Optional[float]:
@@ -62,7 +56,10 @@ def _as_payload(value: Optional[dict[str, Any]]) -> dict[str, Any]:
     return dict(value or {})
 
 
-def _sensor_payload_from_rows(realtime_payload: dict[str, Any] | None, hourly_payload: dict[str, Any] | None) -> dict[str, Any]:
+def _sensor_payload_from_rows(
+    realtime_payload: dict[str, Any] | None,
+    hourly_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
     merged = SensorPayload(
         temperature=23.0,
         humidity=50.0,
@@ -72,13 +69,13 @@ def _sensor_payload_from_rows(realtime_payload: dict[str, Any] | None, hourly_pa
     ).model_dump()
 
     if hourly_payload:
-        for key in ("temperature", "humidity", "water_level", "water_raw"):
+        for key in ("temperature", "humidity", "water_level"):
             value = hourly_payload.get(key)
             if value is not None:
                 merged[key] = value
 
     if realtime_payload:
-        for key in ("temperature", "humidity", "light", "distance", "water_level", "light_raw", "water_raw"):
+        for key in ("temperature", "humidity", "light", "distance", "water_level"):
             value = realtime_payload.get(key)
             if value is not None:
                 merged[key] = value
@@ -132,7 +129,7 @@ def compute_sensor_metrics(
     water_window_start = current - timedelta(hours=WATER_AVG_WINDOW_HOURS)
     daylight_window_start = current - timedelta(days=LIGHT_AVG_WINDOW_DAYS)
     daylight_end = current
-    daylight_label = f"최근 {LIGHT_AVG_WINDOW_DAYS}일 {DAYLIGHT_START_HOUR:02d}:00~{DAYLIGHT_END_HOUR:02d}:00 KST 평균"
+    daylight_label = f"최근 {LIGHT_AVG_WINDOW_DAYS}일 13:00~18:00 KST 평균"
     is_daylight_hour = DAYLIGHT_START_HOUR <= current_local.hour < DAYLIGHT_END_HOUR
 
     with conn.cursor() as cur:
@@ -210,7 +207,7 @@ def empty_sensor_metrics(current_time: Optional[datetime] = None) -> dict[str, A
     current_local = current.astimezone(now_kst().tzinfo)
     daylight_window_start = current - timedelta(days=LIGHT_AVG_WINDOW_DAYS)
     daylight_end = current
-    daylight_label = f"최근 {LIGHT_AVG_WINDOW_DAYS}일 {DAYLIGHT_START_HOUR:02d}:00~{DAYLIGHT_END_HOUR:02d}:00 KST 평균"
+    daylight_label = f"최근 {LIGHT_AVG_WINDOW_DAYS}일 13:00~18:00 KST 평균"
     return {
         "current_time": current,
         "current_hour": current_local.hour,
@@ -248,14 +245,14 @@ def build_sensor_semantics(metrics: dict[str, Any]) -> dict[str, Any]:
     return {
         "temperature_high_threshold_c": 30.0,
         "temperature_low_threshold_c": 20.0,
-        "water_level_meaning": "water level is better when it is higher; use the recent 2 hour average",
+        "water_level_meaning": "water level is interpreted as a percentage and is better when it is higher",
         "water_level_recent_avg_2h": metrics.get("water_level_recent_avg_2h"),
         "water_level_sample_count": metrics.get("water_level_sample_count", 0),
-        "light_meaning": f"light is summarized with the recent {LIGHT_AVG_WINDOW_DAYS} day KST 13:00-18:00 average and used as a daytime reference",
+        "light_meaning": "light is interpreted as the raw measured value and compared with the daytime average reference",
         "light_daytime_avg_13_18": metrics.get("light_daytime_avg_13_18"),
         "light_daytime_sample_count": metrics.get("light_daytime_sample_count", 0),
-        "distance_meaning": "distance is only a proximity / position signal, not a danger signal",
-        "distance_mode": "position_only",
+        "distance_meaning": "distance is used only for environment conversation trigger",
+        "distance_mode": "trigger_only",
     }
 
 
@@ -264,29 +261,57 @@ def build_sensor_summary(sensor: dict[str, Any], state: dict[str, Any], metrics:
     humidity = _coerce_float(sensor.get("humidity"))
     water_level = _coerce_float(sensor.get("water_level"))
     light = _coerce_float(sensor.get("light"))
-    distance = _coerce_float(sensor.get("distance"))
     water_avg = _coerce_float(metrics.get("water_level_recent_avg_2h"))
     light_avg = _coerce_float(metrics.get("light_daytime_avg_13_18"))
-    parts: list[str] = []
 
+    parts: list[str] = []
     if temperature is not None:
-        parts.append(f"기온 {temperature:.1f}°C")
+        parts.append(f"기온 {temperature:.1f}도")
     if humidity is not None:
-        parts.append(f"습도 {humidity:.1f}%")
-    if water_avg is not None:
-        parts.append(f"수위 최근 2시간 평균 {water_avg:.1f}%")
-    elif water_level is not None:
-        parts.append(f"수위 {water_level:.1f}%")
-    if light_avg is not None:
-        parts.append(f"조도 {metrics.get('light_daytime_window_label', '13:00~18:00 KST')} 평균 {light_avg:.1f} lx")
-    elif light is not None:
-        parts.append(f"조도 {light:.1f} lx")
-    if distance is not None:
-        parts.append(f"거리 {distance:.1f} cm (위치 정보)")
+        parts.append(f"습도 {humidity:.1f}퍼센트")
+    if water_level is not None:
+        parts.append(f"수위 {water_level:.1f}퍼센트")
+    elif water_avg is not None:
+        parts.append(f"수위 최근 평균 {water_avg:.1f}퍼센트")
+    if light is not None:
+        parts.append(f"조도 {light:.1f}럭스")
+    elif light_avg is not None:
+        parts.append(f"조도 평균 {light_avg:.1f}럭스")
 
     level = str(state.get("level") or "normal").strip() or "normal"
     prefix = f"현재 센서 상태는 {level}입니다."
-    return f"{prefix} " + " / ".join(parts) if parts else prefix
+    if not parts:
+        return prefix + " 현재 센서 값이 아직 없습니다."
+    return f"{prefix} " + " / ".join(parts) + "."
+
+
+def build_distance_summary(sensor: dict[str, Any], runtime_settings: Optional[dict[str, Any]] = None) -> str:
+    runtime_settings = runtime_settings or {}
+    distance = _coerce_float(sensor.get("distance"))
+    threshold = _coerce_float(runtime_settings.get("distance_threshold_cm"))
+    distance_detection_enabled = bool(runtime_settings.get("distance_detection_enabled", True))
+    wake_enabled = bool(runtime_settings.get("wake_enabled", True))
+    inside = runtime_settings.get("distance_inside_threshold")
+
+    parts = [
+        "거리 센서는 환경 대화 모드의 거리 감지와 호출어 허용에만 사용됩니다.",
+    ]
+    if distance is not None:
+        parts.append(f"현재 거리는 {distance:.1f}센티미터입니다.")
+    if threshold is not None:
+        try:
+            parts.append(f"기준은 {float(threshold):.0f}센티미터입니다.")
+        except (TypeError, ValueError):
+            pass
+    if inside is not None:
+        parts.append("현재는 기준 안쪽입니다." if inside else "현재는 기준 바깥쪽입니다.")
+    if not distance_detection_enabled:
+        parts.append("거리 감지가 꺼져 있습니다.")
+    elif not wake_enabled:
+        parts.append("호출어가 꺼져 있습니다.")
+    else:
+        parts.append("호출어 허용 상태를 함께 보고 있습니다.")
+    return " ".join(parts)
 
 
 def build_sensor_payload(
@@ -295,14 +320,8 @@ def build_sensor_payload(
     metrics: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     merged = _sensor_payload_from_rows(realtime_payload, hourly_payload)
-    if merged.get("water_level_raw") is None:
-        merged["water_level_raw"] = merged.get("water_level")
-    if merged.get("water_raw") is None:
-        merged["water_raw"] = merged.get("water_level")
-    if merged.get("light_raw") is None:
-        merged["light_raw"] = merged.get("light")
     merged["light_normalized_0_100"] = _normalize_range_to_100(
-        merged.get("light_raw") if merged.get("light_raw") is not None else merged.get("light"),
+        merged.get("light"),
         LIGHT_NORMALIZED_MIN_RAW,
         LIGHT_NORMALIZED_MAX_RAW,
     )
@@ -380,9 +399,7 @@ def rebuild_sensor_reading_states(conn) -> int:
             sensor_payload = row_payload_to_sensor_payload(payload, metrics=metrics)
             state = judge_realtime_state(sensor_payload, metrics=metrics)
 
-        state_level = str(state.get("level") or "normal")
-        state_alerts = normalize_response_payload(state.get("alerts") or [])
-        if state_level != row["state_level"] or state_alerts != normalize_response_payload(row["state_alerts"]):
+        if state.get("level") != row.get("state_level") or (state.get("alerts") or []) != (row.get("state_alerts") or []):
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -391,9 +408,10 @@ def rebuild_sensor_reading_states(conn) -> int:
                         state_alerts = %s
                     WHERE reading_id = %s
                     """,
-                    (state_level, normalize_response_payload(state_alerts), row["reading_id"]),
+                    (state.get("level"), state.get("alerts", []), row["reading_id"]),
                 )
-                updated_count += 1
+            updated_count += 1
 
-    conn.commit()
+    if updated_count:
+        conn.commit()
     return updated_count

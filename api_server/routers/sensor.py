@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from extensions.db import get_db_connection
 from schemas import HourlySensorPayload, RealtimeSensorPayload, RuntimeSettingsPayload, SensorPayload
+from services.sensor_analytics import build_sensor_summary, build_sensor_semantics, compute_sensor_metrics
 from services.sensor_judge import judge_hourly_state, judge_realtime_state, judge_sensor_state
 from services.sensor_policy import build_realtime_next_action
 from services.sensor_store import (
@@ -56,7 +57,14 @@ def sensor_status(payload: SensorPayload) -> dict[str, Any]:
 
 @router.post("/sensor/ingest")
 def sensor_ingest(payload: RealtimeSensorPayload) -> dict[str, Any]:
-    state = judge_realtime_state(payload)
+    try:
+        with get_db_connection() as conn:
+            metrics = compute_sensor_metrics(conn, current_payload=payload.model_dump(), current_sensor_type="realtime")
+    except Exception:
+        from services.sensor_analytics import empty_sensor_metrics
+
+        metrics = empty_sensor_metrics()
+    state = judge_realtime_state(payload, metrics=metrics)
     response = save_sensor_reading(payload.model_dump(), "realtime", state)
     response["next_action"] = _safe_build_realtime_next_action(payload)
     return response
@@ -64,7 +72,14 @@ def sensor_ingest(payload: RealtimeSensorPayload) -> dict[str, Any]:
 
 @router.post("/sensor/realtime-ingest")
 def sensor_realtime_ingest(payload: RealtimeSensorPayload) -> dict[str, Any]:
-    state = judge_realtime_state(payload)
+    try:
+        with get_db_connection() as conn:
+            metrics = compute_sensor_metrics(conn, current_payload=payload.model_dump(), current_sensor_type="realtime")
+    except Exception:
+        from services.sensor_analytics import empty_sensor_metrics
+
+        metrics = empty_sensor_metrics()
+    state = judge_realtime_state(payload, metrics=metrics)
     response = save_sensor_reading(payload.model_dump(), "realtime", state)
     response["next_action"] = _safe_build_realtime_next_action(payload)
     return response
@@ -72,7 +87,14 @@ def sensor_realtime_ingest(payload: RealtimeSensorPayload) -> dict[str, Any]:
 
 @router.post("/sensor/hourly-ingest")
 def sensor_hourly_ingest(payload: HourlySensorPayload) -> dict[str, Any]:
-    state = judge_hourly_state(payload)
+    try:
+        with get_db_connection() as conn:
+            metrics = compute_sensor_metrics(conn, current_payload=payload.model_dump(), current_sensor_type="hourly")
+    except Exception:
+        from services.sensor_analytics import empty_sensor_metrics
+
+        metrics = empty_sensor_metrics()
+    state = judge_hourly_state(payload, metrics=metrics)
     response = save_sensor_reading(payload.model_dump(), "hourly", state)
     return response
 
@@ -81,15 +103,36 @@ def sensor_hourly_ingest(payload: HourlySensorPayload) -> dict[str, Any]:
 def sensor_latest() -> dict[str, Any]:
     with get_db_connection() as conn:
         realtime_row = get_latest_sensor_row(conn, "realtime")
+        hourly_row = get_latest_sensor_row(conn, "hourly")
+        metrics = compute_sensor_metrics(conn)
 
-    merged = build_merged_payload(realtime_row, None)
+    merged = build_merged_payload(realtime_row, hourly_row, metrics=metrics)
     runtime_settings = get_runtime_settings()
     latest_distance = (merged or {}).get("distance") if merged else None
     threshold = float(runtime_settings.get("distance_threshold_cm") or 50)
+    state = judge_sensor_state(
+        SensorPayload(**merged) if merged is not None else SensorPayload(
+            temperature=23.0,
+            humidity=50.0,
+            light=500.0,
+            water_level=50.0,
+            distance=100.0,
+        ),
+        metrics=metrics,
+    ) if merged is not None else {"level": "normal", "alerts": []}
+    if merged is not None:
+        merged["state_level"] = state.get("level", "normal")
+        merged["alerts"] = state.get("alerts", [])
+        merged["rag"] = state.get("rag", "green")
+        merged["sensor_semantics"] = build_sensor_semantics(metrics)
+        merged["sensor_summary"] = build_sensor_summary(merged, state, metrics)
     return {
         "latest_realtime": normalize_response_payload(expand_sensor_row(realtime_row)),
-        "latest_hourly": None,
+        "latest_hourly": normalize_response_payload(expand_sensor_row(hourly_row)),
         "latest_merged": normalize_response_payload(merged),
+        "latest_state": normalize_response_payload(state),
+        "sensor_semantics": normalize_response_payload(build_sensor_semantics(metrics)),
+        "sensor_summary": build_sensor_summary(merged or {}, state, metrics) if merged else None,
         "runtime_settings": runtime_settings,
         "distance_inside_threshold": bool(latest_distance is not None and latest_distance <= threshold),
         "wake_eligible": _wake_eligible(merged, runtime_settings),
@@ -102,21 +145,43 @@ def sensor_history(limit: int = 24) -> dict[str, Any]:
     with get_db_connection() as conn:
         realtime_rows = get_recent_sensor_rows(conn, "realtime", safe_limit)
         realtime_row = get_latest_sensor_row(conn, "realtime")
+        hourly_rows = get_recent_sensor_rows(conn, "hourly", safe_limit)
+        hourly_row = get_latest_sensor_row(conn, "hourly")
+        metrics = compute_sensor_metrics(conn)
 
-    merged = build_merged_payload(realtime_row, None)
+    merged = build_merged_payload(realtime_row, hourly_row, metrics=metrics)
     runtime_settings = get_runtime_settings()
     latest_distance = (merged or {}).get("distance") if merged else None
     threshold = float(runtime_settings.get("distance_threshold_cm") or 50)
+    state = judge_sensor_state(
+        SensorPayload(**merged) if merged is not None else SensorPayload(
+            temperature=23.0,
+            humidity=50.0,
+            light=500.0,
+            water_level=50.0,
+            distance=100.0,
+        ),
+        metrics=metrics,
+    ) if merged is not None else {"level": "normal", "alerts": []}
+    if merged is not None:
+        merged["state_level"] = state.get("level", "normal")
+        merged["alerts"] = state.get("alerts", [])
+        merged["rag"] = state.get("rag", "green")
+        merged["sensor_semantics"] = build_sensor_semantics(metrics)
+        merged["sensor_summary"] = build_sensor_summary(merged, state, metrics)
     return {
         "limit": safe_limit,
         "latest_realtime": normalize_response_payload(expand_sensor_row(realtime_row)),
-        "latest_hourly": None,
+        "latest_hourly": normalize_response_payload(expand_sensor_row(hourly_row)),
         "latest_merged": normalize_response_payload(merged),
+        "latest_state": normalize_response_payload(state),
+        "sensor_semantics": normalize_response_payload(build_sensor_semantics(metrics)),
+        "sensor_summary": build_sensor_summary(merged or {}, state, metrics) if merged else None,
         "runtime_settings": runtime_settings,
         "distance_inside_threshold": bool(latest_distance is not None and latest_distance <= threshold),
         "wake_eligible": _wake_eligible(merged, runtime_settings),
         "realtime_history": normalize_response_payload(realtime_rows),
-        "hourly_history": [],
+        "hourly_history": normalize_response_payload(hourly_rows),
     }
 
 

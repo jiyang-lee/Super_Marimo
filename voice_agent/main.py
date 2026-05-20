@@ -167,14 +167,26 @@ def ask_api_server(
 
 def extract_answer(api_result: dict[str, Any]) -> str:
     answer = str(
-        api_result.get("tts_text")
-        or api_result.get("llm_answer")
+        api_result.get("llm_answer")
         or api_result.get("answer")
+        or api_result.get("tts_text")
         or ""
     ).strip()
     if not answer:
         raise HTTPException(status_code=502, detail="api-server returned an empty answer")
     return answer
+
+
+def extract_tts_text(api_result: dict[str, Any]) -> str:
+    text = str(
+        api_result.get("tts_text")
+        or api_result.get("llm_answer")
+        or api_result.get("answer")
+        or ""
+    ).strip()
+    if not text:
+        raise HTTPException(status_code=502, detail="api-server returned an empty tts text")
+    return text
 
 
 def synthesize_tts(text: str, voice_name: Optional[str] = None, prefix: str = "ask") -> Optional[str]:
@@ -224,20 +236,21 @@ def ask(payload: AskPayload, background_tasks: BackgroundTasks = None) -> AskRes
         raise HTTPException(status_code=500, detail="Unexpected error in voice interaction") from exc
     
     answer = extract_answer(api_result)
+    tts_text = extract_tts_text(api_result)
     tts_path: Optional[str] = None
     tts_ok = False
     tts_queued = False
 
     if payload.speak:
         if background_tasks is not None:
-            background_tasks.add_task(synthesize_tts, answer, payload.voice_name, "ask")
+            background_tasks.add_task(synthesize_tts, tts_text, payload.voice_name, "ask")
             tts_queued = True
             tts_ok = True
         else:
-            tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
+            tts_path = synthesize_tts(tts_text, voice_name=payload.voice_name)
             tts_ok = tts_path is not None
             if not tts_ok:
-                logger.warning("[ask] TTS synthesis failed for answer: %s | session_id=%s", answer[:100], session_id)
+                logger.warning("[ask] TTS synthesis failed for answer: %s | session_id=%s", tts_text[:100], session_id)
 
     resolved_session_id = str(api_result.get("session_id") or session_id)
     session_store.save(resolved_session_id)

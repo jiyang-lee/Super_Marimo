@@ -183,7 +183,8 @@ def test_ask_routes_through_api_server(monkeypatch) -> None:
             "interaction_id": 7,
             "session_created": True,
             "messages_saved": 2,
-            "tts_text": f"answer: {text}",
+            "llm_answer": f"answer: {text}",
+            "tts_text": f"sound: {text}",
         },
     )
     monkeypatch.setattr(
@@ -213,4 +214,5 @@ def test_ask_routes_through_api_server(monkeypatch) -> None:
     assert saved_sessions[-1] == "11111111-1111-1111-1111-111111111111"
     assert captured_api_call["persona_memo"] == "persona memo"
     assert captured_api_call["system_memo"] == "system memo"
+    assert captured_tts_call["text"] == "sound: test question"
     assert captured_tts_call["voice_name"] == "F2"

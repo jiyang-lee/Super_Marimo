@@ -101,15 +101,15 @@ export function DashboardPage() {
     {
       label: 'Light',
       value: formatNormalizedWithRaw(
-        merged?.light_normalized_0_100 ?? normalizeLightRange(merged?.light_raw ?? merged?.light),
-        merged?.light_raw ?? merged?.light,
+        merged?.light_normalized_0_100 ?? normalizeLightRange(merged?.light),
+        merged?.light,
       ),
     },
     {
       label: 'Water',
       value: formatNormalizedWithRaw(
         merged?.water_level_normalized_0_100 ?? normalizeToPercent(merged?.water_level, merged?.water_level_recent_avg_2h),
-        merged?.water_raw ?? merged?.water_level_raw ?? merged?.water_level,
+        merged?.water_level,
       ),
     },
     { label: 'Distance', value: formatMetricValue(merged?.distance, 'cm') },

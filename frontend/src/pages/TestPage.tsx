@@ -76,15 +76,15 @@ export function TestPage() {
       {
         label: '조도',
         value: formatNormalizedWithRaw(
-          mergedSensor?.light_normalized_0_100 ?? normalizeLightRange(mergedSensor?.light_raw ?? mergedSensor?.light),
-          mergedSensor?.light_raw ?? mergedSensor?.light,
+          mergedSensor?.light_normalized_0_100 ?? normalizeLightRange(mergedSensor?.light),
+          mergedSensor?.light,
         ),
       },
       {
         label: '수위',
         value: formatNormalizedWithRaw(
           mergedSensor?.water_level_normalized_0_100 ?? normalizeToPercent(mergedSensor?.water_level, mergedSensor?.water_level_recent_avg_2h),
-          mergedSensor?.water_raw ?? mergedSensor?.water_level_raw ?? mergedSensor?.water_level,
+          mergedSensor?.water_level,
         ),
       },
       { label: '거리', value: formatValue(mergedSensor?.distance, 'cm') },

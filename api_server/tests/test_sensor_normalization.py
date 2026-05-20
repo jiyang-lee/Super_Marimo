@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from services.sensor_analytics import compute_sensor_metrics
-from services.sensor_analytics import build_sensor_payload, empty_sensor_metrics
+from services.sensor_analytics import build_distance_summary, build_sensor_payload, build_sensor_summary, compute_sensor_metrics, empty_sensor_metrics
 
 
 class _Cursor:
@@ -49,8 +48,8 @@ def test_build_sensor_payload_adds_0_to_100_normalized_values() -> None:
 
     assert merged["light"] == 200.0
     assert merged["water_level"] == 25.0
-    assert merged["light_raw"] == 200.0
-    assert merged["water_level_raw"] == 25.0
+    assert "light_raw" not in merged
+    assert "water_level_raw" not in merged
     assert merged["light_normalized_0_100"] == 28
     assert merged["water_level_normalized_0_100"] == 50
 
@@ -95,3 +94,20 @@ def test_compute_sensor_metrics_uses_recent_20_day_daylight_average() -> None:
     assert metrics["water_level_recent_avg_2h"] == 20.0
     assert metrics["light_daytime_avg_13_18"] == 400.0
     assert metrics["light_daytime_sample_count"] == 2
+
+
+def test_sensor_summary_excludes_distance_and_distance_summary_separates_it() -> None:
+    summary = build_sensor_summary(
+        {"temperature": 28.0, "humidity": 57.0, "light": 14.0, "water_level": 100.0, "distance": 42.0},
+        {"level": "normal"},
+        {"water_level_recent_avg_2h": 100.0, "light_daytime_avg_13_18": 400.0},
+    )
+    distance_summary = build_distance_summary(
+        {"distance": 42.0},
+        {"distance_detection_enabled": True, "wake_enabled": True, "distance_threshold_cm": 50.0, "distance_inside_threshold": False},
+    )
+
+    assert "거리" not in summary
+    assert "42.0" not in summary
+    assert "거리 센서는 환경 대화 모드" in distance_summary
+    assert "42.0센티미터" in distance_summary

@@ -162,10 +162,7 @@ export interface SensorReading {
   temperature?: number;
   humidity?: number;
   light?: number;
-  light_raw?: number;
   water_level?: number;
-  water_raw?: number;
-  water_level_raw?: number;
   water_level_recent_avg_2h?: number;
   light_daytime_avg_13_18?: number;
   light_normalized_0_100?: number;

@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from extensions.db import get_db_connection
 from schemas import RealtimeSensorPayload
+from services.sensor_analytics import compute_sensor_metrics
 from services.device_event_service import save_device_event
 from services.runtime_settings import get_runtime_settings, set_distance_inside_threshold
 from services.sensor_judge import judge_realtime_state
@@ -132,7 +133,6 @@ def build_realtime_next_action(
 ) -> dict[str, Any]:
     from config import PROACTIVE_GREETING_COOLDOWN_SECONDS, SENSOR_WARNING_DISTANCE_THRESHOLD_CM
 
-    state = judge_realtime_state(payload)
     settings = get_runtime_settings()
     threshold_cm = float(settings.get("distance_threshold_cm") or SENSOR_WARNING_DISTANCE_THRESHOLD_CM)
     detection_enabled = bool(settings.get("distance_detection_enabled", True))
@@ -168,6 +168,8 @@ def build_realtime_next_action(
         }
 
     with get_db_connection() as conn:
+        metrics = compute_sensor_metrics(conn, current_payload=payload.model_dump(), current_sensor_type="realtime")
+        state = judge_realtime_state(payload, metrics=metrics)
         set_distance_inside_threshold(True)
 
         greeting_policy = can_emit_proactive_greeting(conn)

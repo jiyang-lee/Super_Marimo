@@ -17,8 +17,17 @@ def normalize_answer(answer: str) -> str:
     cleaned = unicodedata.normalize("NFKC", answer or "")
     cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
     cleaned = re.sub(r"[\x00-\x1f\x7f]", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned)
-    return cleaned.strip()
+    cleaned = cleaned.replace("\r", "\n")
+    cleaned = re.sub(r"[A-Za-z]+", "", cleaned)
+    cleaned = re.sub(r"[`\"'“”‘’\[\]{}<>]", "", cleaned)
+    cleaned = re.sub(r"[|\\]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return ""
+    sentences = [part.strip(" ,;:") for part in re.split(r"(?<=[.!?])\s+|\n+", cleaned) if part.strip(" ,;:")]
+    if not sentences:
+        return cleaned
+    return " ".join(sentences[:3])
 
 
 def get_model_bundle() -> dict[str, Any]:
@@ -109,23 +118,56 @@ def _safe_plain_text(payload: Any) -> str:
     if hasattr(runtime_settings, "model_dump"):
         runtime_settings = runtime_settings.model_dump()
 
-    values: list[str] = []
-    for key, label in (
-        ("temperature", "온도"),
-        ("humidity", "습도"),
-        ("light", "조도"),
-        ("water_level", "수위"),
-        ("distance", "거리"),
-    ):
-        if isinstance(sensor, dict) and sensor.get(key) is not None:
-            values.append(f"{label} {sensor[key]}")
+    question = str(getattr(payload, "question", "") or "").strip().lower()
+    distance_keywords = ("거리", "distance", "wake", "호출어", "threshold", "follow-up", "follow up", "호출", "감지")
+    is_distance_question = any(keyword in question for keyword in distance_keywords)
 
-    sensor_text = ", ".join(values) if values else "센서 값이 아직 없어요"
-    state_level = state.get("level", "normal") if isinstance(state, dict) else "normal"
-    runtime_text = f"runtime_settings: {runtime_settings}" if runtime_settings else ""
-    if runtime_text:
-        return f"지금 상태는 {state_level}이에요. {sensor_text}. {runtime_text}"
-    return f"지금 상태는 {state_level}이에요. {sensor_text}."
+    def _num(key: str) -> float | None:
+        try:
+            value = sensor.get(key) if isinstance(sensor, dict) else None
+            return None if value is None else float(value)
+        except (TypeError, ValueError):
+            return None
+
+    if is_distance_question:
+        distance = _num("distance")
+        threshold = runtime_settings.get("distance_threshold_cm") if isinstance(runtime_settings, dict) else None
+        inside = runtime_settings.get("distance_inside_threshold") if isinstance(runtime_settings, dict) else None
+        parts = ["거리 센서는 환경 대화 모드의 거리 감지와 호출어 허용에만 사용됩니다."]
+        if distance is not None:
+            parts.append(f"현재 거리는 {distance:.1f}센티미터입니다.")
+        if threshold is not None:
+            try:
+                parts.append(f"기준은 {float(threshold):.0f}센티미터입니다.")
+            except (TypeError, ValueError):
+                pass
+        if inside is not None:
+            parts.append("현재는 기준 안쪽입니다." if inside else "현재는 기준 바깥쪽입니다.")
+        return " ".join(parts)
+
+    temperature = _num("temperature")
+    humidity = _num("humidity")
+    water_level = _num("water_level")
+    if water_level is None:
+        water_level = _num("water_level_normalized_0_100")
+    light = _num("light")
+    if light is None:
+        light = _num("light_daytime_avg_13_18")
+    state_level = str(state.get("level") or "normal").strip() or "normal"
+
+    parts = [f"현재 센서 상태는 {state_level}입니다."]
+    if temperature is not None:
+        parts.append(f"기온 {temperature:.1f}도")
+    if humidity is not None:
+        parts.append(f"습도 {humidity:.1f}퍼센트")
+    if water_level is not None:
+        parts.append(f"수위 {water_level:.1f}퍼센트")
+    if light is not None:
+        parts.append(f"조도 {light:.1f}럭스")
+
+    if len(parts) == 1:
+        return "현재 센서 값을 바로 읽을 수 없습니다."
+    return " / ".join(parts)
 
 
 def _extract_json_blob(text: str) -> str | None:
@@ -133,7 +175,6 @@ def _extract_json_blob(text: str) -> str | None:
     if not cleaned:
         return None
 
-    # 코드블록 마커 제거 (```json ... ```)
     cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
     cleaned = cleaned.replace("```", "").strip()
 
@@ -197,19 +238,19 @@ def _sanitize_action_proposal(action_proposal: Any) -> dict[str, Any] | None:
             if numeric_value <= 0:
                 continue
             sanitized_patch[key] = numeric_value
-        else:
-            if isinstance(value, bool):
-                sanitized_patch[key] = value
-                continue
-            if isinstance(value, (int, float)):
-                sanitized_patch[key] = bool(value)
-                continue
-            if isinstance(value, str):
-                normalized = value.strip().lower()
-                if normalized in {"true", "1", "yes", "on", "켜", "켜기"}:
-                    sanitized_patch[key] = True
-                elif normalized in {"false", "0", "no", "off", "끄", "끄기"}:
-                    sanitized_patch[key] = False
+            continue
+        if isinstance(value, bool):
+            sanitized_patch[key] = value
+            continue
+        if isinstance(value, (int, float)):
+            sanitized_patch[key] = bool(value)
+            continue
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                sanitized_patch[key] = True
+            elif normalized in {"false", "0", "no", "off"}:
+                sanitized_patch[key] = False
 
     if not sanitized_patch:
         return None
@@ -229,8 +270,8 @@ def _build_fallback_contract(payload: Any, *, raw_text: str = "") -> dict[str, A
     question = str(getattr(payload, "question", "") or "").strip()
     if question and len(answer) < 80:
         lowered = question.lower()
-        if any(k in lowered for k in ("wake", "깨우기", "distance", "거리", "voice", "음성", "보이스", "threshold", "기준")):
-            answer = f"{answer} 설정을 바꾸고 싶으시면 더 명확하게 말씀해 주세요."
+        if any(keyword in lowered for keyword in ("wake", "distance", "voice", "threshold", "호출어", "거리")):
+            answer = f"{answer} 설정이 필요하면 구체적으로 말씀해 주세요."
     return build_contract(
         answer=answer,
         action_proposal=None,
@@ -240,19 +281,15 @@ def _build_fallback_contract(payload: Any, *, raw_text: str = "") -> dict[str, A
 
 
 def parse_contract_text(text: str, payload: Any | None = None) -> dict[str, Any]:
-    # Regex-based preemptive rescue for the "answer" field
-    # Highly robust defense for LLM JSON breakdown cases
     extracted_answer = None
-    
-    # 1) re.DOTALL을 사용해 개행 문자가 포함된 긴 문자열도 완벽하게 추출
+
     match = re.search(r'"answer"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', text, re.DOTALL)
     if match:
         try:
             extracted_answer = json.loads(f'"{match.group(1)}"')
         except Exception:
             extracted_answer = match.group(1)
-            
-    # 2) 만약 1차 정규식으로 구출에 실패한 경우, 뒷부분이 잘린 JSON 형태에서도 answer를 구출할 수 있는 백업 정규식 시도
+
     if not extracted_answer:
         lazy_match = re.search(r'"answer"\s*:\s*"(.*?)"(?:\s*,|\s*\})', text, re.DOTALL)
         if lazy_match:
@@ -274,7 +311,6 @@ def parse_contract_text(text: str, payload: Any | None = None) -> dict[str, Any]
 
     contract = coerce_contract(raw)
     if contract is None:
-        # Extract answer from parsed raw dict or fallback to regex match
         fallback_text = str(raw.get("answer") or "") if isinstance(raw, dict) else ""
         if not fallback_text and extracted_answer:
             fallback_text = extracted_answer
@@ -284,7 +320,7 @@ def parse_contract_text(text: str, payload: Any | None = None) -> dict[str, Any]
     if not contract["answer"] and extracted_answer:
         contract["answer"] = normalize_answer(extracted_answer)
 
-    contract["reason"] = normalize_answer(str(contract.get("reason") or ""))
+    contract["reason"] = str(contract.get("reason") or "").strip()
     contract["action_proposal"] = _sanitize_action_proposal(contract.get("action_proposal"))
     if contract["action_proposal"] is None and raw.get("action_proposal") is not None:
         contract["reason"] = "action_proposal_rejected"
@@ -318,22 +354,12 @@ def generate_contract(payload: Any) -> dict[str, Any]:
             **inputs,
             do_sample=False,
             max_new_tokens=192,
-            repetition_penalty=1.08,
-            no_repeat_ngram_size=2,
-            length_penalty=0.9,
-            pad_token_id=tokenizer.eos_token_id,
+            temperature=0.0,
+            top_p=1.0,
         )
 
     generated_ids = output_ids[0][inputs["input_ids"].shape[-1] :]
-    decoded = tokenizer.decode(generated_ids, skip_special_tokens=True)
-    contract = parse_contract_text(decoded, payload)
-    if not contract.get("answer"):
-        contract["answer"] = _safe_plain_text(payload)
-    contract.setdefault("reason", "")
-    contract.setdefault("confidence", 0.0)
-    contract.setdefault("action_proposal", None)
-    return contract
-
-
-def generate_answer(payload: Any) -> str:
-    return str(generate_contract(payload).get("answer", ""))
+    text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    if not text.strip():
+        return _build_fallback_contract(payload, raw_text=text)
+    return parse_contract_text(text, payload)
