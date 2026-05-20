@@ -162,7 +162,17 @@ export interface SensorReading {
   temperature?: number;
   humidity?: number;
   light?: number;
+  light_raw?: number;
   water_level?: number;
+  water_raw?: number;
+  water_level_raw?: number;
+  water_level_recent_avg_2h?: number;
+  light_daytime_avg_13_18?: number;
+  light_normalized_0_100?: number;
+  water_level_normalized_0_100?: number;
+  water_level_sample_count?: number;
+  light_daytime_sample_count?: number;
+  light_daytime_window_label?: string;
   distance?: number;
   state_level?: string;
   rag?: string;
@@ -171,9 +181,19 @@ export interface SensorReading {
 
 export interface SensorLatest {
   latest_realtime: SensorReading | null;
+  latest_hourly: SensorReading | null;
   latest_merged: SensorReading | null;
+  latest_state?: {
+    level?: string;
+    rag?: string;
+    alerts?: string[];
+    details?: Record<string, unknown>;
+  } | null;
+  sensor_semantics?: Record<string, unknown>;
+  sensor_summary?: string | null;
   runtime_settings?: RuntimeSettings;
   distance_inside_threshold?: boolean;
+  wake_eligible?: boolean;
 }
 
 export interface RuntimeSettings {

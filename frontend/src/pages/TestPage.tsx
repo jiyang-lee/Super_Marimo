@@ -14,6 +14,30 @@ function formatValue(value: unknown, suffix = '') {
   return `${value}${suffix}`;
 }
 
+function formatNormalizedWithRaw(normalized: unknown, raw: unknown, suffix = '') {
+  const normalizedText = formatValue(normalized, suffix);
+  const rawText = formatValue(raw);
+  if (rawText === '-') {
+    return normalizedText;
+  }
+  return `${normalizedText} (raw ${rawText})`;
+}
+
+function normalizeToPercent(value: unknown, reference: unknown) {
+  const current = Number(value);
+  const base = Number(reference);
+  if (!Number.isFinite(current) || !Number.isFinite(base) || base <= 0) return null;
+  const normalized = Math.round((current / base) * 100);
+  return Math.max(0, Math.min(100, normalized));
+}
+
+function normalizeLightRange(value: unknown) {
+  const current = Number(value);
+  if (!Number.isFinite(current)) return null;
+  const normalized = Math.round(((current - 2) / (700 - 2)) * 100);
+  return Math.max(0, Math.min(100, normalized));
+}
+
 function timeLabel(value?: string | null) {
   if (!value) return '-';
   return new Date(value).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -47,10 +71,22 @@ export function TestPage() {
 
   const sensorCards = useMemo(
     () => [
-      { label: '온도', value: formatValue(mergedSensor?.temperature, '°C') },
+      { label: '온도', value: formatValue(mergedSensor?.temperature, ' C') },
       { label: '습도', value: formatValue(mergedSensor?.humidity, '%') },
-      { label: '조도', value: formatValue(mergedSensor?.light) },
-      { label: '수위', value: formatValue(mergedSensor?.water_level) },
+      {
+        label: '조도',
+        value: formatNormalizedWithRaw(
+          mergedSensor?.light_normalized_0_100 ?? normalizeLightRange(mergedSensor?.light_raw ?? mergedSensor?.light),
+          mergedSensor?.light_raw ?? mergedSensor?.light,
+        ),
+      },
+      {
+        label: '수위',
+        value: formatNormalizedWithRaw(
+          mergedSensor?.water_level_normalized_0_100 ?? normalizeToPercent(mergedSensor?.water_level, mergedSensor?.water_level_recent_avg_2h),
+          mergedSensor?.water_raw ?? mergedSensor?.water_level_raw ?? mergedSensor?.water_level,
+        ),
+      },
       { label: '거리', value: formatValue(mergedSensor?.distance, 'cm') },
     ],
     [mergedSensor],

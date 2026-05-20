@@ -18,6 +18,35 @@ function StatusDot({ ok }: { ok: boolean }) {
   return <span className={`lab-status-dot ${ok ? 'ok' : 'bad'}`} />;
 }
 
+function formatMetricValue(value: unknown, suffix = '') {
+  if (value === null || value === undefined || value === '') return '-';
+  return `${value}${suffix}`;
+}
+
+function formatNormalizedWithRaw(normalized: unknown, raw: unknown, suffix = '') {
+  const normalizedText = formatMetricValue(normalized, suffix);
+  const rawText = formatMetricValue(raw);
+  if (rawText === '-') {
+    return normalizedText;
+  }
+  return `${normalizedText} (raw ${rawText})`;
+}
+
+function normalizeToPercent(value: unknown, reference: unknown) {
+  const current = Number(value);
+  const base = Number(reference);
+  if (!Number.isFinite(current) || !Number.isFinite(base) || base <= 0) return null;
+  const normalized = Math.round((current / base) * 100);
+  return Math.max(0, Math.min(100, normalized));
+}
+
+function normalizeLightRange(value: unknown) {
+  const current = Number(value);
+  if (!Number.isFinite(current)) return null;
+  const normalized = Math.round(((current - 2) / (700 - 2)) * 100);
+  return Math.max(0, Math.min(100, normalized));
+}
+
 export function DashboardPage() {
   const [agent, setAgent] = useState<AgentHealth | null>(null);
   const [api, setApi] = useState<ApiHealth | null>(null);
@@ -67,12 +96,24 @@ export function DashboardPage() {
   ];
 
   const sensorCards = [
-    { label: 'Temperature', value: merged?.temperature ?? '-', suffix: '°C' },
-    { label: 'Humidity', value: merged?.humidity ?? '-', suffix: '%' },
-    { label: 'Light', value: merged?.light ?? '-', suffix: '' },
-    { label: 'Water(raw)', value: merged?.water_level ?? '-', suffix: '' },
-    { label: 'Distance', value: merged?.distance ?? '-', suffix: 'cm' },
-    { label: 'Level', value: merged?.state_level ?? 'no data', suffix: '' },
+    { label: 'Temperature', value: formatMetricValue(merged?.temperature, ' C') },
+    { label: 'Humidity', value: formatMetricValue(merged?.humidity, '%') },
+    {
+      label: 'Light',
+      value: formatNormalizedWithRaw(
+        merged?.light_normalized_0_100 ?? normalizeLightRange(merged?.light_raw ?? merged?.light),
+        merged?.light_raw ?? merged?.light,
+      ),
+    },
+    {
+      label: 'Water',
+      value: formatNormalizedWithRaw(
+        merged?.water_level_normalized_0_100 ?? normalizeToPercent(merged?.water_level, merged?.water_level_recent_avg_2h),
+        merged?.water_raw ?? merged?.water_level_raw ?? merged?.water_level,
+      ),
+    },
+    { label: 'Distance', value: formatMetricValue(merged?.distance, 'cm') },
+    { label: 'Level', value: merged?.state_level ?? 'no data' },
   ];
 
   return (
@@ -124,10 +165,7 @@ export function DashboardPage() {
             {sensorCards.map((card) => (
               <div key={card.label} className="lab-card lab-card-column">
                 <div className="lab-card-label">{card.label}</div>
-                <div className="lab-card-value">
-                  {card.value}
-                  {card.suffix}
-                </div>
+                <div className="lab-card-value">{card.value}</div>
               </div>
             ))}
           </div>
