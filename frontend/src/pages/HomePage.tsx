@@ -16,8 +16,6 @@ const questItems = [
 export function HomePage() {
   return (
     <section className="home-stage" aria-label="Home stage">
-      <div className="home-stage__ground" aria-hidden="true" />
-
       <div className="home-stage__layout">
         <section className="home-board home-board--notice" aria-labelledby="home-notice-title">
           <h2 className="home-board__title" id="home-notice-title">

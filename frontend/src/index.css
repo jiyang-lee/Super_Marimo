@@ -1093,43 +1093,48 @@ main.app-main:has(.home-stage) {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 14px 0 0;
+  padding: 8px 0 0;
 }
 
 .home-stage__ground {
-  position: absolute;
-  inset: auto 0 0;
-  height: 132px;
-  background: url('/images/incoming/grass-pattern.png') center bottom / auto 100% repeat-x;
-  z-index: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .home-stage__layout {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(340px, 430px) minmax(300px, 360px);
-  align-items: end;
+  grid-template-columns: 1fr 340px 1fr;
+  align-items: center;
   justify-content: center;
-  gap: clamp(18px, 2vw, 36px);
+  gap: 18px;
   width: 100%;
-  max-width: 1360px;
+  max-width: 1520px;
   height: 100%;
-  padding: 12px clamp(12px, 2vw, 28px) 132px;
+  padding: 28px 24px 24px;
 }
 
 .home-board,
 .home-hero {
-  align-self: end;
+  align-self: center;
 }
 
 .home-board {
   position: relative;
+  width: 560px;
+  height: 280px;
   min-height: 0;
   min-width: 0;
   padding-top: 0;
-  background: url('/images/incoming/information-board2.png') center / 100% 100% no-repeat;
+  background: url('/images/incoming/information-board2.png') center top / 100% 100% no-repeat;
+}
+
+.home-board--notice {
+  justify-self: end;
+}
+
+.home-board--quest {
+  justify-self: start;
 }
 
 .home-board__title-slot {
@@ -1138,24 +1143,27 @@ main.app-main:has(.home-stage) {
 
 .home-board__title {
   position: absolute;
-  top: 36px;
+  top: 26px;
   left: 50%;
   z-index: 3;
+  width: 54%;
   margin: 0;
   transform: translateX(-50%);
   color: #6b4720;
-  font-size: 1.48rem;
+  font-size: 1.22rem;
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0.02em;
+  text-align: center;
   text-shadow: 0 1px 0 rgba(255, 253, 240, 0.7);
   white-space: nowrap;
 }
 
 .home-board__surface {
   position: relative;
-  min-height: 440px;
-  height: min(62vh, 520px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   background: transparent;
 }
 
@@ -1172,34 +1180,34 @@ main.app-main:has(.home-stage) {
 
 .home-board__content--notice {
   align-content: start;
-  gap: 18px;
-  padding: 132px 60px 96px;
+  gap: 10px;
+  padding: 84px 112px 52px 108px;
   overflow: hidden;
 }
 
 .home-board__content--notice p {
   margin: 0;
   color: #5a4528;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 800;
-  line-height: 1.64;
+  line-height: 1.42;
   text-align: center;
 }
 
 .home-board__content--quest {
   align-content: start;
-  gap: 14px;
-  padding: 128px 54px 92px;
+  gap: 8px;
+  padding: 82px 82px 48px;
 }
 
 .home-quest-item {
   position: relative;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 13px 16px;
-  border-radius: 18px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.62);
   border: 2px solid rgba(214, 192, 155, 0.72);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
@@ -1217,34 +1225,34 @@ main.app-main:has(.home-stage) {
 .home-quest-item__icon {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 34px;
+  height: 34px;
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(238, 250, 231, 0.9), rgba(214, 239, 194, 0.82));
   border: 1px solid rgba(118, 161, 82, 0.28);
 }
 
 .home-quest-item__icon img {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   image-rendering: pixelated;
 }
 
 .home-quest-item__title {
   color: #355334;
-  font-size: 1.04rem;
+  font-size: 0.88rem;
   font-weight: 900;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 .home-quest-item__action {
-  padding: 7px 12px;
+  padding: 5px 10px;
   border-radius: 999px;
   background: linear-gradient(180deg, #ffe495 0%, #f0c255 100%);
   border: 1px solid #8f632a;
   color: #583819;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -1254,37 +1262,38 @@ main.app-main:has(.home-stage) {
   display: grid;
   justify-items: center;
   align-content: end;
+  width: 340px;
   height: 100%;
   min-height: 0;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
 }
 
 .home-hero__bubble {
   position: absolute;
-  top: 12%;
+  top: 70px;
   left: 50%;
-  width: clamp(260px, 28vw, 360px);
+  width: 300px;
   transform: translateX(-50%);
   filter: drop-shadow(0 14px 26px rgba(39, 54, 28, 0.16));
 }
 
 .home-hero__bubble-copy {
   position: absolute;
-  top: calc(12% + 28px);
+  top: 96px;
   left: 50%;
-  width: min(72%, 240px);
+  width: 200px;
   transform: translateX(-50%);
   color: #4f4122;
-  font-size: clamp(1rem, 1.2vw, 1.2rem);
+  font-size: 1rem;
   font-weight: 900;
   line-height: 1.45;
   text-align: center;
 }
 
 .home-hero__marimo {
-  width: min(100%, 360px);
+  width: 300px;
   margin-top: auto;
-  margin-bottom: 28px;
+  margin-bottom: 8px;
   animation: marimo-hover 3.8s ease-in-out infinite;
 }
 
@@ -1311,51 +1320,57 @@ main.app-main:has(.home-stage) {
   }
 
   .home-stage__layout {
-    grid-template-columns: minmax(260px, 332px) minmax(310px, 390px) minmax(260px, 332px);
-    gap: 18px;
-    padding: 10px 10px 120px;
+    grid-template-columns: 480px 300px 480px;
+    gap: 10px;
+    padding: 20px 10px;
   }
 
-  .home-board__surface {
-    min-height: 390px;
-    height: min(58vh, 450px);
+  .home-board {
+    width: 480px;
+    height: 240px;
+  }
+
+  .home-board__title {
+    top: 22px;
+    font-size: 1.08rem;
   }
 
   .home-board__content--notice {
-    padding: 122px 48px 88px;
-    gap: 14px;
+    padding: 72px 96px 42px 92px;
+    gap: 8px;
   }
 
   .home-board__content--notice p {
-    font-size: 0.98rem;
-    line-height: 1.62;
+    font-size: 0.84rem;
+    line-height: 1.34;
   }
 
   .home-board__content--quest {
-    padding: 120px 44px 82px;
-    gap: 12px;
+    padding: 70px 70px 40px;
+    gap: 7px;
   }
 
   .home-quest-item {
-    gap: 12px;
-    padding: 11px 14px;
+    gap: 8px;
+    padding: 6px 9px;
   }
 
   .home-quest-item__title {
-    font-size: 0.98rem;
+    font-size: 0.84rem;
   }
 
   .home-hero__bubble {
-    top: 12%;
-    width: clamp(240px, 24vw, 320px);
+    top: 62px;
+    width: 260px;
   }
 
   .home-hero__bubble-copy {
-    top: calc(12% + 24px);
+    top: 84px;
+    font-size: 0.92rem;
   }
 
   .home-hero__marimo {
-    width: min(100%, 320px);
+    width: 270px;
   }
 }
 
