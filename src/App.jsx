@@ -160,6 +160,7 @@ export default function App() {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [chatMode, setChatMode] = useState("텍스트");
   const [chatDraft, setChatDraft] = useState("");
+  const [chatMessages, setChatMessages] = useState(chatStarterMessages);
   const [openModal, setOpenModal] = useState(null);
   const [clockText, setClockText] = useState(makeClock());
   const [hoverPoint, setHoverPoint] = useState(null);
@@ -210,6 +211,25 @@ export default function App() {
 
   function closeModal() {
     setOpenModal(null);
+  }
+
+  function sendChatMessage() {
+    const message = chatDraft.trim();
+
+    if (!message) {
+      return;
+    }
+
+    setChatMessages((current) => [
+      ...current,
+      {
+        id: `user-${Date.now()}`,
+        role: "user",
+        text: message,
+        time: makeClock().slice(0, 5),
+      },
+    ]);
+    setChatDraft("");
   }
 
   return (
@@ -299,7 +319,7 @@ export default function App() {
         {activeScreen === "sensor" && (
           <section className="sensor-stack">
             <div className="sensor-top-grid">
-              <Panel title="마리모 이미지" className="panel--marimo">
+              <Panel className="panel--marimo">
                 <div className="marimo-stage">
                   <MarimoImage size="medium" alt="센서 화면 마리모 캐릭터" className="sensor-marimo" />
                 </div>
@@ -311,7 +331,6 @@ export default function App() {
                     <div key={row.title} className="sensor-summary-row">
                       <div>
                         <strong>{row.title}</strong>
-                        <span>{row.note}</span>
                       </div>
                       <div className="sensor-value">{row.value}</div>
                     </div>
@@ -320,7 +339,12 @@ export default function App() {
               </Panel>
             </div>
 
-            <Panel title="주간 / 월간 자료" className="panel--announcement panel--announcement-two">
+            <article className="sensor-switch-panel">
+              <div className="panel-head">
+                <h2 className="panel-title">위클릭 / 머슬릭 자료</h2>
+              </div>
+
+              <div className="panel-body">
               <div className="mode-switch">
                 <button
                   type="button"
@@ -330,7 +354,7 @@ export default function App() {
                     setHoverPoint(null);
                   }}
                 >
-                  위클릭
+                  Weekly
                 </button>
                 <button
                   type="button"
@@ -340,7 +364,7 @@ export default function App() {
                     setHoverPoint(null);
                   }}
                 >
-                  머슬릭
+                  Monthly
                 </button>
               </div>
 
@@ -364,14 +388,14 @@ export default function App() {
                 ))}
               </div>
 
-              <div className="sensor-switch-panel">
+              <div className="sensor-content">
                 {sensorMode === "weekly" ? (
                   <div className="weekly-list">
                     {weeklySummaries.map((text) => {
                       const [range, ...rest] = text.split(" ");
                       return (
                         <article key={range} className="weekly-card">
-                          <strong className="weekly-range">{range}</strong>
+                          <span className="weekly-date">{range}</span>
                           <span className="weekly-text">{rest.join(" ")}</span>
                         </article>
                       );
@@ -380,14 +404,21 @@ export default function App() {
                 ) : (
                   <div className="chart-card">
                     <div className="chart-header">
-                      <strong>{monthLabels[selectedChartMonth]} 월간 그래프</strong>
-                      <span>온도 / 습도 / 수위 / 조도</span>
+                      <h3 className="chart-title">{monthLabels[selectedChartMonth]} 머슬릭 그래프</h3>
+                      <div className="legend">
+                        <span className="legend-item"><span className="legend-dot legend-temp" />온도</span>
+                        <span className="legend-item"><span className="legend-dot legend-humidity" />습도</span>
+                        <span className="legend-item"><span className="legend-dot legend-water" />수위</span>
+                        <span className="legend-item"><span className="legend-dot legend-light" />조도</span>
+                      </div>
                     </div>
+
+                    <p className="chart-caption">그래프 위에 마우스를 올리면 해당 날짜 값이 보여요.</p>
 
                     <div className="chart-panel">
                       <div className="chart-axis axis-left">
-                        {[10000, 7500, 5000, 2500, 0].map((tick) => (
-                          <span key={tick} style={{ top: `${chart.scaleY(tick, 0, 10000)}px` }}>
+                        {[0, 25, 50, 75, 100].map((tick) => (
+                          <span key={tick} style={{ top: `${chart.scaleY(tick, 0, 100)}px` }}>
                             {tick}
                           </span>
                         ))}
@@ -404,16 +435,17 @@ export default function App() {
                           <polyline className="line water-line" points={chart.waterPath} />
                           <polyline className="line light-line" points={chart.lightPath} />
                           {currentPoint ? (
-                            <line x1={hoverPoint.x} x2={hoverPoint.x} y1={chart.top} y2={chart.height - chart.bottom} className="chart-crosshair" />
+                            <>
+                              <line x1={hoverPoint.x} x2={hoverPoint.x} y1={chart.top} y2={chart.height - chart.bottom} className="chart-crosshair" />
+                              <g className="chart-hover-dots">
+                                <circle className="chart-point temp-point" cx={hoverPoint.x} cy={chart.scaleY(currentPoint.temp, 0, 100)} r="2.4" />
+                                <circle className="chart-point humidity-point" cx={hoverPoint.x} cy={chart.scaleY(currentPoint.humidity, 0, 100)} r="2.4" />
+                                <circle className="chart-point water-point" cx={hoverPoint.x} cy={chart.scaleY(currentPoint.water, 0, 100)} r="2.4" />
+                                <circle className="chart-point light-point" cx={hoverPoint.x} cy={chart.scaleY(currentPoint.light, 0, 10000)} r="2.4" />
+                              </g>
+                            </>
                           ) : null}
                         </svg>
-
-                        <div className="chart-legend">
-                          <span><i className="dot temp-dot" />온도</span>
-                          <span><i className="dot humidity-dot" />습도</span>
-                          <span><i className="dot water-dot" />수위</span>
-                          <span><i className="dot light-dot" />조도</span>
-                        </div>
 
                         {currentPoint ? (
                           <div
@@ -433,62 +465,77 @@ export default function App() {
                       </div>
 
                       <div className="chart-axis axis-right">
-                        {[0, 25, 50, 75, 100].map((tick) => (
-                          <span key={`right-${tick}`} style={{ top: `${chart.scaleY(tick, 0, 100)}px` }}>
+                        {[10000, 7500, 5000, 2500, 0].map((tick) => (
+                          <span key={`right-${tick}`} style={{ top: `${chart.scaleY(tick, 0, 10000)}px` }}>
                             {tick}
                           </span>
                         ))}
                       </div>
                     </div>
+                    <div className="chart-week-labels">
+                      <span>1주차</span>
+                      <span>2주차</span>
+                      <span>3주차</span>
+                      <span>4주차</span>
+                    </div>
                   </div>
                 )}
               </div>
-            </Panel>
+              </div>
+            </article>
           </section>
         )}
 
         {activeScreen === "chat" && (
-          <section className="chat-card">
-            <Panel title="마리모와 대화하기" className="panel--chat">
+          <section className="chat-screen">
+            <article className="chat-card">
+              <div className="panel-head">
+                <h2 className="panel-title">채팅</h2>
+              </div>
+
+              <div className="panel-body chat-screen-layout">
               <div className="chat-list">
-                {chatStarterMessages.map((message) => (
+                {chatMessages.map((message) => (
                   <div key={message.id} className={`chat-row ${message.role}`}>
                     {message.role === "bot" ? <MarimoImage size="small" alt="작은 마리모" className="chat-marimo" /> : null}
+                    <span className="msg-time">{message.time}</span>
                     <div className={`chat-bubble ${message.role}`}>
-                      {message.role === "bot" ? (
-                        <img src="/images/incoming/speech-bubble-medium.png" alt="" aria-hidden="true" className="chat-bubble-frame" />
-                      ) : null}
                       <p>{message.text}</p>
-                      <span className="msg-time">{message.time}</span>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="chat-bar">
-                <input
+              <div className="chat-controls">
+                <textarea
                   className="chat-input"
-                  type="text"
                   value={chatDraft}
                   onChange={(event) => setChatDraft(event.target.value)}
-                  placeholder="메시지를 입력해 보세요"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      sendChatMessage();
+                    }
+                  }}
+                  placeholder={chatMode === "음성" ? "음성 모드에서 말하고 싶은 내용을 적어도 돼요." : "메시지를 입력해 주세요."}
                 />
-                <button type="button" className="send-button">전송</button>
+                <button type="button" className="send-button" onClick={sendChatMessage}>전송</button>
                 <button
                   type="button"
-                  className={`mode-button ${chatMode === "텍스트" ? "is-active" : ""}`}
+                  className="voice-button"
                   onClick={() => setChatMode((current) => (current === "텍스트" ? "음성" : "텍스트"))}
                 >
-                  {chatMode}
+                  {chatMode === "텍스트" ? "음성" : "텍스트"}
                 </button>
               </div>
-            </Panel>
+              </div>
+            </article>
           </section>
         )}
 
         {activeScreen === "settings" && (
-          <section className="settings-grid">
-            <Panel title="상태">
+          <section className="settings-screen">
+            <div className="settings-grid">
               <button
                 type="button"
                 className={`notification-toggle ${notificationEnabled ? "is-on" : "is-off"}`}
@@ -496,19 +543,15 @@ export default function App() {
               >
                 {notificationEnabled ? "on" : "off"}
               </button>
-            </Panel>
 
-            <Panel title="센서">
-              <button type="button" className="setting-open-button" onClick={() => setOpenModal("sensor")}>
-                온도 / 습도 / 수위 / 조도 범위 보기
+              <button type="button" className="setting-button" onClick={() => setOpenModal("sensor")}>
+                <div className="setting-title">센서</div>
               </button>
-            </Panel>
 
-            <Panel title="가이드">
-              <button type="button" className="setting-open-button" onClick={() => setOpenModal("guide")}>
-                사용 가이드 열기
+              <button type="button" className="setting-button" onClick={() => setOpenModal("guide")}>
+                <div className="setting-title">가이드</div>
               </button>
-            </Panel>
+            </div>
           </section>
         )}
       </main>
@@ -517,23 +560,45 @@ export default function App() {
         <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && closeModal()}>
           <div className="modal-card" role="dialog" aria-modal="true">
             <div className="modal-head">
-              <strong>{openModal === "sensor" ? "센서 범위" : "마리모 가이드"}</strong>
-              <button type="button" className="modal-close" onClick={closeModal}>닫기</button>
+              {openModal === "sensor" ? (
+                <h2 className="modal-title">센서값 지정</h2>
+              ) : (
+                <h2 className="modal-title">마리모 가이드</h2>
+              )}
+              <button type="button" className="modal-close" onClick={closeModal}>×</button>
             </div>
 
             {openModal === "sensor" ? (
-              <div className="range-grid">
-                {sensorRangeItems.map((item) => {
-                  const minKey = `${item.key}Min`;
-                  const maxKey = `${item.key}Max`;
-                  const minValue = sensorRanges[minKey];
-                  const maxValue = sensorRanges[maxKey];
+              <div className="modal-body">
+                <div className="range-list">
+                  {sensorRangeItems.map((item) => {
+                    const minKey = `${item.key}Min`;
+                    const maxKey = `${item.key}Max`;
+                    const minValue = sensorRanges[minKey];
+                    const maxValue = sensorRanges[maxKey];
 
-                  return (
-                    <div key={item.key} className="range-row">
-                      <strong>{item.label}</strong>
-                      <div className="range-slider">
-                        <div className="range-track">
+                    return (
+                      <div key={item.key} className="range-row">
+                        <div className="range-head">
+                          <span>{item.label}</span>
+                          <strong>{minValue} ~ {maxValue}</strong>
+                        </div>
+                        <div
+                          className="range-bar"
+                          onPointerDown={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+                            const nextValue = Math.round(ratio * item.max);
+                            const minDistance = Math.abs(nextValue - minValue);
+                            const maxDistance = Math.abs(nextValue - maxValue);
+
+                            if (minDistance <= maxDistance) {
+                              setSensorRanges((current) => ({ ...current, [minKey]: Math.min(nextValue, current[maxKey]) }));
+                            } else {
+                              setSensorRanges((current) => ({ ...current, [maxKey]: Math.max(nextValue, current[minKey]) }));
+                            }
+                          }}
+                        >
                           <div
                             className="range-fill"
                             style={{
@@ -541,11 +606,8 @@ export default function App() {
                               width: `${((maxValue - minValue) / item.max) * 100}%`,
                             }}
                           />
-                          <span className="range-thumb left" style={{ left: `${(minValue / item.max) * 100}%` }} />
-                          <span className="range-thumb right" style={{ left: `${(maxValue / item.max) * 100}%` }} />
-                        </div>
-                        <div className="range-inputs">
                           <input
+                            className="range-input"
                             type="range"
                             min="0"
                             max={item.max}
@@ -556,6 +618,7 @@ export default function App() {
                             }}
                           />
                           <input
+                            className="range-input"
                             type="range"
                             min="0"
                             max={item.max}
@@ -566,24 +629,22 @@ export default function App() {
                             }}
                           />
                         </div>
-                        <div className="range-values">
-                          <span>{minValue}</span>
-                          <span>{maxValue}</span>
-                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             ) : (
-              <div className="guide-grid">
-                {guideItems.map((item) => (
-                  <article key={item.title} className="guide-item">
-                    <span className="guide-icon">{item.icon}</span>
-                    <strong>{item.title}</strong>
-                    <span>{item.text}</span>
-                  </article>
-                ))}
+              <div className="modal-body">
+                <div className="guide-grid">
+                  {guideItems.map((item) => (
+                    <article key={item.title} className="guide-item">
+                      <span className="guide-icon">{item.icon}</span>
+                      <strong>{item.title}</strong>
+                      <span>{item.text}</span>
+                    </article>
+                  ))}
+                </div>
               </div>
             )}
           </div>
