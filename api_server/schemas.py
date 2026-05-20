@@ -15,6 +15,8 @@ class SensorPayload(BaseModel):
 class RealtimeSensorPayload(BaseModel):
     light: float = Field(..., description="Light level")
     distance: float = Field(..., description="Distance in cm")
+    light_raw: Optional[int] = Field(None, description="Raw light sensor value (BH1750 16bit)")
+    water_raw: Optional[int] = Field(None, description="Raw water ADC value")
 
 
 class HourlySensorPayload(BaseModel):
@@ -22,11 +24,20 @@ class HourlySensorPayload(BaseModel):
     humidity: float = Field(..., description="Humidity")
     water_level: float = Field(..., description="Water level")
     water_raw: Optional[int] = Field(None, description="Raw water ADC value")
+    light_raw: Optional[int] = Field(None, description="Raw light sensor value")
+
+
+class RuntimeSettingsPayload(BaseModel):
+    distance_detection_enabled: Optional[bool] = None
+    wake_enabled: Optional[bool] = None
+    web_voice_enabled: Optional[bool] = None
+    distance_threshold_cm: Optional[float] = None
+    distance_inside_threshold: Optional[bool] = None
 
 
 class AskPayload(BaseModel):
     question: str
-    sensor: SensorPayload
+    sensor: Optional[SensorPayload] = None
     session_id: Optional[UUID] = None
     use_sensor_context: bool = True
     persona_memo: Optional[str] = None
@@ -52,6 +63,7 @@ class DeviceEventBasePayload(BaseModel):
     state_alerts: list[str] = Field(default_factory=list)
     generated_text: str = Field("", description="Generated event text")
     played: bool = Field(False, description="Whether TTS was played")
+    status: str = Field("pending", description="Event lifecycle status")
     meta: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -12,6 +12,15 @@ EVENT_TYPE_ALIASES = {
     "sensor-warning": "sensor_warning",
 }
 
+ALLOWED_EVENT_STATUSES = {
+    "pending",
+    "processing",
+    "tts_generated",
+    "playing",
+    "played",
+    "failed",
+}
+
 
 def normalize_event_type(event_type: str) -> str:
     value = str(event_type or "").strip().lower().replace(" ", "_")
@@ -35,6 +44,7 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
     if next_action is not None:
         meta.setdefault("next_action", next_action)
 
+    status = str(payload.get("status") or "pending").strip() or "pending"
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -50,9 +60,10 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
                     state_alerts,
                     generated_text,
                     played,
+                    status,
                     meta
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING
                     event_id,
                     session_id,
@@ -66,6 +77,7 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
                     state_alerts,
                     generated_text,
                     played,
+                    status,
                     meta
                 """,
                 (
@@ -79,6 +91,7 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
                     Json(payload.get("state_alerts") or []),
                     str(payload.get("generated_text") or ""),
                     bool(payload.get("played", False)),
+                    status,
                     Json(meta),
                 ),
             )
@@ -101,6 +114,7 @@ def save_device_event(payload: dict[str, Any]) -> dict[str, Any]:
         "state_alerts": normalize_response_payload(row["state_alerts"]),
         "generated_text": row["generated_text"],
         "played": row["played"],
+        "status": row["status"],
         "meta": normalize_response_payload(row["meta"]),
     }
     return {"saved": True, "event": normalize_response_payload(event)}
@@ -111,6 +125,7 @@ def list_events(
     event_type: Optional[str] = None,
     event_types: Optional[list[str]] = None,
     device_id: Optional[str] = None,
+    status: Optional[str] = None,
     played: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
@@ -143,6 +158,9 @@ def list_events(
     if device_id:
         conditions.append("device_id = %s")
         params.append(device_id)
+    if status:
+        conditions.append("status = %s")
+        params.append(str(status).strip())
     if played is not None:
         conditions.append("played = %s")
         params.append(played)
@@ -167,6 +185,7 @@ def list_events(
                     state_alerts,
                     generated_text,
                     played,
+                    status,
                     meta
                 FROM device_event_log
                 {where_clause}
@@ -193,6 +212,7 @@ def list_events(
                 "state_alerts": normalize_response_payload(row["state_alerts"]),
                 "generated_text": row["generated_text"],
                 "played": row["played"],
+                "status": row["status"],
                 "meta": normalize_response_payload(row["meta"]),
             }
         )
@@ -223,6 +243,7 @@ def get_event(event_id: int) -> dict[str, Any]:
                     state_alerts,
                     generated_text,
                     played,
+                    status,
                     meta
                 FROM device_event_log
                 WHERE event_id = %s
@@ -248,18 +269,23 @@ def get_event(event_id: int) -> dict[str, Any]:
             "state_alerts": normalize_response_payload(row["state_alerts"]),
             "generated_text": row["generated_text"],
             "played": row["played"],
+            "status": row["status"],
             "meta": normalize_response_payload(row["meta"]),
         }
     )
 
 
-def mark_event_played(event_id: int) -> dict[str, Any]:
+def update_event_status(event_id: int, status: str) -> dict[str, Any]:
+    status = str(status or "").strip()
+    if status not in ALLOWED_EVENT_STATUSES:
+        raise HTTPException(status_code=400, detail="unsupported event status")
+    played = status in ("playing", "played")
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE device_event_log
-                SET played = TRUE
+                SET status = %s, played = %s
                 WHERE event_id = %s
                 RETURNING
                     event_id,
@@ -274,9 +300,10 @@ def mark_event_played(event_id: int) -> dict[str, Any]:
                     state_alerts,
                     generated_text,
                     played,
+                    status,
                     meta
                 """,
-                (event_id,),
+                (status, played, event_id),
             )
             row = cur.fetchone()
         conn.commit()
@@ -298,6 +325,11 @@ def mark_event_played(event_id: int) -> dict[str, Any]:
             "state_alerts": normalize_response_payload(row["state_alerts"]),
             "generated_text": row["generated_text"],
             "played": row["played"],
+            "status": row["status"],
             "meta": normalize_response_payload(row["meta"]),
         }
     )
+
+
+def mark_event_played(event_id: int) -> dict[str, Any]:
+    return update_event_status(event_id, "played")

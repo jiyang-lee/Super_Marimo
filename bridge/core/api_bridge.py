@@ -81,6 +81,32 @@ class ApiBridge:
         self.active_session_id = resolved
         return result
 
+    def speak(self, text: str) -> dict[str, Any]:
+        session_id = self.ensure_session()
+        url = f"{self.voice_agent_url}/speak"
+        payload = {
+            "text": text,
+            "session_id": session_id,
+            "save_message": True,
+        }
+        result = _post_json(url, payload, timeout=120)
+        resolved = str(result.get("session_id") or session_id)
+        self._save_session_id(resolved)
+        self.active_session_id = resolved
+        return result
+
+    def update_event_status(self, event_id: int, status: str) -> dict[str, Any]:
+        url = f"{self.api_server_url}/events/{event_id}/status"
+        return _put_json(url, {"status": status}, timeout=10)
+
+    def sensor_runtime_status(self) -> dict[str, Any]:
+        latest = _get_json(f"{self.api_server_url}/sensor/latest", timeout=10)
+        settings = latest.get("runtime_settings") or {}
+        return {
+            "settings": settings,
+            "distance_inside_threshold": bool(latest.get("distance_inside_threshold")),
+        }
+
 
 def _post_json(url: str, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
     data = json.dumps(payload).encode("utf-8")
@@ -90,6 +116,32 @@ def _post_json(url: str, payload: dict[str, Any], timeout: int) -> dict[str, Any
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    try:
+        with urlrequest.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} from {url}: {detail}") from exc
+
+
+def _put_json(url: str, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
+    data = json.dumps(payload).encode("utf-8")
+    request = urlrequest.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="PUT",
+    )
+    try:
+        with urlrequest.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} from {url}: {detail}") from exc
+
+
+def _get_json(url: str, timeout: int) -> dict[str, Any]:
+    request = urlrequest.Request(url, headers={"Accept": "application/json"}, method="GET")
     try:
         with urlrequest.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))

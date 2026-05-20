@@ -5,6 +5,7 @@ import { EventsPage } from './pages/EventsPage';
 import { TestPage } from './pages/TestPage';
 import { HomePage } from './pages/HomePage';
 import { SensorPage } from './pages/SensorPage';
+import { ChatPage } from './pages/ChatPage';
 import { ReportPage } from './pages/ReportPage';
 import { SettingsPage } from './pages/SettingsPage';
 
@@ -17,6 +18,7 @@ function App() {
         <Route path="/test" element={<TestPage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/sensor" element={<SensorPage />} />
+        <Route path="/chat" element={<ChatPage />} />
         <Route path="/report" element={<ReportPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>

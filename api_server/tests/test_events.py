@@ -121,3 +121,31 @@ def test_manual_test_event_routes_to_service(monkeypatch) -> None:
     assert captured["event_type"] == "manual_test"
     assert captured["device_id"] == "test-01"
     assert captured["trigger_source"] == "manual"
+
+
+def test_update_event_status_routes_to_service(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_update_event_status(event_id: int, status: str) -> dict[str, object]:
+        captured["event_id"] = event_id
+        captured["status"] = status
+        return {
+            "event_id": event_id,
+            "status": status,
+            "played": status in {"playing", "played"},
+        }
+
+    monkeypatch.setattr(events_router, "update_event_status", fake_update_event_status)
+
+    client = TestClient(app)
+    response = client.put(
+        "/events/7/status",
+        json={"status": "processing"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["event_id"] == 7
+    assert payload["status"] == "processing"
+    assert captured["event_id"] == 7
+    assert captured["status"] == "processing"

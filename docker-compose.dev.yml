@@ -1,0 +1,37 @@
+# Super Marimo - Dev Mode
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Local development with live code reload and exposed debug ports.
+
+services:
+  api-server:
+    env_file:
+      - .env.gpu
+    volumes:
+      - ./api_server:/app/api_server
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  llm-server:
+    env_file:
+      - .env.gpu
+    volumes:
+      - ./llm_server:/app/llm_server
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  voice-server:
+    env_file:
+      - .env.gpu
+    volumes:
+      - ./voice_server:/app/voice_server
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  voice-agent:
+    env_file:
+      - .env.gpu
+    volumes:
+      - ./voice_agent:/app/voice_agent
+      - ./shared/audio:/app/shared/audio
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -1,0 +1,28 @@
+# Super Marimo - CPU Mode
+# Usage: docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+# Real models on CPU; slower but no GPU required.
+
+services:
+  api-server:
+    env_file:
+      - .env.cpu
+
+  llm-server:
+    env_file:
+      - .env.cpu
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+
+  voice-server:
+    env_file:
+      - .env.cpu
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+
+  voice-agent:
+    env_file:
+      - .env.cpu

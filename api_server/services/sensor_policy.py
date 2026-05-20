@@ -4,14 +4,12 @@ from typing import Any, Optional
 from extensions.db import get_db_connection
 from schemas import RealtimeSensorPayload
 from services.device_event_service import save_device_event
+from services.runtime_settings import get_runtime_settings, set_distance_inside_threshold
 from services.sensor_judge import judge_realtime_state
-from services.sensor_store import get_latest_sensor_row
 from utils import normalize_datetime
 
 
 def get_latest_proactive_greeting_at(conn) -> Optional[datetime]:
-    from config import PROACTIVE_GREETING_COOLDOWN_SECONDS
-
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -21,6 +19,25 @@ def get_latest_proactive_greeting_at(conn) -> Optional[datetime]:
             ORDER BY created_at DESC
             LIMIT 1
             """
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return row["created_at"]
+
+
+def get_latest_sensor_warning_at(conn, device_id: str) -> Optional[datetime]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT created_at
+            FROM device_event_log
+            WHERE event_type = 'sensor_warning'
+              AND device_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (device_id,),
         )
         row = cur.fetchone()
     if row is None:
@@ -45,6 +62,23 @@ def can_emit_proactive_greeting(conn, *, now: Optional[datetime] = None) -> dict
     }
 
 
+def can_emit_sensor_warning(conn, device_id: str, *, now: Optional[datetime] = None) -> dict[str, Any]:
+    from config import SENSOR_WARNING_COOLDOWN_SECONDS
+
+    current_time = now or datetime.now(timezone.utc)
+    last_warning_at = get_latest_sensor_warning_at(conn, device_id)
+    if last_warning_at is None:
+        return {"allowed": True, "last_warning_at": None, "cooldown_remaining_sec": 0}
+
+    elapsed = (current_time - last_warning_at).total_seconds()
+    cooldown_remaining = max(0, SENSOR_WARNING_COOLDOWN_SECONDS - int(elapsed))
+    return {
+        "allowed": elapsed >= SENSOR_WARNING_COOLDOWN_SECONDS,
+        "last_warning_at": normalize_datetime(last_warning_at),
+        "cooldown_remaining_sec": cooldown_remaining,
+    }
+
+
 def _resolve_greeting_text() -> str:
     from config import (
         LLM_SERVER_URL,
@@ -54,7 +88,15 @@ def _resolve_greeting_text() -> str:
     )
 
     if not PROACTIVE_GREETING_USE_LLM:
-        return PROACTIVE_GREETING_TEXT
+        from random import choice
+
+        greetings = [
+            PROACTIVE_GREETING_TEXT,
+            "안녕? 오늘 하루 어때?",
+            "어서 와. 오늘은 어떤 하루였어?",
+            "안녕. 잠깐 쉬어가도 좋아.",
+        ]
+        return choice([text for text in greetings if text])
 
     import httpx
 
@@ -85,18 +127,58 @@ def build_realtime_next_action(
 ) -> dict[str, Any]:
     from config import (
         PROACTIVE_GREETING_COOLDOWN_SECONDS,
-        PROACTIVE_GREETING_TEXT,
         SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
     )
 
     state = judge_realtime_state(payload)
-    if payload.distance > SENSOR_WARNING_DISTANCE_THRESHOLD_CM:
+    settings = get_runtime_settings()
+    threshold_cm = float(settings.get("distance_threshold_cm") or SENSOR_WARNING_DISTANCE_THRESHOLD_CM)
+    detection_enabled = bool(settings.get("distance_detection_enabled", True))
+    was_inside = bool(settings.get("distance_inside_threshold", False))
+    is_inside = payload.distance <= threshold_cm
+
+    if not detection_enabled:
+        if was_inside:
+            set_distance_inside_threshold(False)
+        return {
+            "type": "none",
+            "reason": "distance_detection_disabled",
+            "threshold_cm": threshold_cm,
+            "distance_cm": payload.distance,
+        }
+
+    if not is_inside:
+        if was_inside:
+            set_distance_inside_threshold(False)
         return {
             "type": "none",
             "reason": "distance_above_threshold",
-            "threshold_cm": SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
+            "threshold_cm": threshold_cm,
             "distance_cm": payload.distance,
         }
+
+    if was_inside:
+        return {
+            "type": "none",
+            "reason": "distance_already_inside_threshold",
+            "threshold_cm": threshold_cm,
+            "distance_cm": payload.distance,
+        }
+
+    set_distance_inside_threshold(True)
+
+    with get_db_connection() as conn:
+        warning_policy = can_emit_sensor_warning(conn, device_id)
+
+    warning_meta = {
+        "policy": "distance_threshold",
+        "threshold_cm": threshold_cm,
+        "distance_cm": payload.distance,
+        "distance_entry": True,
+    }
+    if not warning_policy["allowed"]:
+        warning_meta["skipped_due_to_cooldown"] = True
+        warning_meta["cooldown_remaining_sec"] = warning_policy["cooldown_remaining_sec"]
 
     warning_event = save_device_event(
         {
@@ -108,28 +190,12 @@ def build_realtime_next_action(
             "sensor": payload.model_dump(),
             "state_level": state["level"],
             "state_alerts": state["alerts"],
-            "generated_text": f"distance={payload.distance}cm threshold={SENSOR_WARNING_DISTANCE_THRESHOLD_CM}cm",
-            "played": False,
-            "meta": {
-                "policy": "distance_threshold",
-                "threshold_cm": SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
-                "distance_cm": payload.distance,
-            },
+            "generated_text": "거리 센서가 사용자를 감지했습니다.",
+            "played": True,
+            "status": "played",
+            "meta": warning_meta,
         }
     )
-
-    with get_db_connection() as conn:
-        greeting_policy = can_emit_proactive_greeting(conn)
-
-    if not greeting_policy["allowed"]:
-        return {
-            "type": "sensor_warning",
-            "threshold_cm": SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
-            "distance_cm": payload.distance,
-            "device_event": warning_event["event"],
-            "cooldown_remaining_sec": greeting_policy["cooldown_remaining_sec"],
-            "last_greeting_at": greeting_policy["last_greeting_at"],
-        }
 
     greeting_text = _resolve_greeting_text()
 
@@ -147,16 +213,17 @@ def build_realtime_next_action(
             "played": False,
             "meta": {
                 "policy": "distance_threshold",
-                "threshold_cm": SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
+                "threshold_cm": threshold_cm,
                 "distance_cm": payload.distance,
                 "cooldown_seconds": PROACTIVE_GREETING_COOLDOWN_SECONDS,
+                "cooldown_ignored_for_distance_entry": True,
                 "warning_event_id": warning_event["event"]["event_id"],
             },
         }
     )
     return {
         "type": "proactive_greeting",
-        "threshold_cm": SENSOR_WARNING_DISTANCE_THRESHOLD_CM,
+        "threshold_cm": threshold_cm,
         "distance_cm": payload.distance,
         "text": greeting_text,
         "device_event": greeting_event["event"],

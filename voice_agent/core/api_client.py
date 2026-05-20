@@ -26,6 +26,11 @@ class ApiClient:
         response.raise_for_status()
         return response.json()
 
+    def put_json(self, url: str, payload: dict[str, Any], timeout: Optional[float] = None) -> dict[str, Any]:
+        response = requests.put(url, json=payload, timeout=timeout or self.timeout)
+        response.raise_for_status()
+        return response.json()
+
     # API Server
     def api_health(self) -> dict[str, Any]:
         return self.get_json(f"{self.api_server_url}/health", timeout=10)
@@ -35,6 +40,7 @@ class ApiClient:
         *,
         event_type: Optional[str] = None,
         event_types: Optional[list[str]] = None,
+        status: Optional[str] = None,
         played: Optional[bool] = False,
         limit: int = 10,
         order: str = "desc",
@@ -44,6 +50,8 @@ class ApiClient:
             params["event_type"] = event_type
         if event_types:
             params["event_types"] = event_types
+        if status:
+            params["status"] = status
         if played is not None:
             params["played"] = str(played).lower()
         if order:
@@ -56,6 +64,26 @@ class ApiClient:
         return self.post_json(
             f"{self.api_server_url}/events/{event_id}/played",
             {},
+            timeout=10,
+        )
+
+    def update_event_status(self, event_id: int, status: str) -> dict[str, Any]:
+        return self.put_json(
+            f"{self.api_server_url}/events/{event_id}/status",
+            {"status": status},
+            timeout=10,
+        )
+
+    def save_session_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        meta: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        return self.post_json(
+            f"{self.api_server_url}/sessions/{session_id}/messages",
+            {"role": role, "content": content, "meta": meta or {}},
             timeout=10,
         )
 
@@ -93,9 +121,15 @@ class ApiClient:
     def voice_health(self) -> dict[str, Any]:
         return self.get_json(f"{self.voice_server_url}/health", timeout=10)
 
+    def voice_ready(self) -> dict[str, Any]:
+        return self.get_json(f"{self.voice_server_url}/ready", timeout=10)
+
     # LLM Server
     def llm_generate(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.post_json(f"{self.llm_server_url}/generate", payload)
 
     def llm_health(self) -> dict[str, Any]:
         return self.get_json(f"{self.llm_server_url}/health", timeout=10)
+
+    def llm_ready(self) -> dict[str, Any]:
+        return self.get_json(f"{self.llm_server_url}/ready", timeout=10)

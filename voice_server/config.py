@@ -6,12 +6,14 @@ from typing import Any
 
 logger = logging.getLogger("voice_server")
 
-MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
+RUN_MODE = os.getenv("RUN_MODE", os.getenv("MOCK_MODE", "true").lower() == "true" and "mock" or "gpu").lower()
+MOCK_MODE = RUN_MODE == "mock"
+
 STT_MODEL_SIZE = os.getenv("STT_MODEL_SIZE", "small")
 STT_ACCURATE_MODEL_SIZE = os.getenv("STT_ACCURATE_MODEL_SIZE", "medium")
-STT_DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
-STT_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
-TTS_BACKEND = os.getenv("TTS_BACKEND", "supertonic-3")
+STT_DEVICE = os.getenv("WHISPER_DEVICE", "cpu" if RUN_MODE == "cpu" else "cuda")
+STT_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8" if RUN_MODE == "cpu" else "float16")
+TTS_BACKEND = os.getenv("TTS_BACKEND", "mock" if RUN_MODE == "mock" else "supertonic-3")
 TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "Supertone/supertonic-3")
 TTS_VOICE_NAME = os.getenv("TTS_VOICE_NAME", "F1")
 TTS_LANG = os.getenv("TTS_LANG", "ko")

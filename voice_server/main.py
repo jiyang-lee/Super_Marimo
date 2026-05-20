@@ -2,6 +2,8 @@ import logging
 import os
 import tempfile
 import wave
+import sys
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -13,8 +15,15 @@ from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+CURRENT_DIR = Path(__file__).resolve().parent
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+if "config" in sys.modules:
+    del sys.modules["config"]
+
 from config import (
     MOCK_MODE,
+    RUN_MODE,
     STT_COMPUTE_TYPE,
     STT_DEVICE,
     STT_MODEL_SIZE,
@@ -73,42 +82,77 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    return {"ok": True, "server": "voice"}
+
+
+@app.get("/")
+def root() -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ok": True,
+            "server": "voice",
+            "endpoints": ["/health", "/ready", "/stt", "/tts"],
+        },
+    )
+
+
+@app.get("/favicon.ico")
+def favicon() -> JSONResponse:
+    return JSONResponse(status_code=204, content={})
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
     stt_models_status: dict[str, Any] = {}
-    for key in ("fast", "accurate"):
-        try:
-            get_stt_model(key)
+    if MOCK_MODE:
+        for key in ("fast", "accurate"):
             stt_models_status[key] = {
                 "loaded": True,
-                "device": _STT_RUNTIME_STATES.get(key, {}).get("device", STT_DEVICE),
-                "compute_type": _STT_RUNTIME_STATES.get(key, {}).get("compute_type", STT_COMPUTE_TYPE),
+                "device": STT_DEVICE,
+                "compute_type": STT_COMPUTE_TYPE,
                 "size": _STT_CONFIG[key]["size"],
             }
-        except Exception:
+        ready_state = True
+        tts_ready = True
+        tts_runtime_voice_name = TTS_VOICE_NAME
+        tts_error = None
+    else:
+        for key in ("fast", "accurate"):
             stt_models_status[key] = {
-                "loaded": False,
-                "device": None,
-                "compute_type": None,
+                "loaded": key in _STT_RUNTIME_STATES,
+                "device": _STT_RUNTIME_STATES.get(key, {}).get("device"),
+                "compute_type": _STT_RUNTIME_STATES.get(key, {}).get("compute_type"),
                 "size": _STT_CONFIG[key]["size"],
             }
+        tts_ready = _TTS_RUNTIME_STATE["ready"]
+        ready_state = all(item["loaded"] for item in stt_models_status.values()) and tts_ready
+        tts_runtime_voice_name = _TTS_RUNTIME_STATE["voice_name"]
+        tts_error = _TTS_RUNTIME_STATE["error"]
 
-    return {
-        "ok": True,
-        "server": "voice",
-        "mock_mode": MOCK_MODE,
-        "stt_models": stt_models_status,
-        "stt_device": STT_DEVICE,
-        "stt_compute_type": STT_COMPUTE_TYPE,
-        "tts_backend": TTS_BACKEND,
-        "tts_model": TTS_MODEL_ID,
-        "tts_voice_name": TTS_VOICE_NAME,
-        "tts_voice_names": _TTS_RUNTIME_STATE.get("available_voice_names", []),
-        "tts_lang": TTS_LANG,
-        "tts_ready": _TTS_RUNTIME_STATE["ready"],
-        "tts_runtime_voice_name": _TTS_RUNTIME_STATE["voice_name"],
-        "tts_error": _TTS_RUNTIME_STATE["error"],
-        "tts_cache_dir": str(SUPERTONIC_CACHE_DIR),
-        "tts_model_dir": str(SUPERTONIC_MODEL_DIR),
-    }
+    return JSONResponse(
+        status_code=200 if ready_state else 503,
+        content={
+            "ok": ready_state,
+            "ready": ready_state,
+            "server": "voice",
+            "run_mode": RUN_MODE,
+            "mock_mode": MOCK_MODE,
+            "stt_models": stt_models_status,
+            "stt_device": STT_DEVICE,
+            "stt_compute_type": STT_COMPUTE_TYPE,
+            "tts_backend": TTS_BACKEND,
+            "tts_model": TTS_MODEL_ID,
+            "tts_voice_name": TTS_VOICE_NAME,
+            "tts_voice_names": _TTS_RUNTIME_STATE.get("available_voice_names", []),
+            "tts_lang": TTS_LANG,
+            "tts_ready": tts_ready,
+            "tts_runtime_voice_name": tts_runtime_voice_name,
+            "tts_error": tts_error,
+            "tts_cache_dir": str(SUPERTONIC_CACHE_DIR),
+            "tts_model_dir": str(SUPERTONIC_MODEL_DIR),
+        },
+    )
 
 
 @app.post("/stt")
@@ -174,34 +218,35 @@ def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
         return FileResponse(output_path, media_type="audio/wav", filename="mock_tts.wav")
 
     wav_bytes, _resolved_voice = synthesize(payload.text, voice_name=payload.voice_name)
-    from supertonic import TTS
     tts_instance = get_tts_runtime()["tts"]
-    TTS.save_audio(wav_bytes, output_path)
+    tts_instance.save_audio(wav_bytes, output_path)
     background_tasks.add_task(os.remove, output_path)
     return FileResponse(output_path, media_type="audio/wav", filename="tts.wav")
 
 
 @app.on_event("startup")
 def startup_load_stt_models():
-    if not MOCK_MODE:
-        logger.info("Eager-loading STT models...")
-        for key in ("fast", "accurate"):
-            try:
-                get_stt_model(key)
-                state = _STT_RUNTIME_STATES.get(key, {})
-                logger.info(
-                    "STT model '%s' (%s) loaded on %s",
-                    key,
-                    _STT_CONFIG[key]["size"],
-                    state.get("device", "unknown"),
-                )
-            except Exception as exc:
-                logger.error("Failed to load STT model '%s': %s", key, exc)
+    if MOCK_MODE:
+        logger.info("Mock mode: skipping model eager-loading.")
+        return
+    logger.info("Eager-loading STT models...")
+    for key in ("fast", "accurate"):
         try:
-            logger.info("Eager-loading TTS model and voice style...")
-            runtime = get_tts_runtime()
-            logger.info("TTS voice style ready: %s", runtime["voice_name"])
+            get_stt_model(key)
+            state = _STT_RUNTIME_STATES.get(key, {})
+            logger.info(
+                "STT model '%s' (%s) loaded on %s",
+                key,
+                _STT_CONFIG[key]["size"],
+                state.get("device", "unknown"),
+            )
         except Exception as exc:
-            _TTS_RUNTIME_STATE.update({"loaded": False, "ready": False, "error": str(exc)})
-            logger.error("Failed to load TTS model: %s", exc)
-            raise
+            logger.error("Failed to load STT model '%s': %s", key, exc)
+    try:
+        logger.info("Eager-loading TTS model and voice style...")
+        runtime = get_tts_runtime()
+        logger.info("TTS voice style ready: %s", runtime["voice_name"])
+    except Exception as exc:
+        _TTS_RUNTIME_STATE.update({"loaded": False, "ready": False, "error": str(exc)})
+        logger.error("Failed to load TTS model: %s", exc)
+        raise

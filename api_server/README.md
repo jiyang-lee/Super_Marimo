@@ -33,6 +33,8 @@ API Server는 Super_Marimo의 중심 저장 및 정책 계층입니다.
 - `POST /sensor/hourly-ingest`
 - `GET /sensor/latest`
 - `GET /sensor/history`
+- `GET /sensor/water-raw-samples`
+- `GET /sensor/light-raw-samples`
 
 ### Sessions
 - `GET /sessions`
@@ -46,5 +48,7 @@ API Server는 Super_Marimo의 중심 저장 및 정책 계층입니다.
 2. `sensor_warning` 이벤트 저장
 3. 쿨다운(기본 60초) 확인
 4. `proactive_greeting` 이벤트 생성
+
+`POST /sensor/hourly-ingest` 호출 시 `water_raw`와 `light_raw`가 있으면 각각 `water_raw_samples`, `light_raw_samples`에 저장합니다.
 
 `PROACTIVE_GREETING_USE_LLM=true` 설정 시 LLM으로 인사 문장을 생성합니다.

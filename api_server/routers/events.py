@@ -1,6 +1,6 @@
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from schemas import DeviceEventPayload, ManualTestEventPayload, WakewordEventPayload
 from services.device_event_service import (
@@ -9,6 +9,7 @@ from services.device_event_service import (
     mark_event_played,
     normalize_event_type,
     save_device_event,
+    update_event_status,
 )
 
 router = APIRouter()
@@ -19,6 +20,7 @@ def device_event_list(
     event_type: Optional[str] = None,
     event_types: Optional[list[str]] = None,
     device_id: Optional[str] = None,
+    status: Optional[str] = None,
     played: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
@@ -28,6 +30,7 @@ def device_event_list(
         event_type=event_type,
         event_types=event_types,
         device_id=device_id,
+        status=status,
         played=played,
         limit=limit,
         offset=offset,
@@ -43,6 +46,15 @@ def device_event_detail(event_id: int) -> dict[str, Any]:
 @router.post("/events/{event_id}/played")
 def device_event_mark_played(event_id: int) -> dict[str, Any]:
     return mark_event_played(event_id)
+
+
+@router.put("/events/{event_id}/status")
+def device_event_update_status(event_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    status = str(payload.get("status") or "").strip()
+    allowed = {"pending", "processing", "tts_generated", "playing", "played", "failed"}
+    if status not in allowed:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(allowed)}")
+    return update_event_status(event_id, status)
 
 
 @router.post("/events")

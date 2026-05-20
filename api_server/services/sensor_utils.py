@@ -18,6 +18,10 @@ def build_merged_payload(
             merged_payload["temperature"] = hourly_payload.get("temperature", merged_payload["temperature"])
             merged_payload["humidity"] = hourly_payload.get("humidity", merged_payload["humidity"])
             merged_payload["water_level"] = hourly_payload.get("water_level", merged_payload["water_level"])
+            if "water_raw" in hourly_payload:
+                merged_payload["water_raw"] = hourly_payload.get("water_raw")
+            if "light_raw" in hourly_payload:
+                merged_payload["light_raw"] = hourly_payload.get("light_raw")
         if realtime_row is not None:
             realtime_payload = extract_payload(realtime_row)
             merged_payload["light"] = realtime_payload.get("light", merged_payload["light"])

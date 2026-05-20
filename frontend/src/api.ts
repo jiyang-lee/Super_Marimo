@@ -91,10 +91,13 @@ export interface LlmHealth extends ServiceHealth {
 
 export interface AskResult {
   saved: boolean;
-  answer: string;
+  answer?: string;
+  llm_answer?: string;
+  tts_text?: string;
+  stt_text?: string;
   session_id: string;
   api_health?: { ok: boolean; data?: unknown; error?: string };
-  tts_ok: boolean;
+  tts_ok?: boolean;
   tts_path?: string | null;
   interaction_id?: number | null;
   session_created?: boolean | null;
@@ -150,7 +153,9 @@ export interface SensorReading {
   light?: number;
   water_level?: number;
   distance?: number;
+  water_raw?: number;
   state_level?: string;
+  rag?: string;
   alerts?: string[];
 }
 
@@ -158,6 +163,23 @@ export interface SensorLatest {
   latest_realtime: SensorReading | null;
   latest_hourly: SensorReading | null;
   latest_merged: SensorReading | null;
+  runtime_settings?: RuntimeSettings;
+  distance_inside_threshold?: boolean;
+}
+
+export interface RuntimeSettings {
+  distance_detection_enabled: boolean;
+  wake_enabled: boolean;
+  web_voice_enabled: boolean;
+  distance_threshold_cm: number;
+  distance_inside_threshold: boolean;
+  updated_at?: string;
+}
+
+export interface WaterRawSample {
+  sample_id: number;
+  created_at: string;
+  raw_value: number;
 }
 
 export interface DeviceEvent {
@@ -217,6 +239,42 @@ export async function getLatestSensor(): Promise<SensorLatest> {
 
 export async function getSensorHistory(limit = 24): Promise<{ realtime_history: SensorReading[]; hourly_history: SensorReading[] }> {
   return fetchJson(`${API}/sensor/history?limit=${limit}`);
+}
+
+export async function getWaterRawSamples(limit = 24): Promise<{ limit: number; samples: WaterRawSample[] }> {
+  return fetchJson(`${API}/sensor/water-raw-samples?limit=${limit}`);
+}
+
+export async function getRuntimeSettings(): Promise<{ settings: RuntimeSettings }> {
+  return fetchJson(`${API}/sensor/runtime-settings`);
+}
+
+export async function updateRuntimeSettings(patch: Partial<RuntimeSettings>): Promise<{ settings: RuntimeSettings }> {
+  return fetchJson(`${API}/sensor/runtime-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function ingestRealtimeSensor(payload: { light: number; distance: number }): Promise<unknown> {
+  return fetchJson(`${API}/sensor/realtime-ingest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function askChat(text: string, sessionId?: string): Promise<AskResult> {
+  return fetchJson<AskResult>(`${API}/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question: text,
+      session_id: sessionId ?? null,
+      use_sensor_context: false,
+    }),
+  });
 }
 
 export async function askAgent(text: string, sessionId?: string, options?: AskAgentOptions): Promise<AskResult> {

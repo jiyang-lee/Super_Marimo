@@ -5,13 +5,17 @@ volatile int samplesRead = 0;
 
 void onPDMdata() {
   int bytesAvailable = PDM.available();
-  PDM.read(sampleBuffer, bytesAvailable);
-  samplesRead = bytesAvailable / 2;
+  int bytesToRead = bytesAvailable;
+  if (bytesToRead > (int)sizeof(sampleBuffer)) {
+    bytesToRead = sizeof(sampleBuffer);
+  }
+  bytesToRead -= bytesToRead % 2;
+  PDM.read(sampleBuffer, bytesToRead);
+  samplesRead = bytesToRead / 2;
 }
 
 void setup() {
   Serial.begin(921600);
-  while (!Serial) {}
 
   PDM.onReceive(onPDMdata);
   if (!PDM.begin(1, 16000)) {

@@ -28,9 +28,6 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: "postgresql://marimo:marimo@db-server:5432/marimo"
-      LLM_SERVER_URL: "http://llm-server:8000"
     healthcheck:
       test:
         [
@@ -53,11 +50,6 @@ services:
     container_name: super-marimo-llm-server
     ports:
       - "8001:8000"
-    gpus: all
-    environment:
-      MOCK_MODE: "false"
-      LLM_MODEL_ID: "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
-      LLM_MODEL_REVISION: "c38726a"
     volumes:
       - hf-cache:/root/.cache/huggingface
     healthcheck:
@@ -68,10 +60,10 @@ services:
           "-c",
           "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') else 1)",
         ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   voice-server:
     build:
@@ -82,18 +74,6 @@ services:
     container_name: super-marimo-voice-server
     ports:
       - "8002:8000"
-    gpus: all
-    environment:
-      MOCK_MODE: "false"
-      SUPERTONIC_CACHE_DIR: "/root/.cache/supertonic3"
-      STT_MODEL_SIZE: "medium"
-      STT_ACCURATE_MODEL_SIZE: "medium"
-      WHISPER_DEVICE: "cuda"
-      WHISPER_COMPUTE_TYPE: "float16"
-      TTS_BACKEND: "supertonic-3"
-      TTS_MODEL_ID: "Supertone/supertonic-3"
-      TTS_VOICE_NAME: "F1"
-      TTS_LANG: "ko"
     volumes:
       - hf-cache:/root/.cache/huggingface
       - supertonic-cache:/root/.cache/supertonic3
@@ -103,12 +83,12 @@ services:
           "CMD",
           "python",
           "-c",
-          "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') and data.get('tts_ready') else 1)",
+          "import json, sys, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health')); sys.exit(0 if data.get('ok') else 1)",
         ]
-      interval: 20s
-      timeout: 10s
-      retries: 20
-      start_period: 300s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   voice-agent:
     build:
@@ -119,13 +99,6 @@ services:
     container_name: super-marimo-voice-agent
     ports:
       - "8003:8000"
-    environment:
-      API_SERVER_URL: "http://api-server:8000"
-      VOICE_SERVER_URL: "http://voice-server:8000"
-      LLM_SERVER_URL: "http://llm-server:8000"
-      SESSION_FILE: "/tmp/super_marimo_voice_agent_session.json"
-      SHARED_AUDIO_DIR: "/app/shared/audio"
-      EVENT_POLLER_INTERVAL: "1.0"
     volumes:
       - ./shared/audio:/app/shared/audio
     depends_on:

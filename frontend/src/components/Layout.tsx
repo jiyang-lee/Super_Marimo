@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { path: '/test', label: 'Test' },
   { path: '/home', label: 'Home' },
   { path: '/sensor', label: 'Sensor' },
+  { path: '/chat', label: 'Chat' },
   { path: '/report', label: 'Report' },
   { path: '/settings', label: 'Settings' },
 ];

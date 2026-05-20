@@ -1,0 +1,1408 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Super_Marimo 베타 대화 테스트 콘솔</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f1ea;
+      --surface: #ffffff;
+      --surface-2: #f9faf7;
+      --ink: #222831;
+      --muted: #667085;
+      --line: #d8d2c5;
+      --brand: #006b5f;
+      --brand-2: #7c4d13;
+      --danger: #b42318;
+      --ok: #067647;
+      --warn: #b54708;
+      --code: #101828;
+      --code-text: #ecfdf3;
+      --shadow: 0 12px 32px rgba(27, 34, 44, 0.08);
+      --radius: 8px;
+      --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      --sans: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(0,107,95,0.08) 0, transparent 34%),
+        linear-gradient(180deg, #fbfaf7 0, var(--bg) 100%);
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button {
+      border: 1px solid var(--brand);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.secondary {
+      background: var(--surface);
+      color: var(--brand);
+    }
+    button.neutral {
+      border-color: var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+    }
+    button.danger {
+      border-color: var(--danger);
+      background: var(--danger);
+      color: #fff;
+    }
+    button:disabled {
+      opacity: 0.52;
+      cursor: not-allowed;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 10px 11px;
+    }
+    textarea {
+      min-height: 92px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .page {
+      max-width: 1640px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.86);
+      box-shadow: var(--shadow);
+    }
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .title h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+    .route {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .status-card {
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 0 8px 18px rgba(27, 34, 44, 0.05);
+    }
+    .status-card .name {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status-card .value {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #98a2b3;
+      flex: 0 0 auto;
+    }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.bad { background: var(--danger); }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-head h2 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+    .panel-head p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .console {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+    .terminal {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-radius: var(--radius);
+      background: var(--code);
+      color: var(--code-text);
+    }
+    .terminal-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .terminal-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+    }
+    .terminal-title::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #12b76a;
+      box-shadow: 14px 0 #f79009, 28px 0 #f04438;
+      margin-right: 28px;
+    }
+    .state-pill {
+      padding: 6px 9px;
+      border: 1px solid rgba(236,253,243,0.28);
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #d1fadf;
+    }
+    .terminal-log {
+      display: grid;
+      gap: 5px;
+      max-height: 136px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .terminal-log div {
+      padding: 6px 8px;
+      border-left: 3px solid rgba(209,250,223,0.42);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .chat-feed {
+      display: grid;
+      gap: 10px;
+      min-height: 410px;
+      max-height: 52vh;
+      overflow: auto;
+      padding: 4px 2px;
+    }
+    .bubble {
+      width: fit-content;
+      max-width: min(760px, 88%);
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+    .bubble.user {
+      justify-self: end;
+      background: #e6f4f1;
+      border-color: #a7d7cf;
+    }
+    .bubble.assistant {
+      justify-self: start;
+      background: #fff6e6;
+      border-color: #ead3a8;
+    }
+    .bubble.system {
+      justify-self: center;
+      max-width: 100%;
+      background: #eef4ff;
+      border-color: #c7d7fe;
+      text-align: center;
+    }
+    .bubble .meta {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .bubble .text {
+      white-space: pre-wrap;
+      line-height: 1.58;
+      font-size: 14px;
+    }
+
+    .composer {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-2);
+    }
+    .composer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 10px;
+    }
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .side {
+      display: grid;
+      gap: 12px;
+    }
+    .side .panel { overflow: hidden; }
+    .side-body {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+    .mini-output,
+    pre {
+      margin: 0;
+      padding: 10px;
+      border-radius: var(--radius);
+      background: var(--code);
+      color: var(--code-text);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: auto;
+    }
+    .mini-output { min-height: 150px; max-height: 270px; }
+    audio { width: 100%; }
+
+    .tabs {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .tabbar {
+      display: flex;
+      gap: 0;
+      overflow: auto;
+      border-bottom: 1px solid var(--line);
+      background: #f0ede5;
+    }
+    .tabbar button {
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+      color: var(--ink);
+      min-width: 132px;
+    }
+    .tabbar button.active {
+      background: var(--surface);
+      color: var(--brand);
+      box-shadow: inset 0 -3px 0 var(--brand);
+    }
+    .tab-panel {
+      display: none;
+      padding: 14px;
+    }
+    .tab-panel.active { display: block; }
+    .tab-note {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .tab-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .test-box {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-2);
+    }
+    .test-box h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+    .test-box .desc {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .full { grid-column: 1 / -1; }
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f6f4ee;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: #eef8f5; }
+
+    @media (max-width: 1180px) {
+      .main-grid,
+      .status-strip,
+      .composer-grid,
+      .tab-grid {
+        grid-template-columns: 1fr;
+      }
+      .button-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .topbar { align-items: stretch; }
+      .topbar, .top-actions { flex-direction: column; }
+      .button-grid, .form-grid { grid-template-columns: 1fr; }
+      .chat-feed { max-height: none; }
+      .bubble { max-width: 100%; }
+      .tabbar button { min-width: 118px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="title">
+        <div>
+          <h1>Super_Marimo 베타 대화 테스트 콘솔</h1>
+          <div class="route">/chat 중심 · STT 대기 · 호출어 · 대화 · 세션 저장 검증</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="btnHealth" type="button">상태 새로고침</button>
+        <button id="btnGoHome" class="secondary" type="button">/home</button>
+        <button id="btnGoChat" class="secondary" type="button">/chat</button>
+        <button id="btnGoSensor" class="secondary" type="button">/sensor</button>
+      </div>
+    </header>
+
+    <section class="status-strip" aria-label="서비스 상태">
+      <div class="status-card">
+        <div class="name">API <span id="dotApi" class="dot"></span></div>
+        <div id="statusApi" class="value">대기</div>
+      </div>
+      <div class="status-card">
+        <div class="name">LLM <span id="dotLlm" class="dot"></span></div>
+        <div id="statusLlm" class="value">대기</div>
+      </div>
+      <div class="status-card">
+        <div class="name">Voice <span id="dotVoice" class="dot"></span></div>
+        <div id="statusVoice" class="value">대기</div>
+      </div>
+      <div class="status-card">
+        <div class="name">Agent <span id="dotAgent" class="dot"></span></div>
+        <div id="statusAgent" class="value">대기</div>
+      </div>
+      <div class="status-card">
+        <div class="name">Session <span id="dotSession" class="dot warn"></span></div>
+        <div id="statusSession" class="value">없음</div>
+      </div>
+    </section>
+
+    <main class="main-grid" id="chatArea">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>대화창</h2>
+            <p>명령창에서 보던 흐름을 웹 대화창으로 옮긴 화면입니다.</p>
+          </div>
+          <span id="routeBadge" class="state-pill" style="background:#101828;color:#ecfdf3;">/chat</span>
+        </div>
+        <div class="console">
+          <div class="terminal">
+            <div class="terminal-top">
+              <div class="terminal-title">voice-agent console</div>
+              <div id="statePill" class="state-pill">STT 대기중</div>
+            </div>
+            <div id="terminalLog" class="terminal-log"></div>
+          </div>
+
+          <div id="chatFeed" class="chat-feed"></div>
+
+          <div class="composer">
+            <div class="composer-grid">
+              <div>
+                <label for="chatInput">대화 입력</label>
+                <textarea id="chatInput">안녕, 지금 센서 상태랑 세션 저장이 잘 되는지 확인해줘.</textarea>
+              </div>
+              <div class="form-grid">
+                <div>
+                  <label for="sessionId">session_id</label>
+                  <input id="sessionId" placeholder="비우면 자동 생성" />
+                </div>
+                <div>
+                  <label for="voiceName">TTS voice</label>
+                  <select id="voiceName"><option value="">기본 voice</option></select>
+                </div>
+                <div>
+                  <label for="speakToggle">TTS 생성</label>
+                  <select id="speakToggle">
+                    <option value="true">켜기</option>
+                    <option value="false">끄기</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="sensorContextToggle">센서 문맥</label>
+                  <select id="sensorContextToggle">
+                    <option value="true">사용</option>
+                    <option value="false">미사용</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="button-grid">
+              <button id="btnRecord" type="button">녹음 시작</button>
+              <button id="btnWakeword" type="button">호출어 감지</button>
+              <button id="btnAskApi" type="button">API 대화</button>
+              <button id="btnAskAgent" class="secondary" type="button">Agent 대화</button>
+              <button id="btnEndSession" class="danger" type="button">세션 종료</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>실시간 실행 결과</h2>
+              <p>마지막 요청, TTS 재생, STT 결과를 바로 확인합니다.</p>
+            </div>
+          </div>
+          <div class="side-body">
+            <audio id="audioPlayer" controls></audio>
+            <pre id="lastResponse" class="mini-output">{ "message": "아직 요청 전입니다." }</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>연결 주소</h2>
+              <p>Docker compose를 올린 기본 포트입니다.</p>
+            </div>
+          </div>
+          <div class="side-body">
+            <div class="form-grid">
+              <div><label for="apiBase">API</label><input id="apiBase" value="http://localhost:8000" /></div>
+              <div><label for="llmBase">LLM</label><input id="llmBase" value="http://localhost:8001" /></div>
+              <div><label for="voiceBase">Voice</label><input id="voiceBase" value="http://localhost:8002" /></div>
+              <div><label for="agentBase">Agent</label><input id="agentBase" value="http://localhost:8003" /></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <section class="tabs" aria-label="상세 테스트 탭">
+      <nav class="tabbar">
+        <button class="active" data-tab="sensor" type="button">센서 스냅샷</button>
+        <button data-tab="events" type="button">이벤트 DB</button>
+        <button data-tab="sessions" type="button">대화 세션 DB</button>
+        <button data-tab="persona" type="button">페르소나/TTS</button>
+        <button data-tab="logs" type="button">원본 로그</button>
+      </nav>
+
+      <section id="tab-sensor" class="tab-panel active">
+        <p class="tab-note">센서 테스트는 실시간 값과 시간당 값을 따로 넣고, 서버가 저장한 최신 병합 스냅샷을 확인하는 용도입니다. 대화 전송 시 센서 문맥을 켜면 이 최신값이 함께 전달됩니다.</p>
+        <div class="tab-grid">
+          <div class="test-box">
+            <h3>실시간 센서 입력</h3>
+            <p class="desc">거리와 조도는 호출어/접근 이벤트 판단에 바로 쓰이는 값입니다.</p>
+            <div class="form-grid">
+              <div><label for="light">light</label><input id="light" type="number" value="420" /></div>
+              <div><label for="distance">distance</label><input id="distance" type="number" value="18" /></div>
+            </div>
+            <button id="btnRealtimeSensor" type="button">실시간 센서 저장</button>
+          </div>
+          <div class="test-box">
+            <h3>시간당 센서 입력</h3>
+            <p class="desc">온도, 습도, 수위는 상태 설명과 장기 관찰용 DB 확인에 사용합니다.</p>
+            <div class="form-grid">
+              <div><label for="temperature">temperature</label><input id="temperature" type="number" value="24.5" /></div>
+              <div><label for="humidity">humidity</label><input id="humidity" type="number" value="52" /></div>
+              <div><label for="waterLevel">water_level</label><input id="waterLevel" type="number" value="61" /></div>
+              <div><label for="waterRaw">water_raw</label><input id="waterRaw" type="number" value="610" /></div>
+            </div>
+            <button id="btnHourlySensor" type="button">시간당 센서 저장</button>
+          </div>
+          <div class="test-box full">
+            <h3>센서 DB 조회</h3>
+            <p class="desc">latest는 대화에 붙일 스냅샷, history는 DB에 값이 쌓이는지 보는 영역입니다.</p>
+            <div class="button-grid">
+              <button id="btnSensorLatest" type="button">최신 센서 조회</button>
+              <button id="btnSensorHistory" class="secondary" type="button">센서 히스토리 조회</button>
+              <button id="btnUseSensorInChat" class="neutral" type="button">대화 입력에 센서 요약 붙이기</button>
+              <button id="btnClearSensor" class="neutral" type="button">센서 출력 비우기</button>
+              <button id="btnRefreshAll2" class="secondary" type="button">전체 새로고침</button>
+            </div>
+            <pre id="sensorOutput">{ "message": "센서 조회 전입니다." }</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-events" class="tab-panel">
+        <p class="tab-note">이벤트 DB는 호출어 감지, manual-test, TTS 생성, 재생 완료 상태가 저장되는지 확인하는 영역입니다. 행을 클릭하면 상세 JSON을 볼 수 있습니다.</p>
+        <div class="tab-grid">
+          <div class="test-box">
+            <h3>이벤트 필터</h3>
+            <div class="form-grid">
+              <div><label for="eventTypeFilter">event_type</label><input id="eventTypeFilter" placeholder="wakeword, manual_test ..." /></div>
+              <div>
+                <label for="eventStatusFilter">status</label>
+                <select id="eventStatusFilter">
+                  <option value="">전체</option>
+                  <option value="pending">pending</option>
+                  <option value="processing">processing</option>
+                  <option value="tts_generated">tts_generated</option>
+                  <option value="playing">playing</option>
+                  <option value="played">played</option>
+                  <option value="failed">failed</option>
+                </select>
+              </div>
+            </div>
+            <div class="button-grid">
+              <button id="btnEvents" type="button">이벤트 조회</button>
+              <button id="btnManualEvent" class="secondary" type="button">manual-test 생성</button>
+              <button id="btnEventPlayed" class="neutral" type="button">선택 이벤트 played</button>
+              <button id="btnEventFailed" class="neutral" type="button">선택 이벤트 failed</button>
+              <button id="btnEventDetail" class="secondary" type="button">선택 이벤트 상세</button>
+            </div>
+          </div>
+          <div class="test-box">
+            <h3>선택 이벤트 상세</h3>
+            <pre id="eventDetail">{ "message": "이벤트를 선택하세요." }</pre>
+          </div>
+          <div class="test-box full">
+            <h3>이벤트 목록</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>id</th><th>type</th><th>status</th><th>played</th><th>session</th><th>created_at</th></tr></thead>
+                <tbody id="eventsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-sessions" class="tab-panel">
+        <p class="tab-note">대화 세션 DB는 질문/답변이 저장되는지, 세션 종료 후 ended_at이 찍히는지 확인하는 영역입니다. 대화 후 세션 상세를 눌러 메시지 저장 상태를 확인하세요.</p>
+        <div class="tab-grid">
+          <div class="test-box">
+            <h3>세션 목록</h3>
+            <div class="button-grid">
+              <button id="btnSessions" type="button">세션 목록 조회</button>
+              <button id="btnSessionDetail" class="secondary" type="button">현재 세션 상세</button>
+              <button id="btnTouchSession" class="neutral" type="button">현재 세션 touch</button>
+              <button id="btnEndSession2" class="danger" type="button">현재 세션 종료</button>
+              <button id="btnNewSession" class="neutral" type="button">새 세션 준비</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>session_id</th><th>turns</th><th>messages</th><th>last_seen_at</th><th>ended_at</th></tr></thead>
+                <tbody id="sessionsTable"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="test-box">
+            <h3>세션 상세와 메시지</h3>
+            <pre id="sessionDetail">{ "message": "세션 상세 조회 전입니다." }</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-persona" class="tab-panel">
+        <p class="tab-note">페르소나와 시스템 메모, TTS voice를 바꿔가며 같은 질문이 어떻게 저장되고 말소리로 나오는지 확인합니다. Agent 대화는 voice-agent가 TTS 파일 생성까지 시도합니다.</p>
+        <div class="tab-grid">
+          <div class="test-box">
+            <h3>페르소나 설정</h3>
+            <label for="personaMemo">persona_memo</label>
+            <textarea id="personaMemo">한국인 꼬마 같은 말투를 쓰되 예의 바르고 다정하게 말한다. 짧고 자연스럽게 답하고 너무 유치하지 않게 부드러운 톤을 유지한다.</textarea>
+            <label for="systemMemo">system_memo</label>
+            <textarea id="systemMemo">현재 세션과 센서 상태를 참고해서 답한다. 너무 길게 말하지 말고 한 번에 이해되도록 짧게 정리한다.</textarea>
+          </div>
+          <div class="test-box">
+            <h3>TTS 모델 선택</h3>
+            <p class="desc">Voice 서버의 /ready 응답에 있는 tts_voice_names를 읽어서 선택지를 채웁니다.</p>
+            <button id="btnVoiceReady" type="button">Voice ready 조회</button>
+            <button id="btnTtsOnly" class="secondary" type="button">현재 입력으로 TTS만 재생</button>
+            <pre id="voiceOutput">{ "message": "Voice ready 조회 전입니다." }</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-logs" class="tab-panel">
+        <p class="tab-note">DB 로그와 API 응답을 자세히 보는 영역입니다. 오류가 나면 이 탭의 마지막 응답과 명령 로그를 먼저 확인하면 됩니다.</p>
+        <div class="tab-grid">
+          <div class="test-box">
+            <h3>명령 로그</h3>
+            <pre id="commandOutput">대기 중</pre>
+          </div>
+          <div class="test-box">
+            <h3>마지막 원본 응답</h3>
+            <pre id="rawOutput">{ "message": "아직 요청 전입니다." }</pre>
+          </div>
+          <div class="test-box full">
+            <h3>서비스 health / ready 원본</h3>
+            <pre id="healthOutput">{ "message": "상태 새로고침 전입니다." }</pre>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const state = {
+      route: "chat",
+      mode: "STT 대기중",
+      commands: [],
+      messages: [],
+      lastResponse: null,
+      latestSensor: null,
+      selectedEventId: "",
+      mediaRecorder: null,
+      recordedChunks: [],
+      recording: false,
+      currentAudioUrl: null,
+    };
+
+    const el = {
+      apiBase: $("apiBase"),
+      llmBase: $("llmBase"),
+      voiceBase: $("voiceBase"),
+      agentBase: $("agentBase"),
+      sessionId: $("sessionId"),
+      voiceName: $("voiceName"),
+      speakToggle: $("speakToggle"),
+      sensorContextToggle: $("sensorContextToggle"),
+      chatInput: $("chatInput"),
+      personaMemo: $("personaMemo"),
+      systemMemo: $("systemMemo"),
+      chatFeed: $("chatFeed"),
+      terminalLog: $("terminalLog"),
+      statePill: $("statePill"),
+      routeBadge: $("routeBadge"),
+      audioPlayer: $("audioPlayer"),
+      lastResponse: $("lastResponse"),
+      rawOutput: $("rawOutput"),
+      commandOutput: $("commandOutput"),
+      healthOutput: $("healthOutput"),
+      sensorOutput: $("sensorOutput"),
+      eventsTable: $("eventsTable"),
+      eventDetail: $("eventDetail"),
+      sessionsTable: $("sessionsTable"),
+      sessionDetail: $("sessionDetail"),
+      voiceOutput: $("voiceOutput"),
+    };
+
+    function now() {
+      return new Date().toLocaleTimeString("ko-KR");
+    }
+
+    function pretty(value) {
+      if (typeof value === "string") return value;
+      return JSON.stringify(value, null, 2);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function base(input) {
+      return input.value.trim().replace(/\/+$/, "");
+    }
+
+    function url(input, path) {
+      return base(input) + (path.startsWith("/") ? path : "/" + path);
+    }
+
+    function setMode(mode, detail = "") {
+      state.mode = mode;
+      el.statePill.textContent = detail ? mode + " · " + detail : mode;
+      $("statusSession").textContent = el.sessionId.value.trim() || "없음";
+      $("dotSession").className = "dot " + (el.sessionId.value.trim() ? "ok" : "warn");
+    }
+
+    function log(message) {
+      state.commands.unshift(now() + " | " + message);
+      if (state.commands.length > 80) state.commands.pop();
+      renderCommands();
+    }
+
+    function renderCommands() {
+      el.terminalLog.innerHTML = "";
+      state.commands.slice(0, 10).forEach((line) => {
+        const item = document.createElement("div");
+        item.textContent = line;
+        el.terminalLog.appendChild(item);
+      });
+      el.commandOutput.textContent = state.commands.join("\n") || "대기 중";
+    }
+
+    function addMessage(role, text, meta = "") {
+      state.messages.push({ role, text, meta, time: now() });
+      if (state.messages.length > 100) state.messages.shift();
+      renderMessages();
+    }
+
+    function renderMessages() {
+      el.chatFeed.innerHTML = "";
+      state.messages.forEach((message) => {
+        const bubble = document.createElement("article");
+        bubble.className = "bubble " + message.role;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = message.role + " · " + message.time + (message.meta ? " · " + message.meta : "");
+        const text = document.createElement("div");
+        text.className = "text";
+        text.textContent = message.text;
+        bubble.append(meta, text);
+        el.chatFeed.appendChild(bubble);
+      });
+      el.chatFeed.scrollTop = el.chatFeed.scrollHeight;
+    }
+
+    function setLastResponse(value) {
+      state.lastResponse = value;
+      el.lastResponse.textContent = pretty(value);
+      el.rawOutput.textContent = pretty(value);
+    }
+
+    async function fetchJson(target, options = {}) {
+      const response = await fetch(target, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
+      });
+      const text = await response.text();
+      let body = text;
+      if (text) {
+        try { body = JSON.parse(text); } catch (_error) { body = text; }
+      }
+      if (!response.ok) {
+        const detail = typeof body === "string" ? body : (body.detail || JSON.stringify(body));
+        throw new Error(detail || "HTTP " + response.status);
+      }
+      return body || {};
+    }
+
+    async function fetchBinary(target, options = {}) {
+      const response = await fetch(target, options);
+      if (!response.ok) throw new Error(await response.text());
+      return response.blob();
+    }
+
+    function setService(name, ok, summary) {
+      const dot = $("dot" + name);
+      const label = $("status" + name);
+      dot.className = "dot " + (ok ? "ok" : "bad");
+      label.textContent = summary;
+    }
+
+    async function refreshHealth() {
+      log("서비스 상태 조회 시작");
+      const results = await Promise.allSettled([
+        fetchJson(url(el.apiBase, "/health")),
+        fetchJson(url(el.llmBase, "/ready")),
+        fetchJson(url(el.voiceBase, "/ready")),
+        fetchJson(url(el.agentBase, "/health")),
+      ]);
+      const names = ["Api", "Llm", "Voice", "Agent"];
+      const payload = {};
+      results.forEach((result, index) => {
+        const name = names[index];
+        if (result.status === "fulfilled") {
+          payload[name.toLowerCase()] = result.value;
+          const voiceCount = Array.isArray(result.value.tts_voice_names) ? " · voices " + result.value.tts_voice_names.length : "";
+          setService(name, true, "정상" + voiceCount);
+          if (name === "Voice" && Array.isArray(result.value.tts_voice_names)) {
+            fillVoiceOptions(result.value.tts_voice_names);
+          }
+        } else {
+          payload[name.toLowerCase()] = { error: result.reason.message };
+          setService(name, false, "오류");
+        }
+      });
+      el.healthOutput.textContent = pretty(payload);
+      setLastResponse(payload);
+      log("서비스 상태 조회 완료");
+    }
+
+    function fillVoiceOptions(names) {
+      const current = el.voiceName.value;
+      el.voiceName.innerHTML = '<option value="">기본 voice</option>';
+      names.filter(Boolean).forEach((name) => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        el.voiceName.appendChild(option);
+      });
+      if (current) el.voiceName.value = current;
+    }
+
+    function realtimePayload() {
+      return {
+        light: Number($("light").value),
+        distance: Number($("distance").value),
+      };
+    }
+
+    function hourlyPayload() {
+      return {
+        temperature: Number($("temperature").value),
+        humidity: Number($("humidity").value),
+        water_level: Number($("waterLevel").value),
+        water_raw: Number($("waterRaw").value),
+      };
+    }
+
+    function sensorForAsk() {
+      const latest = state.latestSensor && state.latestSensor.latest_merged ? state.latestSensor.latest_merged : null;
+      if (latest && latest.temperature !== undefined) return latest;
+      return {
+        temperature: Number($("temperature").value),
+        humidity: Number($("humidity").value),
+        light: Number($("light").value),
+        water_level: Number($("waterLevel").value),
+        distance: Number($("distance").value),
+      };
+    }
+
+    async function saveRealtimeSensor() {
+      const body = await fetchJson(url(el.apiBase, "/sensor/realtime-ingest"), {
+        method: "POST",
+        body: JSON.stringify(realtimePayload()),
+      });
+      log("실시간 센서 저장 완료");
+      setLastResponse(body);
+      await loadSensorLatest();
+    }
+
+    async function saveHourlySensor() {
+      const body = await fetchJson(url(el.apiBase, "/sensor/hourly-ingest"), {
+        method: "POST",
+        body: JSON.stringify(hourlyPayload()),
+      });
+      log("시간당 센서 저장 완료");
+      setLastResponse(body);
+      await loadSensorLatest();
+    }
+
+    async function loadSensorLatest() {
+      const body = await fetchJson(url(el.apiBase, "/sensor/latest"));
+      state.latestSensor = body;
+      el.sensorOutput.textContent = pretty(body);
+      setLastResponse(body);
+      return body;
+    }
+
+    async function loadSensorHistory() {
+      const body = await fetchJson(url(el.apiBase, "/sensor/history") + "?limit=20");
+      state.latestSensor = body;
+      el.sensorOutput.textContent = pretty(body);
+      setLastResponse(body);
+      return body;
+    }
+
+    async function triggerWakeword() {
+      setMode("호출어 감지 중");
+      const body = await fetchJson(url(el.apiBase, "/events/wakeword"), {
+        method: "POST",
+        body: JSON.stringify({
+          device_id: "beta-dashboard",
+          trigger_source: "web",
+          distance: Number($("distance").value),
+          sensor: sensorForAsk(),
+          generated_text: "호출어 감지",
+          status: "pending",
+          played: false,
+          meta: { ui: "beta-dashboard" },
+        }),
+      });
+      const event = body.event || body;
+      state.selectedEventId = String(event.id || event.event_id || "");
+      setMode("호출어 감지됨", "대화 가능");
+      addMessage("system", "호출어가 감지되었습니다. 이제 질문을 보내면 같은 세션으로 저장되는지 확인할 수 있습니다.", "wakeword");
+      log("호출어 이벤트 저장: " + (state.selectedEventId || "id 없음"));
+      setLastResponse(body);
+      await loadEvents();
+    }
+
+    async function triggerManualEvent() {
+      const body = await fetchJson(url(el.apiBase, "/events/manual-test"), {
+        method: "POST",
+        body: JSON.stringify({
+          device_id: "beta-dashboard",
+          trigger_source: "web",
+          distance: Number($("distance").value),
+          sensor: sensorForAsk(),
+          generated_text: el.chatInput.value.trim() || "manual test",
+          status: "pending",
+          played: false,
+          meta: { ui: "beta-dashboard" },
+        }),
+      });
+      const event = body.event || body;
+      state.selectedEventId = String(event.id || event.event_id || "");
+      log("manual-test 이벤트 저장: " + (state.selectedEventId || "id 없음"));
+      setLastResponse(body);
+      await loadEvents();
+    }
+
+    function askBody() {
+      return {
+        text: el.chatInput.value.trim(),
+        session_id: el.sessionId.value.trim() || null,
+        sensor: el.sensorContextToggle.value === "true" ? sensorForAsk() : null,
+        use_sensor_context: el.sensorContextToggle.value === "true",
+        persona_memo: el.personaMemo.value.trim() || null,
+        system_memo: el.systemMemo.value.trim() || null,
+      };
+    }
+
+    async function askApi() {
+      const payload = askBody();
+      if (!payload.text) throw new Error("대화 입력이 비어 있습니다.");
+      setMode("대화 전송 중", "API");
+      addMessage("user", payload.text, "입력");
+      const body = await fetchJson(url(el.apiBase, "/voice/ask"), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      handleAskResponse(body, "API");
+      if (el.speakToggle.value === "true") await playTts(extractAnswer(body));
+      return body;
+    }
+
+    async function askAgent() {
+      const payload = askBody();
+      if (!payload.text) throw new Error("대화 입력이 비어 있습니다.");
+      payload.speak = el.speakToggle.value === "true";
+      payload.voice_name = el.voiceName.value || null;
+      setMode("대화 전송 중", "Agent");
+      addMessage("user", payload.text, "입력");
+      const body = await fetchJson(url(el.agentBase, "/ask"), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      handleAskResponse(body, "Agent");
+      return body;
+    }
+
+    function extractAnswer(body) {
+      return String(body.answer || body.llm_answer || body.tts_text || body.message || "").trim();
+    }
+
+    function handleAskResponse(body, source) {
+      const answer = extractAnswer(body);
+      if (body.session_id) el.sessionId.value = body.session_id;
+      addMessage("assistant", answer || "(빈 응답)", source);
+      setMode("STT 대기중", "다음 호출어 또는 입력 대기");
+      log(source + " 대화 응답 수신");
+      setLastResponse(body);
+      loadSessions().catch(handleError);
+      if (el.sessionId.value.trim()) loadSessionDetail(el.sessionId.value.trim()).catch(handleError);
+    }
+
+    async function playTts(text) {
+      if (!text) return;
+      const blob = await fetchBinary(url(el.voiceBase, "/tts"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice_name: el.voiceName.value || null }),
+      });
+      if (state.currentAudioUrl) URL.revokeObjectURL(state.currentAudioUrl);
+      state.currentAudioUrl = URL.createObjectURL(blob);
+      el.audioPlayer.src = state.currentAudioUrl;
+      await el.audioPlayer.play().catch(() => null);
+      log("TTS 재생 요청 완료");
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        throw new Error("이 브라우저에서 MediaRecorder를 사용할 수 없습니다.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.recordedChunks = [];
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.mediaRecorder.addEventListener("dataavailable", (event) => {
+        if (event.data && event.data.size > 0) state.recordedChunks.push(event.data);
+      });
+      state.mediaRecorder.addEventListener("stop", () => {
+        stream.getTracks().forEach((track) => track.stop());
+        sendStt().catch(handleError);
+      });
+      state.mediaRecorder.start();
+      state.recording = true;
+      $("btnRecord").textContent = "녹음 종료";
+      setMode("STT 녹음 중", "마이크 입력 수집");
+      log("녹음 시작");
+    }
+
+    function stopRecording() {
+      if (state.mediaRecorder && state.recording) {
+        state.mediaRecorder.stop();
+        state.recording = false;
+        $("btnRecord").textContent = "녹음 시작";
+        setMode("STT 변환 중", "voice-server /stt");
+        log("녹음 종료");
+      }
+    }
+
+    async function sendStt() {
+      const blob = new Blob(state.recordedChunks, { type: "audio/webm" });
+      const form = new FormData();
+      form.append("audio", blob, "recording.webm");
+      const response = await fetch(url(el.voiceBase, "/stt") + "?model=fast", {
+        method: "POST",
+        body: form,
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || JSON.stringify(body));
+      const text = String(body.text || "").trim();
+      if (text) {
+        el.chatInput.value = text;
+        addMessage("user", text, "STT 결과");
+      } else {
+        addMessage("system", "STT 결과가 비어 있습니다. 더 길게 말하거나 마이크 입력을 확인하세요.", "STT");
+      }
+      setMode("STT 대기중", "변환 완료");
+      log("STT 변환 완료");
+      setLastResponse(body);
+    }
+
+    async function loadEvents() {
+      const params = new URLSearchParams();
+      if ($("eventTypeFilter").value.trim()) params.set("event_type", $("eventTypeFilter").value.trim());
+      if ($("eventStatusFilter").value) params.set("status", $("eventStatusFilter").value);
+      params.set("limit", "50");
+      params.set("order", "desc");
+      const body = await fetchJson(url(el.apiBase, "/events") + "?" + params.toString());
+      const events = body.events || [];
+      renderEvents(events);
+      setLastResponse(body);
+      return body;
+    }
+
+    function renderEvents(events) {
+      el.eventsTable.innerHTML = "";
+      events.forEach((event) => {
+        const eventId = event.id ?? event.event_id;
+        const row = document.createElement("tr");
+        row.className = "clickable";
+        row.dataset.eventId = eventId;
+        row.innerHTML =
+          "<td>" + escapeHtml(eventId) + "</td>" +
+          "<td>" + escapeHtml(event.event_type) + "</td>" +
+          "<td>" + escapeHtml(event.status) + "</td>" +
+          "<td>" + escapeHtml(event.played) + "</td>" +
+          "<td>" + escapeHtml(event.session_id || "-") + "</td>" +
+          "<td>" + escapeHtml(event.created_at || "-") + "</td>";
+        row.addEventListener("click", () => loadEventDetail(eventId).catch(handleError));
+        el.eventsTable.appendChild(row);
+      });
+      if (!events.length) el.eventsTable.innerHTML = '<tr><td colspan="6">이벤트가 없습니다.</td></tr>';
+    }
+
+    async function loadEventDetail(id = state.selectedEventId) {
+      if (!id) throw new Error("선택된 이벤트가 없습니다.");
+      const body = await fetchJson(url(el.apiBase, "/events/" + encodeURIComponent(id)));
+      state.selectedEventId = String(id);
+      el.eventDetail.textContent = pretty(body);
+      setLastResponse(body);
+      return body;
+    }
+
+    async function updateEventStatus(status) {
+      if (!state.selectedEventId) throw new Error("선택된 이벤트가 없습니다.");
+      const body = await fetchJson(url(el.apiBase, "/events/" + encodeURIComponent(state.selectedEventId) + "/status"), {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+      });
+      log("이벤트 상태 변경: " + status);
+      setLastResponse(body);
+      await loadEvents();
+      await loadEventDetail(state.selectedEventId);
+    }
+
+    async function loadSessions() {
+      const body = await fetchJson(url(el.apiBase, "/sessions") + "?limit=30");
+      renderSessions(body.sessions || []);
+      setLastResponse(body);
+      return body;
+    }
+
+    function renderSessions(sessions) {
+      el.sessionsTable.innerHTML = "";
+      sessions.forEach((session) => {
+        const row = document.createElement("tr");
+        row.className = "clickable";
+        row.dataset.sessionId = session.session_id;
+        row.innerHTML =
+          "<td>" + escapeHtml(String(session.session_id || "").slice(0, 14)) + "</td>" +
+          "<td>" + escapeHtml(session.turn_count ?? 0) + "</td>" +
+          "<td>" + escapeHtml(session.message_count ?? 0) + "</td>" +
+          "<td>" + escapeHtml(session.last_seen_at || "-") + "</td>" +
+          "<td>" + escapeHtml(session.ended_at || "-") + "</td>";
+        row.addEventListener("click", () => {
+          el.sessionId.value = session.session_id;
+          loadSessionDetail(session.session_id).catch(handleError);
+        });
+        el.sessionsTable.appendChild(row);
+      });
+      if (!sessions.length) el.sessionsTable.innerHTML = '<tr><td colspan="5">세션이 없습니다.</td></tr>';
+    }
+
+    async function loadSessionDetail(id = el.sessionId.value.trim()) {
+      if (!id) throw new Error("session_id가 없습니다.");
+      const body = await fetchJson(url(el.apiBase, "/sessions/" + encodeURIComponent(id)));
+      el.sessionDetail.textContent = pretty(body);
+      setLastResponse(body);
+      $("statusSession").textContent = id;
+      $("dotSession").className = "dot ok";
+      return body;
+    }
+
+    async function touchSession() {
+      const id = el.sessionId.value.trim();
+      if (!id) throw new Error("session_id가 없습니다.");
+      const body = await fetchJson(url(el.apiBase, "/sessions/" + encodeURIComponent(id) + "/touch"), { method: "POST" });
+      log("세션 touch 완료");
+      setLastResponse(body);
+      await loadSessionDetail(id);
+    }
+
+    async function endSession() {
+      const id = el.sessionId.value.trim();
+      if (!id) throw new Error("session_id가 없습니다.");
+      const body = await fetchJson(url(el.apiBase, "/sessions/" + encodeURIComponent(id) + "/end"), { method: "POST" });
+      setMode("세션 종료됨", "ended_at 확인");
+      addMessage("system", "세션을 종료했습니다. 아래 대화 세션 DB 탭에서 ended_at을 확인하세요.", "session");
+      log("세션 종료 완료: " + id);
+      setLastResponse(body);
+      await loadSessions();
+      await loadSessionDetail(id);
+    }
+
+    async function loadVoiceReady() {
+      const body = await fetchJson(url(el.voiceBase, "/ready"));
+      el.voiceOutput.textContent = pretty(body);
+      if (Array.isArray(body.tts_voice_names)) fillVoiceOptions(body.tts_voice_names);
+      setLastResponse(body);
+      return body;
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll("[data-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.tab === name);
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === "tab-" + name);
+      });
+    }
+
+    function goRoute(route) {
+      state.route = route;
+      el.routeBadge.textContent = "/" + route;
+      location.hash = route;
+      if (route === "chat") $("chatArea").scrollIntoView({ behavior: "smooth", block: "start" });
+      if (route === "home") window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function appendSensorSummaryToChat() {
+      const sensor = sensorForAsk();
+      el.chatInput.value = el.chatInput.value.trim() + "\n\n[센서 스냅샷]\n" + pretty(sensor);
+      log("대화 입력에 센서 요약 추가");
+    }
+
+    function handleError(error) {
+      const message = error && error.message ? error.message : String(error);
+      setMode("오류", message);
+      addMessage("system", "오류: " + message, "error");
+      log("ERROR: " + message);
+      setLastResponse({ error: message });
+    }
+
+    function bind() {
+      $("btnHealth").addEventListener("click", () => refreshHealth().catch(handleError));
+      $("btnRefreshAll2").addEventListener("click", () => refreshAll().catch(handleError));
+      $("btnGoHome").addEventListener("click", () => goRoute("home"));
+      $("btnGoChat").addEventListener("click", () => goRoute("chat"));
+      $("btnGoSensor").addEventListener("click", () => window.open("sensor-dashboard.html", "_blank", "noopener"));
+      $("btnWakeword").addEventListener("click", () => triggerWakeword().catch(handleError));
+      $("btnAskApi").addEventListener("click", () => askApi().catch(handleError));
+      $("btnAskAgent").addEventListener("click", () => askAgent().catch(handleError));
+      $("btnEndSession").addEventListener("click", () => endSession().catch(handleError));
+      $("btnEndSession2").addEventListener("click", () => endSession().catch(handleError));
+      $("btnRealtimeSensor").addEventListener("click", () => saveRealtimeSensor().catch(handleError));
+      $("btnHourlySensor").addEventListener("click", () => saveHourlySensor().catch(handleError));
+      $("btnSensorLatest").addEventListener("click", () => loadSensorLatest().catch(handleError));
+      $("btnSensorHistory").addEventListener("click", () => loadSensorHistory().catch(handleError));
+      $("btnUseSensorInChat").addEventListener("click", appendSensorSummaryToChat);
+      $("btnClearSensor").addEventListener("click", () => { el.sensorOutput.textContent = '{ "message": "센서 출력 비움" }'; });
+      $("btnEvents").addEventListener("click", () => loadEvents().catch(handleError));
+      $("btnManualEvent").addEventListener("click", () => triggerManualEvent().catch(handleError));
+      $("btnEventPlayed").addEventListener("click", () => updateEventStatus("played").catch(handleError));
+      $("btnEventFailed").addEventListener("click", () => updateEventStatus("failed").catch(handleError));
+      $("btnEventDetail").addEventListener("click", () => loadEventDetail().catch(handleError));
+      $("btnSessions").addEventListener("click", () => loadSessions().catch(handleError));
+      $("btnSessionDetail").addEventListener("click", () => loadSessionDetail().catch(handleError));
+      $("btnTouchSession").addEventListener("click", () => touchSession().catch(handleError));
+      $("btnNewSession").addEventListener("click", () => {
+        el.sessionId.value = "";
+        $("statusSession").textContent = "없음";
+        $("dotSession").className = "dot warn";
+        addMessage("system", "새 세션을 준비했습니다. 다음 대화에서 서버가 session_id를 발급합니다.", "session");
+      });
+      $("btnVoiceReady").addEventListener("click", () => loadVoiceReady().catch(handleError));
+      $("btnTtsOnly").addEventListener("click", () => playTts(el.chatInput.value.trim()).catch(handleError));
+      $("btnRecord").addEventListener("click", () => {
+        if (state.recording) stopRecording();
+        else startRecording().catch(handleError);
+      });
+      document.querySelectorAll("[data-tab]").forEach((button) => {
+        button.addEventListener("click", () => switchTab(button.dataset.tab));
+      });
+      window.addEventListener("hashchange", () => {
+        const next = location.hash.replace("#", "") || "chat";
+        if (next === "home" || next === "chat") goRoute(next);
+      });
+    }
+
+    async function refreshAll() {
+      await Promise.allSettled([
+        refreshHealth(),
+        loadSensorLatest(),
+        loadEvents(),
+        loadSessions(),
+        loadVoiceReady(),
+      ]);
+      log("전체 새로고침 완료");
+    }
+
+    function init() {
+      bind();
+      addMessage("system", "STT 대기중입니다. 녹음하거나 호출어 감지를 눌러 대화 테스트를 시작하세요.", "startup");
+      log("베타 대화 테스트 콘솔 준비");
+      setMode("STT 대기중", "호출어 또는 녹음 대기");
+      goRoute(location.hash.replace("#", "") === "home" ? "home" : "chat");
+      refreshAll().catch(handleError);
+    }
+
+    init();
+  </script>
+</body>
+</html>

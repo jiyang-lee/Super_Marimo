@@ -5,8 +5,6 @@ import wave
 from pathlib import Path
 from typing import Any, Callable
 
-import serial
-
 SAMPLE_RATE = 16_000
 CHANNELS = 1
 SAMPLE_WIDTH = 2
@@ -29,6 +27,8 @@ def compute_rms(frame: bytes) -> float:
 
 
 def open_serial(port: str, baudrate: int):
+    import serial
+
     return serial.Serial(port=port, baudrate=baudrate, timeout=0.25)
 
 
@@ -42,10 +42,30 @@ def wav_bytes_from_pcm(pcm_bytes: bytes) -> bytes:
     return buffer.getvalue()
 
 
-def save_debug_wav(debug_dir: Path, prefix: str, pcm_bytes: bytes) -> Path:
+def prune_debug_wavs(debug_dir: Path, prefix: str, retain_count: int) -> None:
+    if retain_count < 0 or not debug_dir.exists():
+        return
+
+    wav_files = sorted(
+        debug_dir.glob(f"{prefix}-*.wav"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    excess = len(wav_files) - retain_count
+    if excess <= 0:
+        return
+
+    for wav_path in wav_files[:excess]:
+        try:
+            wav_path.unlink()
+        except OSError:
+            pass
+
+
+def save_debug_wav(debug_dir: Path, prefix: str, pcm_bytes: bytes, retain_count: int = 25) -> Path:
     debug_dir.mkdir(parents=True, exist_ok=True)
-    target = debug_dir / f"{prefix}-{int(time.time() * 1000)}.wav"
+    target = debug_dir / f"{prefix}-{time.time_ns()}.wav"
     target.write_bytes(wav_bytes_from_pcm(pcm_bytes))
+    prune_debug_wavs(debug_dir, prefix, retain_count)
     return target
 
 
@@ -53,6 +73,7 @@ class SerialListener:
     def __init__(self, args: Any):
         self.args = args
         self.debug_dir = Path(args.debug_dir)
+        self.debug_retain_count = int(getattr(args, "debug_retain_count", 25))
         self.serial_port = open_serial(args.port, args.baudrate)
 
     def run(
@@ -104,7 +125,7 @@ class SerialListener:
                     if on_speech_ended:
                         on_speech_ended(len(active_frames), silence_hits, max_active_frames)
                     pcm = b"".join(active_frames)
-                    save_debug_wav(self.debug_dir, "segment", pcm)
+                    save_debug_wav(self.debug_dir, "segment", pcm, retain_count=self.debug_retain_count)
                     on_segment(pcm)
                     active = False
                     active_frames = []

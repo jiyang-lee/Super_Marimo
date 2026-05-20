@@ -1,0 +1,22 @@
+# Super Marimo - Mock Mode
+# Usage: docker compose -f docker-compose.yml -f docker-compose.mock.yml up -d
+# No real models loaded; used for flow/integration testing.
+
+services:
+  api-server:
+    env_file:
+      - .env.mock
+
+  llm-server:
+    env_file:
+      - .env.mock
+    # Keep gpus directive harmless in mock mode (models are not loaded)
+
+  voice-server:
+    env_file:
+      - .env.mock
+    # Keep gpus directive harmless in mock mode (models are not loaded)
+
+  voice-agent:
+    env_file:
+      - .env.mock

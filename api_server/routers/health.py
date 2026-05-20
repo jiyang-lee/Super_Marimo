@@ -19,7 +19,8 @@ def health() -> dict[str, Any]:
                     cur.execute("SELECT 1")
             db_status["ok"] = True
         except Exception as exc:
-            db_status["error"] = str(exc)
+            db_status["error"] = f"DB connection failed: {exc}"
+            db_status["action"] = "check db-server logs: docker logs super-marimo-db-server"
 
     return {
         "ok": True,

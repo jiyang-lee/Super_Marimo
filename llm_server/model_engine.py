@@ -40,7 +40,8 @@ def get_model_bundle() -> dict[str, Any]:
             trust_remote_code=True,
         )
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        from config import RUN_MODE
+        device = "cpu" if RUN_MODE == "cpu" else ("cuda" if torch.cuda.is_available() else "cpu")
         if device == "cuda":
             model = model.half()
         model = model.to(device)

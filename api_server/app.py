@@ -1,7 +1,7 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from extensions.db import cleanup_old_realtime_rows, init_db
+from extensions.db import cleanup_old_realtime_rows, init_db, start_cleanup_timer
 from routers.events import router as events_router
 from routers.health import router as health_router
 from routers.interaction import router as interaction_router
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     def startup() -> None:
         init_db()
         cleanup_old_realtime_rows(force=True)
+        start_cleanup_timer()
 
     return app
 

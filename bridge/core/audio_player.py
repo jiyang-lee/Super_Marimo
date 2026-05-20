@@ -1,15 +1,44 @@
 import os
+import re
 import time
 from pathlib import Path
+from typing import Any, Callable, Optional
 
 import winsound
 
 
 class AudioPlayer:
-    def __init__(self, shared_audio_dir: str, poll_interval_ms: int = 200):
+    def __init__(
+        self,
+        shared_audio_dir: str,
+        poll_interval_ms: int = 200,
+        api_bridge: Any = None,
+        on_played: Callable[[str], None] | None = None,
+    ):
         self.audio_dir = Path(shared_audio_dir)
         self.poll_interval_ms = poll_interval_ms
         self._played: set[str] = set()
+        self.api_bridge = api_bridge
+        self.on_played = on_played
+
+    def _extract_event_id(self, name: str) -> Optional[int]:
+        m = re.search(r"^event_(?:.+?)_(\d+)(?:_\d+)?\.wav$", name)
+        if m:
+            return int(m.group(1))
+        return None
+
+    def _should_play_file(self, name: str) -> bool:
+        if name.startswith("event_"):
+            return name.startswith("event_proactive_greeting_")
+        return True
+
+    def _update_status(self, event_id: Optional[int], status: str) -> None:
+        if event_id is None or self.api_bridge is None:
+            return
+        try:
+            self.api_bridge.update_event_status(event_id, status)
+        except Exception as exc:
+            print(f"[audio_player] status update failed: {exc}")
 
     def start(self) -> None:
         print(f"[audio_player] watching {self.audio_dir}")
@@ -24,6 +53,16 @@ class AudioPlayer:
         wav_files = sorted(self.audio_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime)
         for wav_path in wav_files:
             name = wav_path.name
+            if not self._should_play_file(name):
+                event_id = self._extract_event_id(name)
+                print(f"[audio_player] deleting unsupported event audio {name}")
+                self._update_status(event_id, "failed")
+                try:
+                    wav_path.unlink()
+                except OSError:
+                    pass
+                continue
+
             if name in self._played:
                 try:
                     wav_path.unlink()
@@ -32,12 +71,21 @@ class AudioPlayer:
                 self._played.discard(name)
                 continue
 
+            event_id = self._extract_event_id(name)
             print(f"[audio_player] playing {name}")
+            self._update_status(event_id, "playing")
             try:
                 winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
                 print(f"[audio_player] finished {name}")
+                self._update_status(event_id, "played")
+                if name.startswith("event_proactive_greeting_") and self.on_played is not None:
+                    try:
+                        self.on_played(name)
+                    except Exception as exc:
+                        print(f"[audio_player] on_played callback error: {exc}")
             except Exception as exc:
                 print(f"[audio_player] playback error: {exc}")
+                self._update_status(event_id, "failed")
             finally:
                 self._played.add(name)
                 try:

@@ -1,8 +1,17 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { resolve } from 'node:path'
 
 export default defineConfig({
-  plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        betaDashboard: resolve(__dirname, 'beta-dashboard.html'),
+        sensorDashboard: resolve(__dirname, 'sensor-dashboard.html'),
+        sttTest: resolve(__dirname, 'stt-test.html'),
+      },
+    },
+  },
   server: {
     proxy: {
       '/agent': {

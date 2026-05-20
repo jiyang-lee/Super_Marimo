@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+from typing import Any
+
+CURRENT_DIR = Path(__file__).resolve().parent
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+if "config" in sys.modules:
+    del sys.modules["config"]
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,7 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from chain_builder import get_chain
-from config import LLM_MODEL_ID, LLM_MODEL_REVISION, MOCK_MODE, logger
+from config import LLM_MODEL_ID, LLM_MODEL_REVISION, MOCK_MODE, RUN_MODE, logger
 from model_engine import get_readiness_state
 
 
@@ -58,6 +68,31 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/health")
 def health() -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        content={"ok": True, "server": "llm"},
+    )
+
+
+@app.get("/")
+def root() -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ok": True,
+            "server": "llm",
+            "endpoints": ["/health", "/ready", "/generate"],
+        },
+    )
+
+
+@app.get("/favicon.ico")
+def favicon() -> JSONResponse:
+    return JSONResponse(status_code=204, content={})
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
     readiness = get_readiness_state()
     status_code = 200 if readiness["ok"] else 503
     return JSONResponse(
@@ -66,6 +101,7 @@ def health() -> JSONResponse:
             "ok": readiness["ok"],
             "ready": readiness["ready"],
             "server": "llm",
+            "run_mode": RUN_MODE,
             "mock_mode": MOCK_MODE,
             "model": LLM_MODEL_ID,
             "revision": LLM_MODEL_REVISION,

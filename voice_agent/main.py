@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import uuid
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
@@ -17,19 +18,25 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+CURRENT_DIR = Path(__file__).resolve().parent
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+
 from core.api_client import ApiClient
 from core.event_poller import EventPoller
 from core.session_store import SessionStore
 from core.tts_client import TtsClient
 
 
+# Service URLs: default to host loopback for local dev.
+# In Docker containers these are overridden via env_file (.env.gpu / .env.mock etc).
 API_SERVER_URL = os.getenv("API_SERVER_URL", "http://127.0.0.1:8000")
 VOICE_SERVER_URL = os.getenv("VOICE_SERVER_URL", "http://127.0.0.1:8002")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://127.0.0.1:8001")
 SESSION_FILE = Path(os.getenv("SESSION_FILE", "/tmp/super_marimo_voice_agent_session.json"))
 DEFAULT_STT_MODEL = os.getenv("STT_MODEL", "fast")
 VOICE_AGENT_PORT = int(os.getenv("VOICE_AGENT_PORT", "8003"))
-SHARED_AUDIO_DIR = os.getenv("SHARED_AUDIO_DIR", "/app/shared/audio")
+SHARED_AUDIO_DIR = os.getenv("SHARED_AUDIO_DIR", "shared/audio")
 EVENT_POLLER_INTERVAL = float(os.getenv("EVENT_POLLER_INTERVAL", "1.0"))
 
 logger = logging.getLogger("voice_agent")
@@ -95,6 +102,21 @@ class AskResponse(BaseModel):
     messages_saved: Optional[int] = None
 
 
+class SpeakPayload(BaseModel):
+    text: str
+    session_id: Optional[str] = None
+    voice_name: Optional[str] = None
+    save_message: bool = True
+
+
+class SpeakResponse(BaseModel):
+    saved: bool
+    tts_ok: bool
+    tts_path: Optional[str] = None
+    session_id: str
+    message_saved: bool = False
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled voice-agent error: %s", exc)
@@ -113,7 +135,7 @@ def api_health() -> dict[str, Any]:
         data = api_client.api_health()
         return {"ok": True, "data": data}
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": f"api-server unreachable: {exc}", "action": "check api-server logs: docker logs super-marimo-api-server"}
 
 
 def ask_api_server(
@@ -123,7 +145,14 @@ def ask_api_server(
     persona_memo: Optional[str] = None,
     system_memo: Optional[str] = None,
 ) -> dict[str, Any]:
-    return api_client.voice_ask(text, session_id, persona_memo=persona_memo, system_memo=system_memo)
+    try:
+        return api_client.voice_ask(text, session_id, persona_memo=persona_memo, system_memo=system_memo)
+    except requests.HTTPError as exc:
+        logger.error("[ask] api-server returned HTTP error: %s | url=%s | status=%s", exc, exc.request.url if exc.request else "N/A", exc.response.status_code if exc.response else "N/A")
+        raise HTTPException(status_code=502, detail=f"api-server error: {exc}") from exc
+    except requests.RequestException as exc:
+        logger.error("[ask] api-server unreachable: %s | url=%s", exc, getattr(exc, 'request', None) and getattr(exc.request, 'url', None) or "N/A")
+        raise HTTPException(status_code=503, detail=f"api-server unreachable: {exc}") from exc
 
 
 def extract_answer(api_result: dict[str, Any]) -> str:
@@ -196,6 +225,42 @@ def ask(payload: AskPayload) -> AskResponse:
         interaction_id=api_result.get("interaction_id"),
         session_created=api_result.get("session_created"),
         messages_saved=api_result.get("messages_saved"),
+    )
+
+
+@app.post("/speak", response_model=SpeakResponse)
+def speak(payload: SpeakPayload) -> SpeakResponse:
+    session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
+    session_store.save(session_id)
+
+    tts_path: Optional[str] = None
+    tts_ok = False
+    message_saved = False
+
+    if payload.save_message:
+        try:
+            api_client.save_session_message(
+                session_id=session_id,
+                role="assistant",
+                content=payload.text,
+                meta={"source": "voice_agent_speak", "kind": "wake_greeting"},
+            )
+            message_saved = True
+        except Exception as exc:
+            logger.warning("[speak] session_message save failed: %s", exc)
+
+    try:
+        tts_path = synthesize_tts(payload.text, voice_name=payload.voice_name)
+        tts_ok = tts_path is not None
+    except Exception as exc:
+        logger.error("[speak] TTS synthesis failed: %s", exc)
+
+    return SpeakResponse(
+        saved=True,
+        tts_ok=tts_ok,
+        tts_path=tts_path,
+        session_id=session_id,
+        message_saved=message_saved,
     )
 
 

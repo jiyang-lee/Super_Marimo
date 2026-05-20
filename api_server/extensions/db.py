@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 import psycopg
+import threading
 from fastapi import HTTPException
 from psycopg.rows import dict_row
 
@@ -72,6 +73,33 @@ def init_db() -> None:
             )
             cur.execute(
                 """
+                CREATE TABLE IF NOT EXISTS water_raw_samples (
+                    sample_id BIGSERIAL PRIMARY KEY,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    raw_value INTEGER NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS light_raw_samples (
+                    sample_id BIGSERIAL PRIMARY KEY,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    raw_value INTEGER NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runtime_settings (
+                    setting_key TEXT PRIMARY KEY,
+                    setting_value JSONB NOT NULL,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS interaction_log (
                     interaction_id BIGSERIAL PRIMARY KEY,
                     session_id UUID NOT NULL REFERENCES session(session_id) ON DELETE CASCADE,
@@ -128,6 +156,12 @@ def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_sensor_readings_type_created_at ON sensor_readings (sensor_type, created_at DESC)"
             )
             cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_water_raw_samples_created_at ON water_raw_samples (created_at DESC)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_light_raw_samples_created_at ON light_raw_samples (created_at DESC)"
+            )
+            cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_interaction_log_session_created_at ON interaction_log (session_id, created_at DESC)"
             )
             cur.execute(
@@ -138,6 +172,18 @@ def init_db() -> None:
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_device_event_log_session_created_at ON device_event_log (session_id, created_at DESC)"
+            )
+            cur.execute(
+                """
+                ALTER TABLE device_event_log
+                ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending'
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_device_event_log_status
+                ON device_event_log (status, created_at DESC)
+                """
             )
         conn.commit()
 
@@ -169,3 +215,73 @@ def cleanup_old_realtime_rows(force: bool = False) -> int:
 
     last_realtime_cleanup_at = now
     return deleted_count
+
+
+def cleanup_expired_events(force: bool = False) -> dict[str, int]:
+    from config import EVENT_RETENTION_DAYS
+
+    results: dict[str, int] = {}
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            # speech_started / speech_ended
+            for event_type in ("speech_started", "speech_ended"):
+                days = EVENT_RETENTION_DAYS.get(event_type, 1)
+                cur.execute(
+                    """
+                    DELETE FROM device_event_log
+                    WHERE event_type = %s
+                      AND created_at < NOW() - (%s * INTERVAL '1 day')
+                    """,
+                    (event_type, days),
+                )
+                results[event_type] = cur.rowcount
+
+            # proactive_greeting
+            days = EVENT_RETENTION_DAYS.get("proactive_greeting", 30)
+            cur.execute(
+                """
+                DELETE FROM device_event_log
+                WHERE event_type = 'proactive_greeting'
+                  AND created_at < NOW() - (%s * INTERVAL '1 day')
+                """,
+                (days,),
+            )
+            results["proactive_greeting"] = cur.rowcount
+
+            # manual_test
+            days = EVENT_RETENTION_DAYS.get("manual_test", 7)
+            cur.execute(
+                """
+                DELETE FROM device_event_log
+                WHERE event_type = 'manual_test'
+                  AND created_at < NOW() - (%s * INTERVAL '1 day')
+                """,
+                (days,),
+            )
+            results["manual_test"] = cur.rowcount
+
+        conn.commit()
+    return results
+
+
+_cleanup_timer: Optional[threading.Timer] = None
+
+
+def start_cleanup_timer(interval_sec: int = 3600) -> None:
+    global _cleanup_timer
+
+    def _run() -> None:
+        try:
+            cleanup_old_realtime_rows(force=True)
+            cleanup_expired_events(force=True)
+        except Exception:
+            import logging
+            logging.getLogger("db_cleanup").exception("Periodic cleanup failed")
+        finally:
+            start_cleanup_timer(interval_sec)
+
+    if _cleanup_timer is not None:
+        _cleanup_timer.cancel()
+    _cleanup_timer = threading.Timer(interval_sec, _run)
+    _cleanup_timer.daemon = True
+    _cleanup_timer.start()
