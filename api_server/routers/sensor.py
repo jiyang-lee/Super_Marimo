@@ -19,10 +19,29 @@ from utils import normalize_response_payload
 router = APIRouter()
 
 
+def _wake_eligible(merged: dict[str, Any] | None, runtime_settings: dict[str, Any]) -> bool:
+    latest_distance = (merged or {}).get("distance")
+    threshold = float(runtime_settings.get("distance_threshold_cm") or 50)
+    return bool(
+        runtime_settings.get("distance_detection_enabled", True)
+        and runtime_settings.get("wake_enabled", True)
+        and latest_distance is not None
+        and latest_distance >= threshold
+    )
+
+
 def _safe_build_realtime_next_action(payload: RealtimeSensorPayload) -> dict[str, Any]:
     try:
-        return build_realtime_next_action(payload)
+        return build_realtime_next_action(
+            payload,
+            session_id=payload.session_id,
+            device_id=payload.device_id,
+            trigger_source="sensor",
+        )
     except Exception as exc:
+        import logging
+        logger = logging.getLogger("sensor")
+        logger.error("next_action_failed: %s | payload: %s", exc, payload.model_dump(), exc_info=True)
         return {
             "type": "error",
             "reason": "next_action_failed",
@@ -73,6 +92,7 @@ def sensor_latest() -> dict[str, Any]:
         "latest_merged": normalize_response_payload(merged),
         "runtime_settings": runtime_settings,
         "distance_inside_threshold": bool(latest_distance is not None and latest_distance <= threshold),
+        "wake_eligible": _wake_eligible(merged, runtime_settings),
     }
 
 
@@ -94,6 +114,7 @@ def sensor_history(limit: int = 24) -> dict[str, Any]:
         "latest_merged": normalize_response_payload(merged),
         "runtime_settings": runtime_settings,
         "distance_inside_threshold": bool(latest_distance is not None and latest_distance <= threshold),
+        "wake_eligible": _wake_eligible(merged, runtime_settings),
         "realtime_history": normalize_response_payload(realtime_rows),
         "hourly_history": [],
     }

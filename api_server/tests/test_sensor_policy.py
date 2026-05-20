@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from services.sensor_judge import judge_hourly_state, judge_realtime_state
@@ -27,6 +28,40 @@ class _DummyConn:
 
     def cursor(self):
         return _DummyCursor()
+
+
+class _SessionAwareCursor:
+    def __init__(self, row: dict[str, object] | None):
+        self.row = row
+        self.last_sql = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, sql, params=None):
+        self.last_sql = str(sql)
+
+    def fetchone(self):
+        if "FROM session" in self.last_sql:
+            return self.row
+        return None
+
+
+class _SessionAwareConn:
+    def __init__(self, row: dict[str, object] | None):
+        self.row = row
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return _SessionAwareCursor(self.row)
 
 
 def _runtime_settings(**overrides):
@@ -127,6 +162,56 @@ def test_build_realtime_next_action_returns_proactive_greeting_on_distance_entry
     assert [event["event_type"] for event in saved_events] == ["sensor_warning", "proactive_greeting"]
     assert saved_events[0]["status"] == "tts_generated"
     assert saved_events[0]["played"] is False
+
+
+def test_build_realtime_next_action_emits_greeting_even_with_recent_session(monkeypatch) -> None:
+    saved_events: list[dict[str, object]] = []
+    inside_updates: list[bool] = []
+
+    def fake_save_device_event(payload: dict[str, object]) -> dict[str, object]:
+        saved_events.append(payload)
+        return {
+            "saved": True,
+            "event": {
+                "event_id": len(saved_events),
+                "event_type": payload["event_type"],
+            },
+        }
+
+    monkeypatch.setattr("services.sensor_policy.save_device_event", fake_save_device_event)
+    monkeypatch.setattr(
+        "services.sensor_policy.get_db_connection",
+        lambda: _SessionAwareConn({"last_seen_at": datetime.now(timezone.utc), "ended_at": None}),
+    )
+    monkeypatch.setattr("services.sensor_policy.get_runtime_settings", lambda: _runtime_settings())
+    monkeypatch.setattr("services.sensor_policy.set_distance_inside_threshold", lambda inside: inside_updates.append(inside))
+    monkeypatch.setattr(
+        "services.sensor_policy.can_emit_sensor_warning",
+        lambda conn, device_id, now=None: {"allowed": True, "last_warning_at": None, "cooldown_remaining_sec": 0},
+    )
+    monkeypatch.setattr(
+        "services.sensor_policy.can_emit_proactive_greeting",
+        lambda conn: {"allowed": True, "last_greeting_at": None, "cooldown_remaining_sec": 0},
+    )
+    monkeypatch.setattr("services.sensor_policy._resolve_greeting_text", lambda: "안녕하세요. 가까이 오셨네요.")
+
+    payload = SimpleNamespace(
+        light=501.0,
+        distance=49.0,
+        model_dump=lambda: {"distance": 49.0, "light": 501.0},
+    )
+
+    result = build_realtime_next_action(
+        payload,
+        session_id="11111111-1111-1111-1111-111111111111",
+        device_id="rp2040-01",
+        trigger_source="sensor",
+    )
+
+    assert result["type"] == "proactive_greeting"
+    assert result["text"] == "안녕하세요. 가까이 오셨네요."
+    assert inside_updates == [True]
+    assert [event["event_type"] for event in saved_events] == ["sensor_warning", "proactive_greeting"]
 
 
 def test_build_realtime_next_action_skips_when_distance_detection_off(monkeypatch) -> None:

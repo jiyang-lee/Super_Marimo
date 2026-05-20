@@ -52,7 +52,7 @@ class ApiBridge:
         if not self.active_session_id:
             return
         try:
-            url = f"{self.api_server_url}/sessions/{self.active_session_id}/touch"
+            url = f"{self.api_server_url}/sessions/{self.active_session_id}/touch?session_kind=voice"
             _post_json(url, {"touched_by": "bridge"}, timeout=30)
         except Exception as exc:
             print(f"[session] touch failed: {exc}")
@@ -105,6 +105,8 @@ class ApiBridge:
         return {
             "settings": settings,
             "distance_inside_threshold": bool(latest.get("distance_inside_threshold")),
+            "wake_eligible": bool(latest.get("wake_eligible")),
+            "distance_threshold_cm": settings.get("distance_threshold_cm"),
         }
 
 

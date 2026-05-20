@@ -1,5 +1,4 @@
-import os
-import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -20,7 +19,7 @@ class TtsClient:
         prefix: str = "tts",
     ) -> Path:
         wav_bytes = self.api_client.tts(text, voice_name=voice_name)
-        timestamp = int(os.times().system * 1000) if hasattr(os, "times") else 0
+        timestamp = time.time_ns()
         output_path = self.output_dir / f"{prefix}_{timestamp}.wav"
         output_path.write_bytes(wav_bytes)
         return output_path

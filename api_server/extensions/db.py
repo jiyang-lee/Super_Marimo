@@ -32,6 +32,10 @@ def init_db() -> None:
     if not DATABASE_URL:
         return
 
+    # NOTE: PostgreSQL CHECK constraints cannot use parameterized values.
+    # Using string formatting here is acceptable because DEVICE_EVENT_TYPES is a hardcoded,
+    # immutable tuple from config.py. If this ever becomes dynamic or user-configurable,
+    # it MUST be validated and properly escaped to prevent SQL injection.
     allowed_event_types_sql = ", ".join(f"'{event_type}'" for event_type in DEVICE_EVENT_TYPES)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -39,12 +43,32 @@ def init_db() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS session (
                     session_id UUID PRIMARY KEY,
+                    session_kind TEXT NOT NULL DEFAULT 'chat',
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     ended_at TIMESTAMPTZ NULL,
                     turn_count INTEGER NOT NULL DEFAULT 0,
                     meta JSONB NOT NULL DEFAULT '{}'::jsonb
                 )
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE session
+                ADD COLUMN IF NOT EXISTS session_kind TEXT NOT NULL DEFAULT 'chat'
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE session
+                DROP CONSTRAINT IF EXISTS session_session_kind_check
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE session
+                ADD CONSTRAINT session_session_kind_check
+                CHECK (session_kind IN ('chat', 'voice'))
                 """
             )
             cur.execute(
@@ -68,24 +92,6 @@ def init_db() -> None:
                     payload JSONB NOT NULL,
                     state_level TEXT NOT NULL CHECK (state_level IN ('normal', 'warning', 'danger')),
                     state_alerts JSONB NOT NULL DEFAULT '[]'::jsonb
-                )
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS water_raw_samples (
-                    sample_id BIGSERIAL PRIMARY KEY,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    raw_value INTEGER NOT NULL
-                )
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS light_raw_samples (
-                    sample_id BIGSERIAL PRIMARY KEY,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    raw_value INTEGER NOT NULL
                 )
                 """
             )
@@ -150,16 +156,13 @@ def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_session_last_seen_at ON session (last_seen_at DESC)"
             )
             cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_kind_last_seen_at ON session (session_kind, last_seen_at DESC)"
+            )
+            cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_session_message_session_created_at ON session_message (session_id, created_at DESC)"
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_sensor_readings_type_created_at ON sensor_readings (sensor_type, created_at DESC)"
-            )
-            cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_water_raw_samples_created_at ON water_raw_samples (created_at DESC)"
-            )
-            cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_light_raw_samples_created_at ON light_raw_samples (created_at DESC)"
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_interaction_log_session_created_at ON interaction_log (session_id, created_at DESC)"
@@ -202,6 +205,42 @@ def init_db() -> None:
                 ON device_event_log (status, created_at DESC)
                 """
             )
+            cur.execute(
+                """
+                UPDATE session s
+                SET session_kind = 'voice'
+                WHERE session_kind <> 'voice'
+                  AND (
+                    EXISTS (
+                        SELECT 1
+                        FROM session_message sm
+                        WHERE sm.session_id = s.session_id
+                          AND COALESCE(sm.meta->>'source', '') IN ('voice', 'voice_agent', 'voice_agent_speak')
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM interaction_log il
+                        WHERE il.session_id = s.session_id
+                          AND (
+                            COALESCE(il.meta->>'source', '') IN ('voice', 'voice_agent')
+                            OR COALESCE(il.meta->>'session_kind', '') = 'voice'
+                          )
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM device_event_log de
+                        WHERE de.session_id = s.session_id
+                          AND (
+                            de.event_type IN ('wakeword', 'speech_started', 'speech_ended', 'stt_completed', 'llm_completed', 'tts_played', 'sensor_warning', 'proactive_greeting')
+                            OR de.trigger_source IN ('voice', 'voice_agent')
+                          )
+                    )
+                    OR COALESCE(s.meta->>'session_kind', '') = 'voice'
+                  )
+                """
+            )
+            cur.execute("DROP TABLE IF EXISTS water_raw_samples")
+            cur.execute("DROP TABLE IF EXISTS light_raw_samples")
         conn.commit()
 
 

@@ -80,10 +80,14 @@ class ApiClient:
         role: str,
         content: str,
         meta: Optional[dict[str, Any]] = None,
+        session_kind: Optional[str] = None,
     ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"role": role, "content": content, "meta": meta or {}}
+        if session_kind:
+            payload["session_kind"] = session_kind
         return self.post_json(
             f"{self.api_server_url}/sessions/{session_id}/messages",
-            {"role": role, "content": content, "meta": meta or {}},
+            payload,
             timeout=10,
         )
 
@@ -94,12 +98,15 @@ class ApiClient:
         persona_memo: Optional[str] = None,
         system_memo: Optional[str] = None,
         use_sensor_context: bool = True,
+        session_kind: Optional[str] = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "text": text,
             "session_id": session_id,
             "use_sensor_context": use_sensor_context,
         }
+        if session_kind:
+            payload["session_kind"] = session_kind
         if persona_memo:
             payload["persona_memo"] = persona_memo
         if system_memo:

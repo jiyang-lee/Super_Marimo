@@ -3,15 +3,18 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
-from utils import normalize_datetime
+from services.session_kind import normalize_session_kind
+from utils import normalize_datetime, normalize_response_payload
 
 
-def list_sessions(conn, limit: int = 20) -> list[dict[str, Any]]:
+def list_sessions(conn, limit: int = 20, kind: str = "chat") -> list[dict[str, Any]]:
+    resolved_kind = normalize_session_kind(kind)
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT
                 s.session_id,
+                s.session_kind,
                 s.created_at,
                 s.last_seen_at,
                 s.ended_at,
@@ -45,11 +48,12 @@ def list_sessions(conn, limit: int = 20) -> list[dict[str, Any]]:
                     WHERE sm.session_id = s.session_id
                 ) AS message_count
             FROM session s
-            WHERE s.meta IS NULL OR COALESCE((s.meta->>'is_test')::boolean, false) = false
+            WHERE (s.meta IS NULL OR COALESCE((s.meta->>'is_test')::boolean, false) = false)
+              AND s.session_kind = %s
             ORDER BY s.last_seen_at DESC
             LIMIT %s
             """,
-            (limit,),
+            (resolved_kind, limit),
         )
         rows = cur.fetchall() or []
 
@@ -61,6 +65,7 @@ def list_sessions(conn, limit: int = 20) -> list[dict[str, Any]]:
         sessions.append(
             {
                 "session_id": str(row["session_id"]),
+                "session_kind": str(row.get("session_kind") or resolved_kind),
                 "created_at": normalize_datetime(row["created_at"]),
                 "last_seen_at": normalize_datetime(row["last_seen_at"]),
                 "ended_at": normalize_datetime(row["ended_at"]) if row.get("ended_at") else None,
@@ -108,7 +113,7 @@ def fetch_session_detail(conn, session_id: UUID) -> dict[str, Any]:
                 "role": row["role"],
                 "content": row["content"],
                 "created_at": normalize_datetime(row["created_at"]),
-                "meta": row["meta"],
+                "meta": normalize_response_payload(row["meta"]),
             }
         )
 
@@ -119,7 +124,7 @@ def fetch_session_detail(conn, session_id: UUID) -> dict[str, Any]:
             "last_seen_at": normalize_datetime(session_row["last_seen_at"]),
             "ended_at": normalize_datetime(session_row["ended_at"]) if session_row.get("ended_at") else None,
             "turn_count": session_row["turn_count"],
-            "meta": session_row["meta"],
+            "meta": normalize_response_payload(session_row["meta"]),
         },
         "messages": messages,
     }

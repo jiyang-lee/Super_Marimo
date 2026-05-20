@@ -54,8 +54,9 @@ def test_session_end_routes_to_service(monkeypatch) -> None:
 def test_session_touch_routes_to_service(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_ensure_session(conn, session_id):  # noqa: ANN001
+    def fake_ensure_session(conn, session_id, session_kind=None):  # noqa: ANN001
         captured["session_id"] = str(session_id)
+        captured["session_kind"] = session_kind
         return (
             {
                 "session_id": session_id,
@@ -79,3 +80,4 @@ def test_session_touch_routes_to_service(monkeypatch) -> None:
     assert payload["created"] is True
     assert payload["session"]["session_id"] == "11111111-1111-1111-1111-111111111111"
     assert captured["session_id"] == "11111111-1111-1111-1111-111111111111"
+    assert captured["session_kind"] == "chat"

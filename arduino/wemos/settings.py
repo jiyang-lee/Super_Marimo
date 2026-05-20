@@ -1,9 +1,9 @@
 # Auto-generated from .env by deploy.py
-WIFI_SSID = 'U+NetE3CC'
-WIFI_PASSWORD = 'G7D99A@476'
-API_BASE_URL = 'http://192.168.219.43:8000'
-REALTIME_INGEST_URL = 'http://192.168.219.43:8000/sensor/realtime-ingest'
-DEVICE_ID = 'wemos'
+WIFI_SSID = 'KT_GiGA_Mesh_673D'
+WIFI_PASSWORD = '2af91gx378'
+API_BASE_URL = 'http://172.30.1.45:8000'
+REALTIME_INGEST_URL = 'http://172.30.1.45:8000/sensor/realtime-ingest'
+DEVICE_ID = 'wemos_sensor_node'
 POLL_SECONDS = 1
 I2C_SCL_GPIO = 5
 I2C_SDA_GPIO = 4

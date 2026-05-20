@@ -72,7 +72,7 @@ def _patch_common_flow(monkeypatch, runtime_state):
     monkeypatch.setattr(
         service,
         "ensure_session",
-        lambda conn, session_id: (
+        lambda conn, session_id, session_kind=None: (
             {
                 "session_id": session_id,
                 "created_at": None,
@@ -169,6 +169,7 @@ def test_handle_interaction_uses_llm_action_proposal(monkeypatch) -> None:
     result = asyncio.run(
         service.handle_interaction(
             session_id=uuid4(),
+            session_kind="chat",
             text="wake off",
             sensor=None,
             use_sensor_context=True,
@@ -231,6 +232,7 @@ def test_handle_interaction_falls_back_to_text_resolution(monkeypatch) -> None:
     result = asyncio.run(
         service.handle_interaction(
             session_id=uuid4(),
+            session_kind="chat",
             text="distance detection off",
             sensor=None,
             use_sensor_context=True,

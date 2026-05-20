@@ -46,6 +46,15 @@ class _FastAPI:
         return decorator
 
 
+class _BackgroundTasks:
+    def __init__(self):
+        self.tasks = []
+
+    def add_task(self, func, *args, **kwargs):
+        self.tasks.append((func, args, kwargs))
+        return None
+
+
 class _HTTPException(Exception):
     def __init__(self, status_code: int, detail: str):
         super().__init__(detail)
@@ -55,6 +64,7 @@ class _HTTPException(Exception):
 
 fastapi.FastAPI = _FastAPI
 fastapi.HTTPException = _HTTPException
+fastapi.BackgroundTasks = _BackgroundTasks
 
 fastapi_cors = sys.modules.setdefault("fastapi.middleware.cors", types.ModuleType("fastapi.middleware.cors"))
 

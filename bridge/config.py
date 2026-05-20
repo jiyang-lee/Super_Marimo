@@ -32,13 +32,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--shared-audio-dir", default="shared\\audio")
     parser.add_argument("--session-state-file", default="bridge\\session.json")
     parser.add_argument("--history-turns", type=int, default=6)
-    parser.add_argument("--wake-timeout-sec", type=int, default=120)
+    parser.add_argument("--wake-timeout-sec", type=int, default=45)
     parser.add_argument("--start-rms", type=int, default=900)
     parser.add_argument("--stop-rms", type=int, default=500)
     parser.add_argument("--start-frames", type=int, default=2)
-    parser.add_argument("--silence-frames", type=int, default=10)
+    parser.add_argument("--silence-frames", type=int, default=8)
     parser.add_argument("--max-segment-sec", type=float, default=8.0)
-    parser.add_argument("--min-segment-sec", type=float, default=0.7)
+    parser.add_argument("--min-segment-sec", type=float, default=0.3)
+    parser.add_argument(
+        "--wake-min-segment-sec",
+        type=float,
+        default=0.3,
+        help="Minimum segment length when the bridge is idle and waiting for wakeword",
+    )
     parser.add_argument("--pre-roll-frames", type=int, default=8)
     parser.add_argument("--debug-dir", default="bridge\\captures")
     parser.add_argument(
@@ -53,5 +59,47 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=30,
         help="Seconds to keep conversation open after proactive greeting playback",
+    )
+    parser.add_argument(
+        "--reply-boost-sec",
+        type=int,
+        default=12,
+        help="Seconds to keep a short boosted listen window after assistant speech",
+    )
+    parser.add_argument(
+        "--tts-preplay-guard-sec",
+        type=float,
+        default=0.35,
+        help="Seconds to mute STT immediately after an answer is requested, before playback starts",
+    )
+    parser.add_argument(
+        "--reply-min-segment-sec",
+        type=float,
+        default=0.35,
+        help="Minimum segment length during the boosted reply window",
+    )
+    parser.add_argument(
+        "--reply-start-rms",
+        type=int,
+        default=650,
+        help="Lower start RMS threshold during the boosted reply window",
+    )
+    parser.add_argument(
+        "--reply-stop-rms",
+        type=int,
+        default=325,
+        help="Lower stop RMS threshold during the boosted reply window",
+    )
+    parser.add_argument(
+        "--reply-start-frames",
+        type=int,
+        default=1,
+        help="Start frames required during the boosted reply window",
+    )
+    parser.add_argument(
+        "--reply-silence-frames",
+        type=int,
+        default=14,
+        help="Silence frames required during the boosted reply window",
     )
     return parser

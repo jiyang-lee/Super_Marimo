@@ -175,7 +175,7 @@ export function ChatPage() {
   const sessionTitle = activeSession?.title?.trim() || detailTitle || '마리모 대화';
 
   const refreshSessions = async (selectId?: string) => {
-    const rows = await listSessions(30);
+    const rows = await listSessions(30, 'chat');
     setSessions(rows);
 
     const nextId = selectId ?? sessionId ?? rows[0]?.session_id;

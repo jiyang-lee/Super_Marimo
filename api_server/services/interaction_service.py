@@ -15,6 +15,8 @@ from services.sensor_judge import judge_sensor_state
 from services.sensor_store import load_latest_sensor_payload
 from services.session_lifecycle import ensure_session, update_session_meta, update_session_turn
 from services.session_message import fetch_recent_session_messages, save_session_message
+from services.device_event_service import save_device_event
+from services.session_kind import infer_session_kind
 
 from utils import normalize_datetime, normalize_response_payload
 
@@ -79,6 +81,7 @@ async def request_llm(
 async def handle_interaction(
     *,
     session_id: Optional[UUID],
+    session_kind: Optional[str] = None,
     text: str,
     sensor: Optional[SensorPayload],
     use_sensor_context: bool,
@@ -88,6 +91,7 @@ async def handle_interaction(
     is_test: bool = False,
 ) -> dict[str, Any]:
     resolved_session_id = session_id or uuid4()
+    resolved_session_kind = infer_session_kind(session_kind=session_kind, source=source)
     active_sensor: Optional[SensorPayload] = sensor
     state: dict[str, Any] = {"level": "chat", "alerts": []}
     runtime_settings = get_runtime_settings()
@@ -101,7 +105,7 @@ async def handle_interaction(
         state = judge_sensor_state(active_sensor)
 
     with get_db_connection() as conn:
-        session_row, session_created = ensure_session(conn, resolved_session_id)
+        session_row, session_created = ensure_session(conn, resolved_session_id, resolved_session_kind)
         if is_test:
             session_row = update_session_meta(conn, resolved_session_id, {"is_test": True})
         history = fetch_recent_session_messages(conn, resolved_session_id)
@@ -113,10 +117,36 @@ async def handle_interaction(
             text,
             meta={
                 "source": source,
+                "session_kind": resolved_session_kind,
                 "use_sensor_context": use_sensor_context,
                 "session_summary": session_summary,
             },
         )
+        
+        # Create stt_completed event for voice interactions
+        if source in ("voice", "voice_agent"):
+            save_device_event(
+                {
+                    "session_id": str(resolved_session_id),
+                    "event_type": "stt_completed",
+                    "device_id": "default",
+                    "trigger_source": source,
+                    "distance": None,
+                    "sensor": active_sensor.model_dump() if active_sensor else None,
+                    "state_level": state["level"],
+                    "state_alerts": state.get("alerts", []),
+                    "generated_text": text,
+                    "played": False,
+                    "status": "pending",
+                    "meta": {
+                        "source": source,
+                        "session_kind": resolved_session_kind,
+                        "session_created": session_created,
+                        "session_summary": session_summary,
+                        "use_sensor_context": use_sensor_context,
+                    },
+                }
+            )
 
         llm = await request_llm(
             text,
@@ -132,6 +162,29 @@ async def handle_interaction(
         )
         answer = str(llm.get("answer", "")).strip()
         if not answer:
+            # Create failure event when LLM returns no answer
+            if source in ("voice", "voice_agent"):
+                save_device_event(
+                    {
+                        "session_id": str(resolved_session_id),
+                        "event_type": "llm_completed",
+                        "device_id": "default",
+                        "trigger_source": source,
+                        "distance": None,
+                        "sensor": active_sensor.model_dump() if active_sensor else None,
+                        "state_level": state["level"],
+                        "state_alerts": state.get("alerts", []),
+                        "generated_text": "",
+                        "played": False,
+                        "status": "failed",
+                        "meta": {
+                            "source": source,
+                            "session_kind": resolved_session_kind,
+                            "error": "LLM response has no answer",
+                            "session_summary": session_summary,
+                        },
+                    }
+                )
             raise HTTPException(status_code=502, detail="LLM response has no answer")
 
         action_request = normalize_llm_action_proposal(llm.get("action_proposal"))
@@ -181,10 +234,36 @@ async def handle_interaction(
             answer,
             meta={
                 "source": source,
+                "session_kind": resolved_session_kind,
                 "session_summary": session_summary,
                 "action_result": action_result,
             },
         )
+        
+        # Create llm_completed event for voice interactions
+        if source in ("voice", "voice_agent"):
+            save_device_event(
+                {
+                    "session_id": str(resolved_session_id),
+                    "event_type": "llm_completed",
+                    "device_id": "default",
+                    "trigger_source": source,
+                    "distance": None,
+                    "sensor": active_sensor.model_dump() if active_sensor else None,
+                    "state_level": state["level"],
+                    "state_alerts": state.get("alerts", []),
+                    "generated_text": answer,
+                    "played": False,
+                    "status": "pending",
+                    "meta": {
+                        "source": source,
+                        "session_kind": resolved_session_kind,
+                        "session_summary": session_summary,
+                        "action_result": action_result,
+                        "runtime_settings": runtime_settings,
+                    },
+                }
+            )
 
         interaction_payload = active_sensor.model_dump() if active_sensor is not None else {}
         alerts = state.get("alerts") or []
@@ -208,6 +287,7 @@ async def handle_interaction(
                     Json(
                         {
                             "source": source,
+                            "session_kind": resolved_session_kind,
                             "session_created": session_created,
                             "session_summary": session_summary,
                             "action_result": action_result,

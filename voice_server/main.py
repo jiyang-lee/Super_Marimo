@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 import soundfile as sf
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -47,8 +47,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -156,7 +156,7 @@ def ready() -> JSONResponse:
 
 
 @app.post("/stt")
-async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, Any]:
+async def stt(audio: UploadFile = File(...), model: str = "fast", session_id: str = Query(None)) -> dict[str, Any]:
     if model not in {"fast", "accurate"}:
         raise HTTPException(status_code=400, detail="model must be 'fast' or 'accurate'")
 
@@ -184,6 +184,7 @@ async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, A
                 "segments": [],
                 "mock": False,
                 "model": model,
+                "session_id": session_id,
                 "warning": "audio_too_short",
             }
 
@@ -198,6 +199,7 @@ async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, A
             "segments": segment_list,
             "mock": False,
             "model": model,
+            "session_id": session_id,
         }
     finally:
         os.remove(audio_path)

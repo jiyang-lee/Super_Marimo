@@ -20,6 +20,7 @@ def _utf8_json_response(payload: dict[str, Any]) -> Response:
 async def ask(payload: AskPayload) -> Response:
     result = await handle_interaction(
         session_id=payload.session_id,
+        session_kind=payload.session_kind,
         text=payload.question.strip(),
         sensor=payload.sensor,
         use_sensor_context=payload.use_sensor_context,
@@ -39,6 +40,7 @@ async def voice_ask(payload: VoiceAskPayload) -> Response:
 
     result = await handle_interaction(
         session_id=payload.session_id,
+        session_kind=payload.session_kind,
         text=text,
         sensor=payload.sensor,
         use_sensor_context=payload.use_sensor_context,

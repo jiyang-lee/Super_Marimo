@@ -18,6 +18,8 @@ class RealtimeSensorPayload(BaseModel):
     light: float = Field(..., description="Light level")
     distance: float = Field(..., description="Distance in cm")
     water_level: Optional[float] = Field(None, description="Water level")
+    session_id: Optional[str] = Field(None, description="Active session ID if known")
+    device_id: str = Field("", description="Device identifier")
 
 
 
@@ -40,6 +42,7 @@ class AskPayload(BaseModel):
     question: str
     sensor: Optional[SensorPayload] = None
     session_id: Optional[UUID] = None
+    session_kind: Optional[Literal["chat", "voice"]] = None
     use_sensor_context: bool = True
     persona_memo: Optional[str] = None
     system_memo: Optional[str] = None
@@ -50,6 +53,7 @@ class VoiceAskPayload(BaseModel):
     text: str
     sensor: Optional[SensorPayload] = None
     session_id: Optional[UUID] = None
+    session_kind: Optional[Literal["chat", "voice"]] = "voice"
     use_sensor_context: bool = True
     persona_memo: Optional[str] = None
     system_memo: Optional[str] = None

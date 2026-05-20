@@ -122,6 +122,7 @@ export interface AskAgentOptions {
 
 export interface SessionSummary {
   session_id: string;
+  session_kind?: string;
   created_at: string;
   last_seen_at: string;
   ended_at: string | null;
@@ -144,6 +145,7 @@ export interface SessionMessage {
 export interface SessionDetail {
   session: {
     session_id: string;
+    session_kind?: string;
     created_at: string;
     last_seen_at: string;
     ended_at: string | null;
@@ -226,8 +228,12 @@ export async function checkLlmHealth(): Promise<LlmHealth> {
   return fetchJson<LlmHealth>(`${LLM}/health`);
 }
 
-export async function listSessions(limit = 5): Promise<SessionSummary[]> {
-  const data = await fetchJson<{ sessions: SessionSummary[] }>(`${API}/sessions?limit=${limit}`);
+export async function listSessions(limit = 5, kind: 'chat' | 'voice' = 'chat'): Promise<SessionSummary[]> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    kind,
+  });
+  const data = await fetchJson<{ sessions: SessionSummary[] }>(`${API}/sessions?${params.toString()}`);
   return data.sessions ?? [];
 }
 
@@ -292,6 +298,7 @@ export async function askChat(text: string, sessionId?: string, isTest?: boolean
     body: JSON.stringify({
       question: text,
       session_id: sessionId ?? null,
+      session_kind: 'chat',
       use_sensor_context: true,
       is_test: isTest ?? null,
     }),

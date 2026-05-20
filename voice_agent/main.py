@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -48,6 +48,7 @@ event_poller = EventPoller(
     api_client,
     tts_client,
     interval_sec=EVENT_POLLER_INTERVAL,
+    event_types=["proactive_greeting"],
 )
 
 
@@ -65,8 +66,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -96,6 +97,7 @@ class AskResponse(BaseModel):
     session_id: str
     api_health: dict[str, Any]
     tts_ok: bool
+    tts_queued: bool = False
     tts_path: Optional[str] = None
     interaction_id: Optional[int] = None
     session_created: Optional[bool] = None
@@ -112,6 +114,7 @@ class SpeakPayload(BaseModel):
 class SpeakResponse(BaseModel):
     saved: bool
     tts_ok: bool
+    tts_queued: bool = False
     tts_path: Optional[str] = None
     session_id: str
     message_saved: bool = False
@@ -152,6 +155,7 @@ def ask_api_server(
             persona_memo=persona_memo,
             system_memo=system_memo,
             use_sensor_context=True,
+            session_kind="voice",
         )
     except requests.HTTPError as exc:
         logger.error("[ask] api-server returned HTTP error: %s | url=%s | status=%s", exc, exc.request.url if exc.request else "N/A", exc.response.status_code if exc.response else "N/A")
@@ -173,9 +177,9 @@ def extract_answer(api_result: dict[str, Any]) -> str:
     return answer
 
 
-def synthesize_tts(text: str, voice_name: Optional[str] = None) -> Optional[str]:
+def synthesize_tts(text: str, voice_name: Optional[str] = None, prefix: str = "ask") -> Optional[str]:
     try:
-        path = tts_client.synthesize_to_file(text, voice_name=voice_name, prefix="ask")
+        path = tts_client.synthesize_to_file(text, voice_name=voice_name, prefix=prefix)
         return str(path)
     except Exception as exc:
         logger.warning("TTS synthesis failed: %s", exc)
@@ -196,27 +200,44 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(payload: AskPayload) -> AskResponse:
+def ask(payload: AskPayload, background_tasks: BackgroundTasks = None) -> AskResponse:
     session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
     session_store.save(session_id)
 
     a_health = api_health()
     if not a_health.get("ok"):
+        logger.error("[ask] api-server unavailable: %s", a_health.get("error"))
         raise HTTPException(status_code=503, detail=f"api-server unavailable: {a_health.get('error')}")
 
-    api_result = ask_api_server(
-        payload.text,
-        session_id,
-        persona_memo=payload.persona_memo,
-        system_memo=payload.system_memo,
-    )
+    try:
+        api_result = ask_api_server(
+            payload.text,
+            session_id,
+            persona_memo=payload.persona_memo,
+            system_memo=payload.system_memo,
+        )
+    except HTTPException as exc:
+        logger.error("[ask] voice interaction failed: %s | session_id=%s | text=%s", exc.detail, session_id, payload.text)
+        raise
+    except Exception as exc:
+        logger.error("[ask] unexpected error in voice interaction: %s | session_id=%s", exc, session_id)
+        raise HTTPException(status_code=500, detail="Unexpected error in voice interaction") from exc
+    
     answer = extract_answer(api_result)
     tts_path: Optional[str] = None
     tts_ok = False
+    tts_queued = False
 
     if payload.speak:
-        tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
-        tts_ok = tts_path is not None
+        if background_tasks is not None:
+            background_tasks.add_task(synthesize_tts, answer, payload.voice_name, "ask")
+            tts_queued = True
+            tts_ok = True
+        else:
+            tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
+            tts_ok = tts_path is not None
+            if not tts_ok:
+                logger.warning("[ask] TTS synthesis failed for answer: %s | session_id=%s", answer[:100], session_id)
 
     resolved_session_id = str(api_result.get("session_id") or session_id)
     session_store.save(resolved_session_id)
@@ -227,6 +248,7 @@ def ask(payload: AskPayload) -> AskResponse:
         session_id=resolved_session_id,
         api_health=a_health,
         tts_ok=tts_ok,
+        tts_queued=tts_queued,
         tts_path=tts_path,
         interaction_id=api_result.get("interaction_id"),
         session_created=api_result.get("session_created"),
@@ -235,13 +257,14 @@ def ask(payload: AskPayload) -> AskResponse:
 
 
 @app.post("/speak", response_model=SpeakResponse)
-def speak(payload: SpeakPayload) -> SpeakResponse:
+def speak(payload: SpeakPayload, background_tasks: BackgroundTasks = None) -> SpeakResponse:
     session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
     session_store.save(session_id)
 
     tts_path: Optional[str] = None
     tts_ok = False
     message_saved = False
+    tts_queued = False
 
     if payload.save_message:
         try:
@@ -250,20 +273,27 @@ def speak(payload: SpeakPayload) -> SpeakResponse:
                 role="assistant",
                 content=payload.text,
                 meta={"source": "voice_agent_speak", "kind": "wake_greeting"},
+                session_kind="voice",
             )
             message_saved = True
         except Exception as exc:
             logger.warning("[speak] session_message save failed: %s", exc)
 
     try:
-        tts_path = synthesize_tts(payload.text, voice_name=payload.voice_name)
-        tts_ok = tts_path is not None
+        if background_tasks is not None:
+            background_tasks.add_task(synthesize_tts, payload.text, payload.voice_name, "speak")
+            tts_ok = True
+            tts_queued = True
+        else:
+            tts_path = synthesize_tts(payload.text, voice_name=payload.voice_name, prefix="speak")
+            tts_ok = tts_path is not None
     except Exception as exc:
         logger.error("[speak] TTS synthesis failed: %s", exc)
 
     return SpeakResponse(
         saved=True,
         tts_ok=tts_ok,
+        tts_queued=tts_queued,
         tts_path=tts_path,
         session_id=session_id,
         message_saved=message_saved,
