@@ -49,7 +49,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const res = await updateRuntimeSettings({ web_voice_enabled: !settings.web_voice_enabled });
       setSettings(res.settings);
     } catch (e) {
-      alert(e instanceof Error ? e.message : '구동 모드 전환에 실패했습니다.');
+      alert(e instanceof Error ? e.message : '운영 모드 전환에 실패했습니다.');
     } finally {
       setLoading(false);
     }

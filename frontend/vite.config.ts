@@ -15,22 +15,22 @@ export default defineConfig({
   server: {
     proxy: {
       '/agent': {
-        target: 'http://localhost:8003',
+        target: 'http://localhost:9003',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/agent/, ''),
       },
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:9000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/voice': {
-        target: 'http://localhost:8002',
+        target: 'http://localhost:9002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/voice/, ''),
       },
       '/llm': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8104',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/llm/, ''),
       },

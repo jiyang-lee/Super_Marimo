@@ -27,7 +27,10 @@ services:
       db-server:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "9000:8000"
+    environment:
+      DATABASE_URL: "postgresql://marimo:marimo@db-server:5432/marimo"
+      LLM_SERVER_URL: "http://llm-server:8000"
     healthcheck:
       test:
         [
@@ -49,7 +52,7 @@ services:
         REQUIREMENTS_FILE: requirements-llm.txt
     container_name: super-marimo-llm-server
     ports:
-      - "8001:8000"
+      - "8104:8000"
     volumes:
       - hf-cache:/root/.cache/huggingface
     healthcheck:
@@ -73,7 +76,7 @@ services:
         REQUIREMENTS_FILE: requirements-voice.txt
     container_name: super-marimo-voice-server
     ports:
-      - "8002:8000"
+      - "9002:8000"
     volumes:
       - hf-cache:/root/.cache/huggingface
       - supertonic-cache:/root/.cache/supertonic3
@@ -98,7 +101,11 @@ services:
         REQUIREMENTS_FILE: requirements-voice-agent.txt
     container_name: super-marimo-voice-agent
     ports:
-      - "8003:8000"
+      - "9003:8000"
+    environment:
+      API_SERVER_URL: "http://api-server:8000"
+      VOICE_SERVER_URL: "http://voice-server:8000"
+      LLM_SERVER_URL: "http://llm-server:8000"
     volumes:
       - ./shared/audio:/app/shared/audio
     depends_on:
