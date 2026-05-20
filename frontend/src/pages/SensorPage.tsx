@@ -67,6 +67,14 @@ const VIEW_TABS: { key: ViewMode; label: string }[] = [
 const CHART_SIZE = { width: 980, height: 380 };
 const CHART_PADDING = { top: 28, right: 46, bottom: 54, left: 66 };
 const CHART_Y_TICKS = [0, 25, 50, 75, 100];
+const CHART_X_TICKS = [
+  { label: '0', index: 0 },
+  { label: '1주차', index: 6 },
+  { label: '2주차', index: 13 },
+  { label: '3주차', index: 20 },
+  { label: '4주차', index: 27 },
+  { label: '5주차', index: 30 },
+];
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
@@ -104,26 +112,20 @@ function buildChartRows(month: number): ChartRow[] {
   const monthSeed = month - 1;
   const baseMonth = String(month).padStart(2, '0');
 
-  return Array.from({ length: 4 }, (_, index) => {
-    const wave = Math.sin((monthSeed + index + 1) * 0.6);
-    const drift = Math.cos((monthSeed + index + 1) * 0.45);
+  return Array.from({ length: 31 }, (_, index) => {
+    const day = index + 1;
+    const wave = Math.sin((monthSeed + day) * 0.45);
+    const drift = Math.cos((monthSeed + day) * 0.32);
 
-    const temperature = round1(23.4 + monthSeed * 0.16 + index * 0.28 + wave * 0.7);
-    const humidity = round1(44.8 + monthSeed * 0.22 + index * 0.35 + drift * 0.9);
-    const water = round1(79.5 - monthSeed * 0.12 + index * 0.18 + wave * 0.8);
-    const light = Math.round(470 + monthSeed * 14 + index * 32);
+    const temperature = round1(23.4 + monthSeed * 0.12 + day * 0.04 + wave * 0.65);
+    const humidity = round1(44.8 + monthSeed * 0.16 + day * 0.08 + drift * 0.75);
+    const water = round1(79.5 - monthSeed * 0.08 + day * 0.05 + wave * 0.55);
+    const light = Math.round(460 + monthSeed * 12 + day * 9 + drift * 36);
 
     return {
-      label: `${index + 1}주차`,
-      title: formatMonthPointLabel(month, index),
-      dateRange:
-        index === 0
-          ? `${baseMonth}.01 ~ ${baseMonth}.07`
-          : index === 1
-            ? `${baseMonth}.08 ~ ${baseMonth}.14`
-            : index === 2
-              ? `${baseMonth}.15 ~ ${baseMonth}.21`
-              : `${baseMonth}.22 ~ ${baseMonth}.31`,
+      label: `${day}일`,
+      title: `${month}월 ${day}일`,
+      dateRange: `${baseMonth}.${String(day).padStart(2, '0')}`,
       temperature,
       humidity,
       water,
@@ -638,42 +640,19 @@ export function SensorPage() {
                         className="sensor-chart-shell__axis"
                       />
 
-                      {chartRows.map((row, index) => {
-                        const x = CHART_PADDING.left + stepX * index;
+                      {CHART_X_TICKS.map((tick) => {
+                        const x = CHART_PADDING.left + stepX * tick.index;
                         return (
                           <text
-                            key={row.label}
+                            key={tick.label}
                             x={x}
                             y={CHART_SIZE.height - 18}
                             textAnchor="middle"
                             className="sensor-chart-shell__week-label"
                           >
-                            {row.label}
+                            {tick.label}
                           </text>
                         );
-                      })}
-
-                      {pointsBySeries.map((points, seriesIndex) => {
-                        const seriesConfig = series[seriesIndex];
-                        return points.map((point, pointIndex) => {
-                          const baselineY = CHART_SIZE.height - CHART_PADDING.bottom;
-                          const lineY = Math.min(point.y, baselineY);
-                          return (
-                            <g key={`${seriesConfig.label}-${pointIndex}`}>
-                              <line
-                                x1={point.x}
-                                y1={lineY}
-                                x2={point.x}
-                                y2={baselineY}
-                                stroke={seriesConfig.color}
-                                strokeWidth="8"
-                                strokeLinecap="round"
-                                strokeOpacity="0.18"
-                              />
-                              <circle cx={point.x} cy={point.y} r="0.1" opacity="0" />
-                            </g>
-                          );
-                        });
                       })}
 
                       {series.map((item, seriesIndex) => {
@@ -740,10 +719,10 @@ export function SensorPage() {
                                         style={{ filter: 'drop-shadow(0 8px 16px rgba(88,49,22,0.12))' }}
                                       />
                                       <text x="14" y="22" className="sensor-chart-tooltip__title">
-                                        {activePoint.dateRange}
+                                        {activePoint.title}
                                       </text>
                                       <text x="14" y="42" className="sensor-chart-tooltip__meta">
-                                        {activePoint.title}
+                                        {activePoint.dateRange}
                                       </text>
                                       <text x="14" y="64" className="sensor-chart-tooltip__line">
                                         온도
