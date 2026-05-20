@@ -264,6 +264,21 @@
     border-color: rgba(255, 255, 255, 0.12);
   }
 
+  .header-mode-button {
+    background: linear-gradient(180deg, rgba(248, 255, 186, 0.92), rgba(214, 241, 113, 0.92));
+    color: #214e1d;
+    border: 2px solid rgba(54, 96, 39, 0.75);
+    box-shadow:
+      0 10px 22px rgba(21, 62, 30, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    text-shadow: none;
+  }
+
+  .header-mode-button:disabled {
+    color: rgba(33, 78, 29, 0.72);
+    opacity: 0.92;
+  }
+
   .app-header {
     position: sticky;
     top: 0;
@@ -622,124 +637,6 @@
 
   .quest-copy strong {
     color: #38523c;
-  }
-
-  .quest-checkmark {
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #ffe089 0%, #f2b73e 100%);
-    border: 1px solid #8d5a24;
-    font-weight: 800;
-    color: #4c3417;
-  }
-
-  .marimo-image {
-    display: block;
-    max-width: 100%;
-  }
-
-  .marimo-image--large {
-    width: min(100%, 320px);
-  }
-
-  .hero-marimo.marimo-image--large {
-    width: min(100%, 384px);
-    max-width: none;
-  }
-
-  .marimo-image--medium {
-    width: min(100%, 240px);
-  }
-
-  .marimo-image--small {
-    width: 52px;
-    height: 52px;
-  }
-
-  .sensor-stack {
-    display: grid;
-    gap: 18px;
-  }
-
-  .sensor-switch-panel {
-    min-height: 420px;
-    border: 3px solid #8b5e24;
-    border-radius: 28px;
-    background: linear-gradient(180deg, #fff9e3, #fff3cc);
-    box-shadow: 0 16px 28px rgba(78, 45, 12, 0.18);
-  }
-
-  .sensor-switch-panel .panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 20px 10px;
-    margin-bottom: 0;
-  }
-
-  .panel-title {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 900;
-    color: #355338;
-  }
-
-  .sensor-switch-panel .panel-body {
-    padding: 16px 20px 20px;
-  }
-
-  .mode-switch {
-    display: inline-flex;
-    gap: 10px;
-    padding: 6px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.56);
-    flex-wrap: wrap;
-  }
-
-  .mode-button {
-    min-width: 102px;
-    padding: 12px 18px;
-    border: none;
-    border-radius: 999px;
-    background: transparent;
-    color: #23301a;
-    font-weight: 800;
-  }
-
-  .mode-button.is-active {
-    background: linear-gradient(180deg, #7bd469, #3d8d34);
-    color: #fff;
-  }
-
-  .weekly-list {
-    display: grid;
-    gap: 8px;
-  }
-
-  .weekly-card {
-    min-height: 2cm;
-    padding: 10px 14px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.84);
-    border: 1px solid rgba(148, 99, 37, 0.14);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    font-size: 21px;
-  }
-
-  .weekly-date {
-    color: #238a34;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
-  .weekly-text {
-    text-align: right;
-    white-space: nowrap;
-    color: #443d2d;
   }
 
   @keyframes marimo-idle {

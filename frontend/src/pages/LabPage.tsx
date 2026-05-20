@@ -1,3 +1,4 @@
+import '../styles/lab.css';
 import { useState } from 'react';
 import { DashboardPage } from './DashboardPage';
 import { EventsPage } from './EventsPage';
@@ -15,7 +16,7 @@ export function LabPage() {
   const [activeTab, setActiveTab] = useState<LabTab>('dashboard');
 
   return (
-    <div className="space-y-4">
+    <div className="lab-page space-y-4">
       <div className="panel-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

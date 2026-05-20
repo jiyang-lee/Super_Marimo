@@ -1,3 +1,4 @@
+import '../styles/report.css';
 const weeklyRows = [
   ['06:00', '23°C', '49%', '82%', '280 lux'],
   ['09:00', '24°C', '47%', '81%', '410 lux'],
@@ -9,7 +10,7 @@ const weeklyRows = [
 
 export function ReportPage() {
   return (
-    <section className="sensor-stack report-screen">
+    <section className="report-page sensor-stack report-screen">
       <article className="sensor-switch-panel">
         <div className="panel-head">
           <h1 className="panel-title">주간 리포트</h1>
