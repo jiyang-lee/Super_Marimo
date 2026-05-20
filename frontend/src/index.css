@@ -1062,7 +1062,7 @@
 }
 
 main.app-main:has(.home-stage) {
-  width: min(1420px, calc(100vw - 32px));
+  width: min(1880px, calc(100vw - 40px));
   height: calc(100vh - 112px);
   margin: 0 auto;
   padding: 0;
@@ -1093,7 +1093,7 @@ main.app-main:has(.home-stage) {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 8px 0 0;
+  padding: 10px 0 0;
 }
 
 .home-stage__ground {
@@ -1104,37 +1104,42 @@ main.app-main:has(.home-stage) {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1fr 340px 1fr;
+  grid-template-columns: minmax(0, 620px) 360px minmax(0, 620px);
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 24px;
   width: 100%;
-  max-width: 1520px;
+  max-width: 1660px;
   height: 100%;
-  padding: 28px 24px 24px;
+  padding: 228px 24px 18px;
 }
 
 .home-board,
 .home-hero {
   align-self: center;
+  transform: translateY(30px);
 }
 
 .home-board {
   position: relative;
-  width: 560px;
-  height: 280px;
+  width: 620px;
+  height: 400px;
   min-height: 0;
   min-width: 0;
   padding-top: 0;
-  background: url('/images/incoming/information-board2.png') center top / 100% 100% no-repeat;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  background-position: center top;
 }
 
 .home-board--notice {
   justify-self: end;
+  background-image: url('/images/incoming/information-board2-iong.png');
 }
 
 .home-board--quest {
   justify-self: start;
+  background-image: url('/images/incoming/information-board2-iong.png');
 }
 
 .home-board__title-slot {
@@ -1143,14 +1148,14 @@ main.app-main:has(.home-stage) {
 
 .home-board__title {
   position: absolute;
-  top: 26px;
+  top: 28px;
   left: 50%;
   z-index: 3;
   width: 54%;
   margin: 0;
   transform: translateX(-50%);
   color: #6b4720;
-  font-size: 1.22rem;
+  font-size: 1.32rem;
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -1181,23 +1186,23 @@ main.app-main:has(.home-stage) {
 .home-board__content--notice {
   align-content: start;
   gap: 10px;
-  padding: 84px 112px 52px 108px;
+  padding: 98px 116px 60px 112px;
   overflow: hidden;
 }
 
 .home-board__content--notice p {
   margin: 0;
   color: #5a4528;
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 800;
-  line-height: 1.42;
+  line-height: 1.52;
   text-align: center;
 }
 
 .home-board__content--quest {
   align-content: start;
   gap: 8px;
-  padding: 82px 82px 48px;
+  padding: 94px 84px 56px;
 }
 
 .home-quest-item {
@@ -1262,7 +1267,7 @@ main.app-main:has(.home-stage) {
   display: grid;
   justify-items: center;
   align-content: end;
-  width: 340px;
+  width: 360px;
   height: 100%;
   min-height: 0;
   padding-bottom: 12px;
@@ -1270,30 +1275,30 @@ main.app-main:has(.home-stage) {
 
 .home-hero__bubble {
   position: absolute;
-  top: 70px;
+  top: 84px;
   left: 50%;
-  width: 300px;
+  width: 320px;
   transform: translateX(-50%);
   filter: drop-shadow(0 14px 26px rgba(39, 54, 28, 0.16));
 }
 
 .home-hero__bubble-copy {
   position: absolute;
-  top: 96px;
+  top: 112px;
   left: 50%;
-  width: 200px;
+  width: 220px;
   transform: translateX(-50%);
   color: #4f4122;
-  font-size: 1rem;
+  font-size: 1.02rem;
   font-weight: 900;
   line-height: 1.45;
   text-align: center;
 }
 
 .home-hero__marimo {
-  width: 300px;
+  width: 320px;
   margin-top: auto;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   animation: marimo-hover 3.8s ease-in-out infinite;
 }
 
