@@ -2,3 +2,26 @@
   display: grid;
   gap: 1rem;
 }
+
+.panel-surface {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 2rem;
+  background: linear-gradient(180deg, rgba(14, 26, 46, 0.88), rgba(8, 16, 30, 0.78));
+  box-shadow:
+    0 24px 80px rgba(1, 5, 15, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.panel-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 26%),
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 25%);
+  opacity: 0.95;
+}

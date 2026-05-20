@@ -1,4 +1,5 @@
-import '../styles/report.css';
+﻿import '../styles/report.css';
+
 const weeklyRows = [
   ['06:00', '23°C', '49%', '82%', '280 lux'],
   ['09:00', '24°C', '47%', '81%', '410 lux'],
@@ -15,8 +16,12 @@ export function ReportPage() {
         <div className="panel-head">
           <h1 className="panel-title">주간 리포트</h1>
           <div className="mode-switch">
-            <button type="button" className="mode-button is-active">Weekly</button>
-            <button type="button" className="mode-button">Monthly</button>
+            <button type="button" className="mode-button is-active">
+              Weekly
+            </button>
+            <button type="button" className="mode-button">
+              Monthly
+            </button>
           </div>
         </div>
         <div className="panel-body">

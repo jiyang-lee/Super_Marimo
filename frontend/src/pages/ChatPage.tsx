@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { askChat, getSessionDetail, listSessions, synthesizeTts, updateRuntimeSettings, deleteSession, type SessionDetail, type SessionSummary } from '../api';
+import '../styles/chat.css';
+import '../styles/speech.css';
 
 declare global {
   interface Window {
@@ -355,7 +357,7 @@ export function ChatPage() {
 
                   {/* 실제 대화 말풍선 */}
                   <div className="flex flex-col text-left">
-                    <div className={isUser ? 'chat-bubble-player' : 'chat-bubble-npc'}>
+                    <div className={isUser ? 'chat-bubble-player' : 'speech-bubble'}>
                       <div className="whitespace-pre-wrap font-dot text-sm leading-relaxed text-bark">
                         {sanitizeMessageContent(message.content)}
                       </div>
