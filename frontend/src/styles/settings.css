@@ -6,14 +6,35 @@
 }
 
 .settings-screen {
+  position: relative;
   display: grid;
   place-items: center;
   min-height: calc(100vh - 114px);
   width: 100%;
+  overflow: hidden;
+}
+
+.settings-screen__grass {
+  position: absolute;
+  left: 0;
+  bottom: 120px;
+  z-index: 2;
+  width: 50%;
+  height: calc(75px - 0.24cm);
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.settings-screen__grass--right {
+  left: auto;
+  right: 0;
+  transform: scaleX(-1);
+  transform-origin: center;
 }
 
 .settings-board {
   position: relative;
+  z-index: 3;
   width: min(calc(1180px - 8cm), calc(100% - 4rem));
   padding: calc(28px + 3cm) 30px calc(30px + 3cm);
   border: 0;
@@ -358,6 +379,17 @@
 
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-screen__grass {
+    bottom: 12px;
+    width: 50%;
+    height: calc(64px - 0.225cm);
+  }
+
+  .settings-screen__grass--right {
+    left: auto;
+    right: 0;
   }
 
   .settings-button {

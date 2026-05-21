@@ -85,6 +85,19 @@ export function SettingsPage() {
             </button>
           </div>
         </div>
+
+        <img
+          className="settings-screen__grass"
+          src="/images/incoming/grass-pattern3-1.png"
+          alt=""
+          aria-hidden="true"
+        />
+        <img
+          className="settings-screen__grass settings-screen__grass--right"
+          src="/images/incoming/grass-pattern3-1.png"
+          alt=""
+          aria-hidden="true"
+        />
       </section>
 
       {isVersionModalOpen ? (
