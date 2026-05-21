@@ -1,3 +1,5 @@
+import threading
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -101,6 +103,53 @@ def load_latest_sensor_payload() -> SensorPayload:
     return SensorPayload(**fallback)
 
 
+def aggregate_realtime_as_hourly(conn, hours: int = 6) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                DATE_TRUNC('hour', created_at) AS hour,
+                AVG((payload->>'temperature')::numeric) AS temperature,
+                AVG((payload->>'humidity')::numeric) AS humidity,
+                AVG((payload->>'light')::numeric) AS light,
+                AVG((payload->>'water_level')::numeric) AS water_level
+            FROM sensor_readings
+            WHERE sensor_type = 'realtime'
+              AND created_at >= NOW() - (%s * INTERVAL '1 hour')
+            GROUP BY DATE_TRUNC('hour', created_at)
+            ORDER BY hour ASC
+            """,
+            (hours,),
+        )
+        rows = cur.fetchall() or []
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        payload: dict[str, Any] = {}
+        if row["temperature"] is not None:
+            payload["temperature"] = float(row["temperature"])
+        if row["humidity"] is not None:
+            payload["humidity"] = float(row["humidity"])
+        if row["light"] is not None:
+            payload["light"] = float(row["light"])
+        if row["water_level"] is not None:
+            payload["water_level"] = float(row["water_level"])
+
+        if not payload:
+            continue
+
+        result.append({
+            "reading_id": None,
+            "created_at": normalize_datetime(row["hour"]),
+            "sensor_type": "hourly",
+            "payload": payload,
+            "state_level": "normal",
+            "state_alerts": [],
+            **payload,
+        })
+    return result
+
+
 def save_sensor_reading(
     payload: dict[str, Any],
     sensor_type: str,
@@ -138,3 +187,76 @@ def save_sensor_reading(
         "sensor": normalize_response_payload(payload),
         "state": normalize_response_payload(state),
     }
+
+
+_hourly_timer: Optional[threading.Timer] = None
+
+
+def _seconds_until_next_hour() -> float:
+    now = datetime.now()
+    next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    return (next_hour - now).total_seconds()
+
+
+def run_hourly_aggregation() -> None:
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        AVG((payload->>'temperature')::numeric) AS temperature,
+                        AVG((payload->>'humidity')::numeric) AS humidity,
+                        AVG((payload->>'light')::numeric) AS light,
+                        AVG((payload->>'water_level')::numeric) AS water_level
+                    FROM sensor_readings
+                    WHERE sensor_type = 'realtime'
+                      AND created_at >= DATE_TRUNC('hour', NOW() - INTERVAL '1 hour')
+                      AND created_at < DATE_TRUNC('hour', NOW())
+                    """
+                )
+                row = cur.fetchone()
+
+            if row and any(v is not None for v in row.values()):
+                payload: dict[str, Any] = {}
+                if row["temperature"] is not None:
+                    payload["temperature"] = float(row["temperature"])
+                if row["humidity"] is not None:
+                    payload["humidity"] = float(row["humidity"])
+                if row["light"] is not None:
+                    payload["light"] = float(row["light"])
+                if row["water_level"] is not None:
+                    payload["water_level"] = float(row["water_level"])
+
+                if payload:
+                    from schemas import HourlySensorPayload
+                    from services.sensor_judge import judge_hourly_state
+
+                    hp = HourlySensorPayload(**payload)
+                    metrics = compute_sensor_metrics(conn, current_payload=payload, current_sensor_type="hourly")
+                    state = judge_hourly_state(hp, metrics=metrics)
+                    save_sensor_reading(payload, "hourly", state)
+                    print(f"[hourly] aggregated and saved at {datetime.now().isoformat()} | payload={payload}")
+                else:
+                    print(f"[hourly] empty payload at {datetime.now().isoformat()}")
+            else:
+                print(f"[hourly] no data to aggregate at {datetime.now().isoformat()}")
+    except Exception as exc:
+        import logging
+        logging.getLogger("hourly_aggregation").exception("Hourly aggregation failed")
+
+
+def _hourly_timer_callback() -> None:
+    run_hourly_aggregation()
+    start_hourly_aggregation_timer()
+
+
+def start_hourly_aggregation_timer() -> None:
+    global _hourly_timer
+    if _hourly_timer is not None:
+        _hourly_timer.cancel()
+    wait = _seconds_until_next_hour()
+    _hourly_timer = threading.Timer(wait, _hourly_timer_callback)
+    _hourly_timer.daemon = True
+    _hourly_timer.start()
+    print(f"[hourly] timer scheduled in {wait:.0f}s")

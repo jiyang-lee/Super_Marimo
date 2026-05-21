@@ -59,6 +59,12 @@ _SETTING_CUES = (
     "threshold",
 )
 
+_DEMO_MOOD_CUES = ("기분", "어때")
+_DEMO_ROLE_CUES = ("뭘 할 수 있어", "뭐 할 수 있어", "무엇을 할 수 있어")
+_DEMO_SING_CUES = ("노래", "랩", "장기자랑")
+_CARE_GUIDE_CUES = ("팁", "가이드", "키우기", "관리", "어떻게 키워")
+_PROACTIVE_GREETING_CUES = ("proactive_greeting_distance",)
+
 
 def _normalize(text: str) -> str:
     value = (text or "").casefold()
@@ -117,6 +123,22 @@ def _is_sensor_risk_question(payload: Any) -> bool:
     return _contains_any(question, _RISK_CUES)
 
 
+def _is_demo_mood_question(question: str) -> bool:
+    return all(cue in question for cue in _DEMO_MOOD_CUES)
+
+def _is_demo_role_question(question: str) -> bool:
+    return _contains_any(question, _DEMO_ROLE_CUES)
+
+def _is_demo_sing_question(question: str) -> bool:
+    return _contains_any(question, _DEMO_SING_CUES)
+
+def _is_care_guide_question(question: str) -> bool:
+    return _contains_any(question, _CARE_GUIDE_CUES)
+
+def _is_proactive_greeting(question: str) -> bool:
+    return _contains_any(question, _PROACTIVE_GREETING_CUES)
+
+
 def _sensor_summary(payload: Any) -> str:
     sensor = _payload_dict(getattr(payload, "sensor", None))
     state = _payload_dict(getattr(payload, "state", None))
@@ -155,17 +177,32 @@ def _weather_contract(payload: Any) -> dict[str, Any]:
     sensor = _payload_dict(getattr(payload, "sensor", None))
     temperature = sensor.get("temperature")
     humidity = sensor.get("humidity")
+    light = sensor.get("light") or sensor.get("light_normalized_0_100")
+    question = _normalize(_question_text(payload))
 
-    parts = ["현재 날씨는 직접 조회하지 않고, 세부 정보로만 안내합니다."]
-    if temperature is not None:
-        parts.append(f"기온은 {float(temperature):.1f}도입니다.")
-    if humidity is not None:
-        parts.append(f"습도는 {float(humidity):.1f}%입니다.")
-    if len(parts) == 1:
-        parts.append("참고할 날씨 정보가 없습니다.")
+    parts = []
+    # 개별 센서 질문 매칭
+    if "온도" in question or "기온" in question:
+        if temperature is not None:
+            parts.append(f"현재 온도는 {float(temperature):.1f}도입니다.")
+    if "습도" in question:
+        if humidity is not None:
+            parts.append(f"현재 실내 습도는 {float(humidity):.1f}%입니다.")
+    if "조도" in question or "밝기" in question:
+        if light is not None:
+            parts.append(f"현재 조도는 {float(light):.1f}%로 측정되네요.")
+
+    # 특정 센서를 지칭하지 않고 날씨 전체를 물어본 경우
+    if not parts:
+        if temperature is not None:
+            parts.append(f"기온은 {float(temperature):.1f}도,")
+        if humidity is not None:
+            parts.append(f"습도는 {float(humidity):.1f}%입니다.")
+        if len(parts) == 0:
+            parts.append("지금은 센서 정보를 읽을 수 없어요.")
 
     return build_contract(
-        answer=" ".join(parts),
+        answer=" ".join(parts).strip(),
         action_proposal=None,
         confidence=0.94,
         reason="weather_question",
@@ -210,6 +247,52 @@ def _risk_contract(payload: Any) -> dict[str, Any]:
     )
 
 
+def _demo_mood_contract(payload: Any) -> dict[str, Any]:
+    sensor = _payload_dict(getattr(payload, "sensor", None))
+    temperature = sensor.get("temperature", 24.0)
+    humidity = sensor.get("humidity", 50.0)
+    # 온도, 습도 값 포맷팅 방어
+    temp_str = f"{int(round(float(temperature)))}" if temperature is not None else "24"
+    hum_str = f"{int(round(float(humidity)))}" if humidity is not None else "50"
+    answer = f"오늘 온도는 {temp_str}도, 습도는 {hum_str}퍼센트로, 환경이 적절해서 기분이 좋아요!"
+    return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="demo_mood")
+
+
+def _demo_role_contract(payload: Any) -> dict[str, Any]:
+    answer = "저는 사용자님의 마리모 키우기 가이드가 될 수 있답니다! 저와 함께 초보 식집사를 탈출해요!"
+    return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="demo_role")
+
+
+def _demo_sing_contract(payload: Any) -> dict[str, Any]:
+    answer = "동글동글 마리모~ 예압~ 물 속에서 춤을 춰~ 햇빛 한 줌, 시원한 물이면 충분해~ 요! 피스!"
+    return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="demo_sing")
+
+
+def _care_guide_contract(payload: Any) -> dict[str, Any]:
+    answer = "마리모는 일주일에 한 번씩 시원한 물로 갈아주시고, 직사광선을 피해 밝은 그늘에 두시는 게 좋아요."
+    return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="care_guide")
+
+
+def _proactive_greeting_contract(payload: Any) -> dict[str, Any]:
+    state = _payload_dict(getattr(payload, "state", None))
+    level = str(state.get("level") or "normal").strip().lower()
+    sensor = _payload_dict(getattr(payload, "sensor", None))
+    temp = sensor.get("temperature", 24.0)
+    hum = sensor.get("humidity", 50.0)
+    
+    if level == "normal":
+        answer = f"오늘도 마리모를 잘 돌봐주고 계시네요! 온도 {int(round(float(temp)))}도, 습도 {int(round(float(hum)))}퍼센트로 아주 쾌적해요!"
+    else:
+        alerts = state.get("alerts", [])
+        if alerts:
+            issue = str(alerts[0]).replace("_", " ")
+            answer = f"저에게 관심을 가져주셔서 고마워요. 지금 {issue} 상태이니 물을 갈아주시거나 위치를 옮겨주시면 좋겠어요!"
+        else:
+            answer = "저에게 관심을 가져주셔서 고마워요. 환경이 조금 불편한 것 같으니 한번 확인해 주시겠어요?"
+
+    return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="proactive_greeting")
+
+
 def _general_model_payload(payload: Any) -> Any:
     data = _payload_dict(payload)
     data["use_sensor_context"] = False
@@ -249,6 +332,20 @@ def generate_contract(payload: Any) -> dict[str, Any]:
 
 
 def route_contract(payload: Any) -> dict[str, Any]:
+    q = _normalize(_question_text(payload))
+
+    # Demo Script Interceptors
+    if _is_demo_mood_question(q):
+        return _demo_mood_contract(payload)
+    if _is_demo_role_question(q):
+        return _demo_role_contract(payload)
+    if _is_demo_sing_question(q):
+        return _demo_sing_contract(payload)
+    if _is_care_guide_question(q):
+        return _care_guide_contract(payload)
+    if _is_proactive_greeting(q):
+        return _proactive_greeting_contract(payload)
+
     if _is_weather_question(payload):
         return _weather_contract(payload)
     if _is_distance_question(payload):
@@ -256,7 +353,7 @@ def route_contract(payload: Any) -> dict[str, Any]:
     if _is_sensor_risk_question(payload):
         return _risk_contract(payload)
 
-    if _looks_like_setting_request(_normalize(_question_text(payload))):
+    if _looks_like_setting_request(q):
         return generate_contract(_setting_model_payload(payload))
 
     if MOCK_MODE:

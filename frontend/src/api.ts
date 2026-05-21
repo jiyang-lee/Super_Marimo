@@ -3,7 +3,42 @@ const API = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const VOICE = import.meta.env.VITE_VOICE_BASE_URL ?? '/voice';
 const LLM = import.meta.env.VITE_LLM_BASE_URL ?? '/llm';
 const VOICE_NAME_STORAGE_KEY = 'super-marimo.voice-name';
-const DEFAULT_TTS_VOICE_NAMES = ['F1', 'F2'] as const;
+const PERSONA_PRESET_STORAGE_KEY = 'super-marimo.persona-preset';
+const DEFAULT_TTS_VOICE_NAMES = ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5'] as const;
+
+export type PersonaPresetId = 'kind' | 'practical' | 'grumpy';
+
+export interface PersonaPreset {
+  id: PersonaPresetId;
+  label: string;
+  description: string;
+  memo: string;
+}
+
+export const PERSONA_PRESETS: PersonaPreset[] = [
+  {
+    id: 'kind',
+    label: '착하고 다정함',
+    description: '부드럽고 배려심 있는 응답',
+    memo: '착하고 다정하게 답해줘. 상대의 기분을 먼저 살피고, 짧고 따뜻한 문장으로 말해줘.',
+  },
+  {
+    id: 'practical',
+    label: '현실적이고 직관적임',
+    description: '군더더기 없이 핵심 위주',
+    memo: '현실적이고 직관적으로 답해줘. 불필요한 수식은 줄이고, 바로 실행할 수 있는 핵심만 말해줘.',
+  },
+  {
+    id: 'grumpy',
+    label: '툴툴거리고 짜증투성이',
+    description: '투덜대지만 내용은 정확',
+    memo: '툴툴거리면서도 짜증 섞인 말투로 답해줘. 그래도 필요한 정보는 정확하고 단호하게 전달해줘.',
+  },
+];
+
+function isPersonaPresetId(value: string): value is PersonaPresetId {
+  return PERSONA_PRESETS.some((preset) => preset.id === value);
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -39,23 +74,71 @@ function safeParseJson(raw: string): unknown {
 export function getStoredVoiceName(fallback = 'F1'): string {
   if (typeof window === 'undefined') return fallback;
   const stored = window.localStorage.getItem(VOICE_NAME_STORAGE_KEY)?.trim();
-  return stored || fallback;
+  return (stored || fallback).toUpperCase();
 }
 
 export function setStoredVoiceName(voiceName: string): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(VOICE_NAME_STORAGE_KEY, voiceName);
+  window.localStorage.setItem(VOICE_NAME_STORAGE_KEY, voiceName.trim().toUpperCase());
+}
+
+export function getStoredPersonaPreset(fallback: PersonaPresetId = 'kind'): PersonaPresetId {
+  if (typeof window === 'undefined') return fallback;
+  const stored = window.localStorage.getItem(PERSONA_PRESET_STORAGE_KEY)?.trim();
+  if (stored && isPersonaPresetId(stored)) return stored;
+  return fallback;
+}
+
+export function setStoredPersonaPreset(presetId: PersonaPresetId): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PERSONA_PRESET_STORAGE_KEY, presetId);
+}
+
+export function resolvePersonaPreset(presetId?: string | null): PersonaPreset {
+  const requested = (presetId ?? '').trim();
+  const activeId = isPersonaPresetId(requested) ? requested : getStoredPersonaPreset();
+  return PERSONA_PRESETS.find((preset) => preset.id === activeId) ?? PERSONA_PRESETS[0];
+}
+
+export function getStoredPersonaMemo(): string {
+  return resolvePersonaPreset().memo;
 }
 
 export function normalizeVoiceNames(names?: string[] | null): string[] {
-  const cleaned = (names ?? []).map((name) => name.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const cleaned = (names ?? [])
+    .map((name) => name.trim().toUpperCase())
+    .filter(Boolean)
+    .filter((name) => {
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+
+  cleaned.sort((left, right) => {
+    const leftMatch = left.match(/^([FM])(\d+)$/);
+    const rightMatch = right.match(/^([FM])(\d+)$/);
+
+    if (leftMatch && rightMatch) {
+      const leftRank = leftMatch[1] === 'F' ? 0 : 1;
+      const rightRank = rightMatch[1] === 'F' ? 0 : 1;
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return Number(leftMatch[2]) - Number(rightMatch[2]);
+    }
+
+    if (leftMatch) return -1;
+    if (rightMatch) return 1;
+    return left.localeCompare(right);
+  });
+
   return cleaned.length > 0 ? cleaned : [...DEFAULT_TTS_VOICE_NAMES];
 }
 
 export function resolveVoiceNamePreference(availableNames?: string[] | null, fallback = 'F1'): string {
   const options = normalizeVoiceNames(availableNames);
-  const stored = getStoredVoiceName(options[0] ?? fallback);
-  return options.includes(stored) ? stored : options[0] ?? fallback;
+  const stored = getStoredVoiceName(fallback);
+  const resolved = options.includes(stored) ? stored : options[0] ?? fallback;
+  return resolved.toUpperCase();
 }
 
 export interface ServiceHealth {
@@ -332,7 +415,13 @@ export async function ingestRealtimeSensor(payload: { light: number; distance: n
   });
 }
 
-export async function askChat(text: string, sessionId?: string, isTest?: boolean, voiceName?: string): Promise<AskResult> {
+export async function askChat(
+  text: string,
+  sessionId?: string,
+  isTest?: boolean,
+  voiceName?: string,
+  personaMemo?: string,
+): Promise<AskResult> {
   return fetchJson<AskResult>(`${API}/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -342,7 +431,8 @@ export async function askChat(text: string, sessionId?: string, isTest?: boolean
       session_kind: 'chat',
       use_sensor_context: true,
       is_test: isTest ?? null,
-      voice_name: voiceName ?? null,
+      voice_name: voiceName ?? getStoredVoiceName(),
+      persona_memo: personaMemo ?? getStoredPersonaMemo(),
     }),
   });
 }
@@ -355,9 +445,9 @@ export async function askAgent(text: string, sessionId?: string, options?: AskAg
       text,
       session_id: sessionId ?? null,
       speak: options?.speak ?? false,
-      persona_memo: options?.personaMemo ?? null,
+      persona_memo: options?.personaMemo ?? getStoredPersonaMemo(),
       system_memo: options?.systemMemo ?? null,
-      voice_name: options?.voiceName ?? null,
+      voice_name: options?.voiceName ?? getStoredVoiceName(),
     }),
   });
 }

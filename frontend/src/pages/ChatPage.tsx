@@ -3,6 +3,7 @@ import {
   askChat,
   deleteSession,
   getSessionDetail,
+  getStoredPersonaMemo,
   getStoredVoiceName,
   listSessions,
   synthesizeTts,
@@ -344,7 +345,7 @@ export function ChatPage() {
     });
 
     try {
-      const result = await askChat(value, sessionId, false, getStoredVoiceName());
+      const result = await askChat(value, sessionId, false, getStoredVoiceName(), getStoredPersonaMemo());
       const nextId = result.session_id;
 
       const action = result.action_result;

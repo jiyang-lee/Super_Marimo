@@ -63,13 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reply-boost-sec",
         type=int,
-        default=12,
+        default=15,
         help="Seconds to keep a short boosted listen window after assistant speech",
     )
     parser.add_argument(
         "--tts-preplay-guard-sec",
         type=float,
-        default=0.35,
+        default=0.5,
         help="Seconds to mute STT immediately after an answer is requested, before playback starts",
     )
     parser.add_argument(

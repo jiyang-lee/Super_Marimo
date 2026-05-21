@@ -110,6 +110,7 @@ async def request_llm(
     action_result: Optional[dict[str, Any]] = None,
     persona_memo: Optional[str] = None,
     system_memo: Optional[str] = None,
+    source: str = "voice",
 ) -> dict[str, Any]:
     resolved_persona_memo = (persona_memo or DEFAULT_PERSONA_MEMO).strip()
     resolved_system_memo = system_memo.strip() if system_memo else None
@@ -124,6 +125,7 @@ async def request_llm(
         "use_sensor_context": use_sensor_context,
         "persona_memo": resolved_persona_memo,
         "system_memo": resolved_system_memo,
+        "trigger_source": source,
     }
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -233,6 +235,7 @@ async def handle_interaction(
             action_result=action_result,
             persona_memo=resolved_persona_memo,
             system_memo=resolved_system_memo,
+            source=source,
         )
         raw_answer = str(llm.get("answer", "")).strip()
         answer = sanitize_tts_text(raw_answer) or raw_answer

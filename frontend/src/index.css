@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -79,22 +79,22 @@
 
   .header-inner {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+    grid-template-columns: minmax(280px, 1fr) auto minmax(280px, 1fr);
     align-items: center;
-    gap: 32px;
-    width: min(1320px, calc(100vw - 24px));
-    margin: 0 auto;
-    padding: 13px 0;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 32px;
   }
 
   .brand-block {
     display: flex;
     align-items: center;
+    justify-self: start;
     gap: 14px;
   }
 
   .brand-logo {
-    width: 296px;
+    width: 272px;
     max-width: calc(100vw - 32px);
     height: auto;
     object-fit: contain;
@@ -103,6 +103,7 @@
   }
 
   .top-nav {
+    justify-self: center;
     display: flex;
     justify-content: center;
     gap: 20px;
@@ -124,11 +125,11 @@
   }
 
   .nav-button {
-    padding: 4px 16px;
+    padding: 4px 10px;
     background: transparent;
     color: rgba(255, 255, 255, 0.9);
     border-color: transparent;
-    font-size: 26px;
+    font-size: 21px;
     font-weight: 700;
   }
 
@@ -140,57 +141,14 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
   }
 
-  .header-status {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 18px;
-  }
-
-  .header-mode-button {
-    min-width: 86px;
-    padding: 7px 12px;
-    background: linear-gradient(180deg, rgba(248, 255, 186, 0.92), rgba(214, 241, 113, 0.92));
-    color: #214e1d;
-    border: 2px solid rgba(54, 96, 39, 0.75);
-    box-shadow:
-      0 10px 22px rgba(21, 62, 30, 0.16),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    text-shadow: none;
-    font-weight: 800;
-  }
-
-  .header-mode-button:disabled {
-    color: rgba(33, 78, 29, 0.72);
-    opacity: 0.92;
-  }
-
-  .status-hearts {
-    display: flex;
-    gap: 14px;
-  }
-
-  .heart {
-    width: 28px;
-    height: 28px;
-    object-fit: contain;
-    image-rendering: pixelated;
-    opacity: 0.35;
-    filter: grayscale(0.85);
-  }
-
-  .heart.on {
-    opacity: 1;
-    filter: none;
-  }
-
   .status-clock {
+    justify-self: end;
     padding: 4px 14px;
     border-radius: 999px;
     background: transparent;
     border: 1px solid transparent;
     color: #fff;
-    font-size: 26px;
+    font-size: 21px;
     font-weight: 700;
     letter-spacing: 0.06em;
   }
@@ -219,6 +177,13 @@
   .header-inner {
     grid-template-columns: 1fr;
     justify-items: center;
+    gap: 12px;
+  }
+
+  .brand-block,
+  .top-nav,
+  .status-clock {
+    justify-self: center;
   }
 }
 
@@ -229,11 +194,11 @@
 
   .nav-button {
     padding-inline: 10px;
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .status-clock {
-    font-size: 20px;
+    font-size: 18px;
   }
 }
 

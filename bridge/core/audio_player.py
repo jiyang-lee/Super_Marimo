@@ -149,7 +149,18 @@ class AudioPlayer:
                         self.on_playing(name, duration_sec)
                     except Exception as exc:
                         print(f"[audio_player] on_playing callback error: {exc}")
-                winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
+                
+                try:
+                    import sounddevice as sd
+                    import soundfile as sf
+                    
+                    data, fs = sf.read(str(wav_path))
+                    sd.play(data, fs)
+                    sd.wait()
+                except Exception as exc:
+                    print(f"[audio_player] sounddevice failed, falling back to winsound: {exc}")
+                    winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
+
                 print(f"[audio_player] finished {name}")
                 self._update_status(event_id, "played")
                 if (

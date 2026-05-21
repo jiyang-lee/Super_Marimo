@@ -9,6 +9,7 @@ from routers.interaction import router as interaction_router
 from routers.sensor import router as sensor_router
 from routers.sessions import router as sessions_router
 from services.sensor_analytics import rebuild_sensor_reading_states
+from services.sensor_store import start_hourly_aggregation_timer
 
 
 def create_app() -> FastAPI:
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
                 rebuild_sensor_reading_states(conn)
         cleanup_old_realtime_rows(force=True)
         start_cleanup_timer()
+        start_hourly_aggregation_timer()
 
     return app
 

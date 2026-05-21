@@ -8,6 +8,7 @@ from services.sensor_analytics import build_sensor_summary, build_sensor_semanti
 from services.sensor_judge import judge_hourly_state, judge_realtime_state, judge_sensor_state
 from services.sensor_policy import build_realtime_next_action
 from services.sensor_store import (
+    aggregate_realtime_as_hourly,
     expand_sensor_row,
     get_latest_sensor_row,
     get_recent_sensor_rows,
@@ -146,6 +147,8 @@ def sensor_history(limit: int = 24) -> dict[str, Any]:
         realtime_rows = get_recent_sensor_rows(conn, "realtime", safe_limit)
         realtime_row = get_latest_sensor_row(conn, "realtime")
         hourly_rows = get_recent_sensor_rows(conn, "hourly", safe_limit)
+        if not hourly_rows:
+            hourly_rows = aggregate_realtime_as_hourly(conn, hours=safe_limit)
         hourly_row = get_latest_sensor_row(conn, "hourly")
         metrics = compute_sensor_metrics(conn)
 

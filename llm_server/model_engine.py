@@ -351,7 +351,10 @@ def generate_contract(payload: Any) -> dict[str, Any]:
     messages = [{"role": "system", "content": build_system_prompt(payload)}]
     messages.extend(build_history_messages(payload))
     messages.append({"role": "user", "content": build_user_prompt(payload)})
-    max_new_tokens = 36 if bool(getattr(payload, "use_sensor_context", False)) else 48
+    if getattr(payload, "trigger_source", None) == "ask":
+        max_new_tokens = 512
+    else:
+        max_new_tokens = 128
 
     if HF_LLM_BACKEND == "router" and HF_TOKEN:
         try:

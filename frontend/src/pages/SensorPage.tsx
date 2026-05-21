@@ -11,9 +11,10 @@ type SensorConfig = {
   unit: string;
   icon: string;
   accent: string;
-  base: number;
-  range: [number, number];
-  step: number;
+  min: number;
+  max: number;
+  axisPrecision: number;
+  valuePrecision: number;
 };
 
 type SensorPoint = {
@@ -22,58 +23,98 @@ type SensorPoint = {
   value: number;
 };
 
+const HISTORY_LIMIT = 6;
+const MAX_POINTS = 6;
+const LIGHT_RAW_MIN = 2;
+const LIGHT_RAW_MAX = 700;
+
 const SENSOR_CONFIGS: SensorConfig[] = [
-  { key: 'temperature', label: '온도', unit: '℃', icon: '/images/incoming/icon_temperature.png', accent: '#e85b50', base: 24.4, range: [22.5, 27.5], step: 0.18 },
-  { key: 'humidity', label: '습도', unit: '%', icon: '/images/incoming/icon-humidity.png', accent: '#2f90d1', base: 47.8, range: [40, 60], step: 0.8 },
-  { key: 'light', label: '조도', unit: 'lux', icon: '/images/incoming/icon-light.png', accent: '#d38a20', base: 620, range: [380, 1200], step: 26 },
-  { key: 'water', label: '수위', unit: '%', icon: '/images/incoming/icon-water.png', accent: '#21a87e', base: 80.4, range: [72, 88], step: 0.32 },
+  { key: 'temperature', label: '온도', unit: '°C', icon: '/images/incoming/icon_temperature.png', accent: '#e85b50', min: 0, max: 40, axisPrecision: 0, valuePrecision: 1 },
+  { key: 'humidity', label: '습도', unit: '%', icon: '/images/incoming/icon-humidity.png', accent: '#2f90d1', min: 0, max: 100, axisPrecision: 0, valuePrecision: 0 },
+  { key: 'water', label: '수위', unit: '%', icon: '/images/incoming/icon-water.png', accent: '#21a87e', min: 0, max: 100, axisPrecision: 0, valuePrecision: 0 },
+  { key: 'light', label: '조도', unit: '%', icon: '/images/incoming/icon-light.png', accent: '#d38a20', min: 0, max: 100, axisPrecision: 0, valuePrecision: 0 },
 ];
 
-function formatValue(value: number | null | undefined, fallback = '-'): string {
-  if (value === null || value === undefined) return fallback;
-  return String(value);
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
-function formatDayLabel(date: Date) {
-  return `${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
 }
 
-function getPointY(value: number, min: number, max: number, height: number, topPadding: number, bottomPadding: number) {
-  const plotHeight = height - topPadding - bottomPadding;
-  const ratio = (value - min) / (max - min || 1);
-  return topPadding + plotHeight - ratio * plotHeight;
+function formatHourLabel(date: Date): string {
+  return `${pad(date.getHours())}:00`;
 }
 
-function mapHistoryToPoints(history: SensorReading[], key: SensorKey): SensorPoint[] {
-  const fieldMap: Record<SensorKey, keyof SensorReading> = {
-    temperature: 'temperature',
-    humidity: 'humidity',
-    light: 'light',
-    water: 'water_level',
-  };
-  const field = fieldMap[key];
+function normalizeLightPercent(light: number | null | undefined): number | null {
+  if (light === null || light === undefined || Number.isNaN(light)) return null;
+  const normalized = Math.round(((light - LIGHT_RAW_MIN) / (LIGHT_RAW_MAX - LIGHT_RAW_MIN)) * 100);
+  return clamp(normalized, 0, 100);
+}
 
-  // 최근 7개만 사용 (team-a UI가 7개 포인트 기반)
-  const recent = history.slice(-7);
+function getSensorValue(reading: SensorReading, key: SensorKey): number | null {
+  switch (key) {
+    case 'temperature':
+      return reading.temperature ?? null;
+    case 'humidity':
+      return reading.humidity ?? null;
+    case 'water':
+      return reading.water_level_normalized_0_100 ?? reading.water_level ?? null;
+    case 'light':
+      return reading.light_normalized_0_100 ?? normalizeLightPercent(reading.light);
+    default:
+      return null;
+  }
+}
 
-  return recent
-    .map((item) => {
-      const val = item[field] as number | undefined;
-      if (val === undefined || val === null) return null;
-      const date = item.created_at ? new Date(item.created_at) : new Date();
-      return {
-        date,
-        label: formatDayLabel(date),
-        value: val,
-      };
+function buildHourlyPoints(rows: SensorReading[], key: SensorKey, config: SensorConfig): SensorPoint[] {
+  const byHour = new Map<string, SensorPoint>();
+
+  [...rows]
+    .filter((row) => Boolean(row.created_at))
+    .sort((left, right) => {
+      const leftTime = new Date(left.created_at ?? '').getTime();
+      const rightTime = new Date(right.created_at ?? '').getTime();
+      return leftTime - rightTime;
     })
-    .filter((p): p is SensorPoint => p !== null);
+    .forEach((row) => {
+      const createdAt = row.created_at ? new Date(row.created_at) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) return;
+
+      const value = getSensorValue(row, key);
+      if (value === null || value === undefined || Number.isNaN(value)) return;
+
+      const hour = new Date(createdAt);
+      hour.setMinutes(0, 0, 0);
+      const hourKey = `${hour.getFullYear()}-${pad(hour.getMonth() + 1)}-${pad(hour.getDate())}-${pad(hour.getHours())}`;
+
+      byHour.set(hourKey, {
+        date: hour,
+        label: formatHourLabel(hour),
+        value: clamp(value, config.min, config.max),
+      });
+    });
+
+  return Array.from(byHour.values())
+    .sort((left, right) => left.date.getTime() - right.date.getTime())
+    .slice(-MAX_POINTS);
+}
+
+function formatStatusValue(value: number | null | undefined, precision = 0): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '-';
+  return value.toFixed(precision);
+}
+
+function getLatestDisplayValue(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '-';
+  return String(Math.round(value));
 }
 
 export function SensorPage() {
   const [selectedSensor, setSelectedSensor] = useState<SensorKey>('temperature');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [history, setHistory] = useState<SensorReading[]>([]);
+  const [hourlyHistory, setHourlyHistory] = useState<SensorReading[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -82,63 +123,85 @@ export function SensorPage() {
   const realtime = sensor?.latest_realtime;
   const merged = sensor?.latest_merged;
 
+  const selectedConfig = SENSOR_CONFIGS.find((item) => item.key === selectedSensor) ?? SENSOR_CONFIGS[0];
+
   const sensorStatusItems = useMemo(() => {
-    const getVal = (realtimeVal: number | undefined, mergedVal: number | undefined, fallback = '-') => {
-      const v = realtimeVal ?? mergedVal;
-      return v !== undefined && v !== null ? String(v) : fallback;
-    };
+    const lightPercent = merged?.light_normalized_0_100 ?? normalizeLightPercent(merged?.light);
+    const waterPercent = merged?.water_level_normalized_0_100 ?? merged?.water_level;
+
     return [
-      { label: '온도', value: getVal(realtime?.temperature, merged?.temperature), suffix: '℃', icon: '/images/incoming/icon_temperature.png' },
-      { label: '습도', value: getVal(realtime?.humidity, merged?.humidity), suffix: '%', icon: '/images/incoming/icon-humidity.png' },
-      { label: '수위', value: getVal(merged?.water_level_normalized_0_100, merged?.water_level), suffix: '%', icon: '/images/incoming/icon-water.png' },
-      { label: '조도', value: getVal(merged?.light_normalized_0_100, merged?.light), suffix: 'lux', icon: '/images/incoming/icon-light.png' },
+      { label: '온도', value: formatStatusValue(realtime?.temperature ?? merged?.temperature, 1), suffix: '°C', icon: '/images/incoming/icon_temperature.png' },
+      { label: '습도', value: getLatestDisplayValue(realtime?.humidity ?? merged?.humidity), suffix: '%', icon: '/images/incoming/icon-humidity.png' },
+      { label: '수위', value: getLatestDisplayValue(waterPercent), suffix: '%', icon: '/images/incoming/icon-water.png' },
+      { label: '조도', value: getLatestDisplayValue(lightPercent), suffix: '%', icon: '/images/incoming/icon-light.png' },
     ];
-  }, [realtime, merged]);
+  }, [merged, realtime]);
+
+  const chartPoints = useMemo(
+    () => buildHourlyPoints(hourlyHistory, selectedSensor, selectedConfig),
+    [hourlyHistory, selectedConfig, selectedSensor],
+  );
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const historyResult = await getSensorHistory(120);
-      setHistory(historyResult.realtime_history ?? []);
+      const historyResult = await getSensorHistory(HISTORY_LIMIT);
+      setHourlyHistory(historyResult.hourly_history ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '센서 정보를 불러오지 못했어요.');
+      setError(e instanceof Error ? e.message : '센서 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
+  const silentLoad = async () => {
+    try {
+      const historyResult = await getSensorHistory(HISTORY_LIMIT);
+      setHourlyHistory(historyResult.hourly_history ?? []);
+    } catch {
+      // silent fail
+    }
+  };
+
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 5000);
+    const timer = setInterval(() => void silentLoad(), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  const selectedConfig = SENSOR_CONFIGS.find((item) => item.key === selectedSensor) ?? SENSOR_CONFIGS[0];
-  const chartPoints = useMemo(() => mapHistoryToPoints(history, selectedSensor), [history, selectedSensor]);
-
-  // 실제 데이터 기반 range 계산 (데이터 없으면 config 기본값 사용)
-  const dataValues = chartPoints.map((p) => p.value);
-  const dataMin = dataValues.length > 0 ? Math.min(...dataValues) : selectedConfig.range[0];
-  const dataMax = dataValues.length > 0 ? Math.max(...dataValues) : selectedConfig.range[1];
-  // 여유 공간 추가
-  const rangeMin = dataMin - (dataMax - dataMin) * 0.1;
-  const rangeMax = dataMax + (dataMax - dataMin) * 0.1;
-
   const chartWidth = 980;
   const chartHeight = 391;
-  const chartPadding = { top: 24, right: 24, bottom: 54, left: 72 };
+  const chartPadding = { top: 24, right: 24, bottom: 60, left: 72 };
   const chartPlotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const chartPlotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
-  const stepX = chartPoints.length > 1 ? chartPlotWidth / (chartPoints.length - 1) : chartPlotWidth;
+  
+  const latestTime = chartPoints.length > 0 ? chartPoints[chartPoints.length - 1].date.getTime() : new Date().getTime();
+  const latestHour = new Date(latestTime);
+  latestHour.setMinutes(0, 0, 0, 0);
 
-  const points = chartPoints.map((point, index) => ({
-    ...point,
-    x: chartPadding.left + stepX * index,
-    y: getPointY(point.value, rangeMin, rangeMax, chartHeight, chartPadding.top, chartPadding.bottom),
-  }));
+  const axisHours = Array.from({ length: MAX_POINTS }, (_, i) => {
+    const d = new Date(latestHour.getTime() - (MAX_POINTS - 1 - i) * 60 * 60 * 1000);
+    return { date: d, label: formatHourLabel(d), x: chartPadding.left + (chartPlotWidth / (MAX_POINTS - 1)) * i };
+  });
+
+  const minTime = axisHours[0].date.getTime();
+  const maxTime = axisHours[MAX_POINTS - 1].date.getTime();
+
+  const points = chartPoints
+    .filter(p => p.date.getTime() >= minTime && p.date.getTime() <= maxTime)
+    .map((point) => {
+      const hourDiff = (point.date.getTime() - minTime) / (60 * 60 * 1000);
+      return {
+        ...point,
+        x: chartPadding.left + (chartPlotWidth / (MAX_POINTS - 1)) * hourDiff,
+        y: chartPadding.top + chartPlotHeight - ((point.value - selectedConfig.min) / (selectedConfig.max - selectedConfig.min || 1)) * chartPlotHeight,
+      };
+    });
 
   const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
+    if (points.length === 0) return;
+
     const rect = event.currentTarget.getBoundingClientRect();
     const mouseX = ((event.clientX - rect.left) / rect.width) * chartWidth;
 
@@ -155,6 +218,8 @@ export function SensorPage() {
 
     setHoveredIndex(closestIndex);
   };
+
+  const axisSteps = Array.from({ length: 5 }, (_, index) => selectedConfig.min + ((selectedConfig.max - selectedConfig.min) * index) / 4);
 
   return (
     <div className="sensor-page">
@@ -182,15 +247,14 @@ export function SensorPage() {
               <div className="sensor-report-hero">
                 <div className="sensor-report-copy">
                   <h2 className="sensor-report-copy__title">성장 그래프</h2>
+                  <div className="sensor-report-copy__subtitle">
+                    {selectedConfig.label} 데이터를 시간별 기록으로 그립니다. 시간별 기록이 없으면 실시간 데이터를 집계해 표시합니다. 최근 6시간, 오른쪽이 최신입니다.
+                  </div>
                   {sensorStatus === 'ready' && sensorSyncedAt && (
                     <div className="sensor-report-copy__badge">센서 LIVE {sensorSyncedAt}</div>
                   )}
-                  {sensorStatus === 'loading' && (
-                    <div className="sensor-report-copy__badge">센서 수신 중</div>
-                  )}
-                  {sensorError && (
-                    <div className="sensor-report-copy__badge sensor-report-copy__badge--error">{sensorError}</div>
-                  )}
+                  {sensorStatus === 'loading' && <div className="sensor-report-copy__badge">센서 갱신 중</div>}
+                  {sensorError && <div className="sensor-report-copy__badge sensor-report-copy__badge--error">{sensorError}</div>}
                 </div>
               </div>
 
@@ -219,28 +283,29 @@ export function SensorPage() {
                 <div className="sensor-chart-shell">
                   {loading && (
                     <div className="sensor-chart-shell__loading">
-                      <div className="sensor-chart-shell__loading-text">데이터를 불러오는 중...</div>
+                      <div className="sensor-chart-shell__loading-text">데이터를 불러오는 중입니다...</div>
                     </div>
                   )}
+
                   {error && (
                     <div className="sensor-chart-shell__error">
                       <div className="sensor-chart-shell__error-text">{error}</div>
                     </div>
                   )}
+
                   {!loading && !error && (
                     <svg
                       className="sensor-chart-shell__svg"
                       viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                       role="img"
-                      aria-label={`${selectedConfig.label} 최근 측정 그래프`}
+                      aria-label={`${selectedConfig.label} 최근 6시간 그래프`}
                       onMouseMove={handleMouseMove}
                       onMouseLeave={() => setHoveredIndex(null)}
                     >
-                      {Array.from({ length: 5 }, (_, index) => {
-                        const tick = rangeMin + ((rangeMax - rangeMin) * index) / 4;
+                      {axisSteps.map((tick, index) => {
                         const y = chartPadding.top + chartPlotHeight - (index / 4) * chartPlotHeight;
                         return (
-                          <g key={tick}>
+                          <g key={`${selectedSensor}-${tick}`}>
                             <line
                               x1={chartPadding.left}
                               x2={chartWidth - chartPadding.right}
@@ -249,7 +314,7 @@ export function SensorPage() {
                               className="sensor-chart-shell__grid-line"
                             />
                             <text x={chartPadding.left - 14} y={y + 4} textAnchor="end" className="sensor-chart-shell__axis-label">
-                              {Number(tick.toFixed(1))}
+                              {tick.toFixed(selectedConfig.axisPrecision)}
                             </text>
                           </g>
                         );
@@ -270,9 +335,9 @@ export function SensorPage() {
                         className="sensor-chart-shell__axis"
                       />
 
-                      {points.map((point) => (
-                        <text key={point.label} x={point.x} y={chartHeight - 16} textAnchor="middle" className="sensor-chart-shell__week-label">
-                          {point.label}
+                      {axisHours.map((hourObj) => (
+                        <text key={`label-${hourObj.label}`} x={hourObj.x} y={chartHeight - 16} textAnchor="middle" className="sensor-chart-shell__hour-label">
+                          {hourObj.label}
                         </text>
                       ))}
 
@@ -288,7 +353,7 @@ export function SensorPage() {
                       ) : null}
 
                       {points.map((point, index) => (
-                        <g key={point.label}>
+                        <g key={`${point.label}-${point.date.toISOString()}-dot`}>
                           <circle
                             cx={point.x}
                             cy={point.y}
@@ -300,29 +365,45 @@ export function SensorPage() {
                         </g>
                       ))}
 
-                      {hoveredIndex !== null ? (
+                      {hoveredIndex !== null && points[hoveredIndex] ? (
                         <g>
                           {(() => {
                             const activePoint = points[hoveredIndex];
                             const tooltipWidth = 176;
                             const tooltipHeight = 68;
                             const tooltipX = activePoint.x + tooltipWidth + 18 > chartWidth ? activePoint.x - tooltipWidth - 18 : activePoint.x + 18;
-                            const tooltipY = chartPadding.top + 16;
+                            const tooltipY = activePoint.y - tooltipHeight - 16 < 0 ? activePoint.y + 20 : activePoint.y - tooltipHeight - 16;
 
                             return (
-                              <g transform={`translate(${tooltipX}, ${tooltipY})`}>
-                                <rect
-                                  width={tooltipWidth}
-                                  height={tooltipHeight}
-                                  rx="14"
-                                  fill="none"
-                                  stroke="none"
+                              <>
+                                <line
+                                  x1={activePoint.x}
+                                  x2={activePoint.x}
+                                  y1={chartPadding.top}
+                                  y2={chartHeight - chartPadding.bottom}
+                                  stroke="rgba(126,98,56,0.25)"
+                                  strokeWidth="1"
+                                  strokeDasharray="4 4"
                                 />
-                                <text x="88" y="43" textAnchor="middle" className="sensor-chart-tooltip__value">
-                                  {activePoint.value.toFixed(selectedConfig.key === 'light' ? 0 : 1)}
-                                  {selectedConfig.unit}
-                                </text>
-                              </g>
+                                <g transform={`translate(${tooltipX}, ${tooltipY})`}>
+                                  <rect
+                                    width={tooltipWidth}
+                                    height={tooltipHeight}
+                                    rx="12"
+                                    fill="rgba(255,250,240,0.95)"
+                                    stroke="rgba(139,94,36,0.2)"
+                                    strokeWidth="1"
+                                    style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.08))' }}
+                                  />
+                                  <text x="88" y="25" textAnchor="middle" className="sensor-chart-tooltip__title">
+                                    {activePoint.label}
+                                  </text>
+                                  <text x="88" y="52" textAnchor="middle" className="sensor-chart-tooltip__value">
+                                    {activePoint.value.toFixed(selectedConfig.valuePrecision)}
+                                    {selectedConfig.unit}
+                                  </text>
+                                </g>
+                              </>
                             );
                           })()}
                         </g>

@@ -345,6 +345,10 @@ class Bridge:
 
         if has_exit_phrase(transcript):
             print(f"[session] closed by voice {self.api_bridge.active_session_id or '<none>'}")
+            try:
+                self.api_bridge.speak("대화를 종료할게요", save_message=False)
+            except Exception as exc:
+                print(f"[stt] exit speak failed: {exc}")
             self.api_bridge.end_session()
             self.armed_until = 0.0
             self.distance_followup_until = 0.0

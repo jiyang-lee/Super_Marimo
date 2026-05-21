@@ -65,6 +65,7 @@ class GeneratePayload(BaseModel):
     persona_memo: str | None = None
     system_memo: str | None = None
     use_sensor_context: bool = False
+    trigger_source: str | None = None
 
 
 if hasattr(GeneratePayload, "model_rebuild"):
