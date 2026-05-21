@@ -78,6 +78,46 @@ def get_recent_sensor_rows(conn, sensor_type: str, limit: int = 24) -> list[dict
     return history
 
 
+def get_recent_hourly_rows_by_hour(conn, limit: int = 24) -> list[dict[str, Any]]:
+    """Return latest hourly rows by distinct hour bucket.
+
+    This prevents duplicated hourly writes in the same hour (e.g. 23:59 and 23:00)
+    from occupying all slots and hiding older hours in the chart.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT reading_id, created_at, sensor_type, payload, state_level, state_alerts
+            FROM (
+                SELECT
+                    reading_id,
+                    created_at,
+                    sensor_type,
+                    payload,
+                    state_level,
+                    state_alerts,
+                    DATE_TRUNC('hour', created_at) AS hour_bucket,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY DATE_TRUNC('hour', created_at)
+                        ORDER BY created_at DESC, reading_id DESC
+                    ) AS rn
+                FROM sensor_readings
+                WHERE sensor_type = 'hourly'
+            ) t
+            WHERE rn = 1
+            ORDER BY hour_bucket DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall() or []
+
+    history: list[dict[str, Any]] = []
+    for row in reversed(rows):
+        history.append(expand_sensor_row(row))
+    return history
+
+
 def load_latest_sensor_payload() -> SensorPayload:
     fallback = default_sensor_payload().model_dump()
     try:

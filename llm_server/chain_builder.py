@@ -60,6 +60,16 @@ _SETTING_CUES = (
 )
 
 _DEMO_MOOD_CUES = ("기분", "어때")
+_SAD_MOOD_CUES = (
+    "난 기분이 안 좋아",
+    "기분이 안 좋아",
+    "기분 안 좋아",
+    "기분이 안좋아",
+    "기분 안좋아",
+    "우울해",
+    "힘들어",
+    "나 너무 힘들어"
+)
 _DEMO_ROLE_CUES = ("뭘 할 수 있어", "뭐 할 수 있어", "무엇을 할 수 있어")
 _DEMO_SING_CUES = ("노래", "랩", "장기자랑")
 _CARE_GUIDE_CUES = ("팁", "가이드", "키우기", "관리", "어떻게 키워")
@@ -125,6 +135,10 @@ def _is_sensor_risk_question(payload: Any) -> bool:
 
 def _is_demo_mood_question(question: str) -> bool:
     return all(cue in question for cue in _DEMO_MOOD_CUES)
+
+
+def _is_sad_mood_question(question: str) -> bool:
+    return _contains_any(question, _SAD_MOOD_CUES)
 
 def _is_demo_role_question(question: str) -> bool:
     return _contains_any(question, _DEMO_ROLE_CUES)
@@ -258,6 +272,11 @@ def _demo_mood_contract(payload: Any) -> dict[str, Any]:
     return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="demo_mood")
 
 
+def _sad_mood_contract(payload: Any) -> dict[str, Any]:
+    answer = "기분이 안좋으시군요? 제가 뭘 해드릴까요?"
+    return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="sad_mood_fixed_reply")
+
+
 def _demo_role_contract(payload: Any) -> dict[str, Any]:
     answer = "저는 사용자님의 마리모 키우기 가이드가 될 수 있답니다! 저와 함께 초보 식집사를 탈출해요!"
     return build_contract(answer=answer, action_proposal=None, confidence=1.0, reason="demo_role")
@@ -335,6 +354,8 @@ def route_contract(payload: Any) -> dict[str, Any]:
     q = _normalize(_question_text(payload))
 
     # Demo Script Interceptors
+    if _is_sad_mood_question(q):
+        return _sad_mood_contract(payload)
     if _is_demo_mood_question(q):
         return _demo_mood_contract(payload)
     if _is_demo_role_question(q):

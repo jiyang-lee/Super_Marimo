@@ -124,6 +124,7 @@ export function SensorPage() {
   const merged = sensor?.latest_merged;
 
   const selectedConfig = SENSOR_CONFIGS.find((item) => item.key === selectedSensor) ?? SENSOR_CONFIGS[0];
+  const hourlyRows = hourlyHistory;
 
   const sensorStatusItems = useMemo(() => {
     const lightPercent = merged?.light_normalized_0_100 ?? normalizeLightPercent(merged?.light);
@@ -138,8 +139,8 @@ export function SensorPage() {
   }, [merged, realtime]);
 
   const chartPoints = useMemo(
-    () => buildHourlyPoints(hourlyHistory, selectedSensor, selectedConfig),
-    [hourlyHistory, selectedConfig, selectedSensor],
+    () => buildHourlyPoints(hourlyRows, selectedSensor, selectedConfig),
+    [hourlyRows, selectedConfig, selectedSensor],
   );
 
   const load = async () => {

@@ -11,6 +11,7 @@ from services.sensor_store import (
     aggregate_realtime_as_hourly,
     expand_sensor_row,
     get_latest_sensor_row,
+    get_recent_hourly_rows_by_hour,
     get_recent_sensor_rows,
     save_sensor_reading,
 )
@@ -146,7 +147,7 @@ def sensor_history(limit: int = 24) -> dict[str, Any]:
     with get_db_connection() as conn:
         realtime_rows = get_recent_sensor_rows(conn, "realtime", safe_limit)
         realtime_row = get_latest_sensor_row(conn, "realtime")
-        hourly_rows = get_recent_sensor_rows(conn, "hourly", safe_limit)
+        hourly_rows = get_recent_hourly_rows_by_hour(conn, safe_limit)
         if not hourly_rows:
             hourly_rows = aggregate_realtime_as_hourly(conn, hours=safe_limit)
         hourly_row = get_latest_sensor_row(conn, "hourly")
