@@ -1,12 +1,13 @@
 import { useState } from 'react';
+import '../styles/lab.css';
 import { DashboardPage } from './DashboardPage';
 import { EventsPage } from './EventsPage';
 import { TestPage } from './TestPage';
 
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'test', label: 'Test' },
-  { id: 'events', label: 'Events' },
+  { id: 'dashboard', label: '운영 콘솔' },
+  { id: 'test', label: '테스트' },
+  { id: 'events', label: '이벤트' },
 ] as const;
 
 type LabTab = (typeof TABS)[number]['id'];
@@ -15,34 +16,33 @@ export function LabPage() {
   const [activeTab, setActiveTab] = useState<LabTab>('dashboard');
 
   return (
-    <div className="space-y-4">
-      <div className="panel-surface p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="lab-page">
+      <article className="lab-panel">
+        <div className="lab-panel-head">
           <div>
-            <div className="font-dot text-xs uppercase text-cyan-100/70">Operator Lab</div>
-            <h1 className="mt-1 text-2xl font-black text-white">운영 콘솔</h1>
+            <h1 className="lab-panel-title">관리자 / 개발자 콘솔</h1>
+            <p className="lab-panel-subtitle">운영 상태와 테스트 모드를 한곳에서 확인합니다.</p>
           </div>
-          <div className="flex rounded-lg border border-white/10 bg-black/20 p-1">
+          <div className="lab-mode-switch">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={[
-                  'rounded-md px-3 py-2 font-dot text-xs transition',
-                  activeTab === tab.id ? 'bg-cyan-200 text-slate-950' : 'text-slate-200 hover:bg-white/10',
-                ].join(' ')}
+                className={['lab-mode-button', activeTab === tab.id ? 'is-active' : ''].join(' ')}
               >
                 {tab.label}
               </button>
             ))}
           </div>
         </div>
-      </div>
 
-      {activeTab === 'dashboard' ? <DashboardPage /> : null}
-      {activeTab === 'test' ? <TestPage /> : null}
-      {activeTab === 'events' ? <EventsPage /> : null}
-    </div>
+        <div className="lab-panel-body">
+          {activeTab === 'dashboard' ? <DashboardPage /> : null}
+          {activeTab === 'test' ? <TestPage /> : null}
+          {activeTab === 'events' ? <EventsPage /> : null}
+        </div>
+      </article>
+    </section>
   );
 }

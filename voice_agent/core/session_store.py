@@ -24,3 +24,9 @@ class SessionStore:
             json.dumps({"session_id": session_id}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def clear(self) -> None:
+        try:
+            self.session_file.unlink()
+        except FileNotFoundError:
+            pass

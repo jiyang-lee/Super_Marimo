@@ -1,4 +1,5 @@
 from core.event_poller import EventPoller
+from core.tts_client import TtsClient, unwrap_spoken_text
 
 
 class _FakeApiClient:
@@ -103,3 +104,37 @@ def test_event_poller_rejects_unexpected_event_type() -> None:
 
     assert api_client.status_updates == [(31, "failed")]
     assert tts_client.calls == []
+
+
+class _ApiClientForTts:
+    def __init__(self):
+        self.calls = []
+
+    def tts(self, text, voice_name=None):
+        self.calls.append((text, voice_name))
+        return b"RIFF"
+
+
+def test_tts_client_strips_json_wrapper_before_synthesis(tmp_path) -> None:
+    api_client = _ApiClientForTts()
+    client = TtsClient(api_client, output_dir=str(tmp_path))
+
+    path = client.synthesize_to_file('{"answer":"안녕하세요."}', voice_name="F2", prefix="wake")
+
+    assert path.exists()
+    assert api_client.calls == [("안녕하세요.", "F2")]
+    assert unwrap_spoken_text('```json\n{"tts_text":"깨워드릴게요."}\n```') == "깨워드릴게요."
+
+
+def test_tts_client_reuses_cached_audio(tmp_path) -> None:
+    api_client = _ApiClientForTts()
+    client = TtsClient(api_client, output_dir=str(tmp_path))
+
+    first = client.synthesize_to_file("안녕", voice_name="F1", prefix="first")
+    second = client.synthesize_to_file("안녕", voice_name="F1", prefix="second")
+
+    assert first.exists()
+    assert second.exists()
+    assert first != second
+    assert first.read_bytes() == second.read_bytes()
+    assert api_client.calls == [("안녕", "F1")]

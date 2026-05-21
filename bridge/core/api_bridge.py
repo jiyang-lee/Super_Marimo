@@ -7,10 +7,10 @@ from urllib import request as urlrequest
 
 
 class ApiBridge:
-    def __init__(self, voice_agent_url: str, api_server_url: str):
+    def __init__(self, voice_agent_url: str, api_server_url: str, session_state_path: str | Path = "bridge/session.json"):
         self.voice_agent_url = voice_agent_url.rstrip("/")
         self.api_server_url = api_server_url.rstrip("/")
-        self.session_state_path = Path("bridge/session.json")
+        self.session_state_path = Path(session_state_path)
         self.active_session_id: Optional[str] = self._load_session_id()
 
     def _load_session_id(self) -> Optional[str]:
@@ -22,9 +22,21 @@ class ApiBridge:
             if not session_id:
                 return None
             uuid.UUID(session_id)
+            session_active = self._session_is_active(session_id)
+            if session_active is False:
+                self.clear_session()
+                return None
             return session_id or None
         except Exception:
             return None
+
+    def _session_is_active(self, session_id: str) -> Optional[bool]:
+        try:
+            payload = _get_json(f"{self.api_server_url}/sessions/{session_id}", timeout=10)
+        except Exception:
+            return None
+        session = payload.get("session") or {}
+        return not bool(session.get("ended_at"))
 
     def _save_session_id(self, session_id: str) -> None:
         self.session_state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,7 +64,7 @@ class ApiBridge:
         if not self.active_session_id:
             return
         try:
-            url = f"{self.api_server_url}/sessions/{self.active_session_id}/touch"
+            url = f"{self.api_server_url}/sessions/{self.active_session_id}/touch?session_kind=voice"
             _post_json(url, {"touched_by": "bridge"}, timeout=30)
         except Exception as exc:
             print(f"[session] touch failed: {exc}")
@@ -105,6 +117,8 @@ class ApiBridge:
         return {
             "settings": settings,
             "distance_inside_threshold": bool(latest.get("distance_inside_threshold")),
+            "wake_eligible": bool(latest.get("wake_eligible")),
+            "distance_threshold_cm": settings.get("distance_threshold_cm"),
         }
 
 

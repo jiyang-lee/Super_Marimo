@@ -23,11 +23,21 @@ def coerce_contract(data: Any) -> dict[str, Any] | None:
         return None
 
     try:
-        contract = LLMContract.model_validate(data)
-    except ValidationError:
+        if hasattr(LLMContract, "model_validate"):
+            contract = LLMContract.model_validate(data)
+        elif hasattr(LLMContract, "parse_obj"):
+            contract = LLMContract.parse_obj(data)
+        else:
+            contract = LLMContract(**data)
+    except (TypeError, ValueError, ValidationError):
         return None
 
-    result = contract.model_dump()
+    if hasattr(contract, "model_dump"):
+        result = contract.model_dump()
+    elif hasattr(contract, "dict"):
+        result = contract.dict()
+    else:
+        result = dict(vars(contract))
     action_proposal = result.get("action_proposal")
     if action_proposal is not None and not isinstance(action_proposal, dict):
         result["action_proposal"] = None

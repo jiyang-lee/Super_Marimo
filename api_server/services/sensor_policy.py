@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from extensions.db import get_db_connection
 from schemas import RealtimeSensorPayload
+from services.sensor_analytics import compute_sensor_metrics
 from services.device_event_service import save_device_event
 from services.runtime_settings import get_runtime_settings, set_distance_inside_threshold
 from services.sensor_judge import judge_realtime_state
 from utils import normalize_datetime
+
+logger = logging.getLogger("sensor_policy")
 
 
 def get_latest_proactive_greeting_at(conn) -> Optional[datetime]:
@@ -129,7 +133,6 @@ def build_realtime_next_action(
 ) -> dict[str, Any]:
     from config import PROACTIVE_GREETING_COOLDOWN_SECONDS, SENSOR_WARNING_DISTANCE_THRESHOLD_CM
 
-    state = judge_realtime_state(payload)
     settings = get_runtime_settings()
     threshold_cm = float(settings.get("distance_threshold_cm") or SENSOR_WARNING_DISTANCE_THRESHOLD_CM)
     detection_enabled = bool(settings.get("distance_detection_enabled", True))
@@ -164,40 +167,10 @@ def build_realtime_next_action(
             "distance_cm": payload.distance,
         }
 
-    set_distance_inside_threshold(True)
-
     with get_db_connection() as conn:
-        if session_id:
-            try:
-                from uuid import UUID
-                db_session_id = UUID(str(session_id))
-            except ValueError:
-                db_session_id = session_id
-
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT last_seen_at, ended_at
-                    FROM session
-                    WHERE session_id = %s
-                    """,
-                    (db_session_id,),
-                )
-                row = cur.fetchone()
-                if row:
-                    last_seen_at = row["last_seen_at"]
-                    ended_at = row["ended_at"]
-                    if ended_at is None and last_seen_at:
-                        now_utc = datetime.now(timezone.utc)
-                        last_seen_utc = last_seen_at.replace(tzinfo=timezone.utc) if last_seen_at.tzinfo is None else last_seen_at
-                        elapsed_seconds = (now_utc - last_seen_utc).total_seconds()
-                        if elapsed_seconds < 30.0:
-                            return {
-                                "type": "none",
-                                "reason": "session_active_conversing",
-                                "threshold_cm": threshold_cm,
-                                "distance_cm": payload.distance,
-                            }
+        metrics = compute_sensor_metrics(conn, current_payload=payload.model_dump(), current_sensor_type="realtime")
+        state = judge_realtime_state(payload, metrics=metrics)
+        set_distance_inside_threshold(True)
 
         greeting_policy = can_emit_proactive_greeting(conn)
         warning_policy = can_emit_sensor_warning(conn, device_id)
@@ -234,42 +207,51 @@ def build_realtime_next_action(
             "type": "sensor_warning",
             "threshold_cm": threshold_cm,
             "distance_cm": payload.distance,
-            "warning_event": warning_event["event"],
+            "text": "거리가 가까워졌습니다.",
+            "device_event": warning_event["event"] if warning_event else None,
             "cooldown_seconds": PROACTIVE_GREETING_COOLDOWN_SECONDS,
             "cooldown_remaining_sec": greeting_policy["cooldown_remaining_sec"],
         }
 
     greeting_text = _resolve_greeting_text()
 
-    greeting_event = save_device_event(
-        {
-            "session_id": session_id,
-            "event_type": "proactive_greeting",
-            "device_id": device_id,
-            "trigger_source": trigger_source,
-            "distance": payload.distance,
-            "sensor": payload.model_dump(),
-            "state_level": state["level"],
-            "state_alerts": state["alerts"],
-            "generated_text": greeting_text,
-            "played": False,
-            "status": "pending",
-            "meta": {
-                "policy": "distance_threshold",
-                "threshold_cm": threshold_cm,
-                "distance_cm": payload.distance,
-                "cooldown_seconds": PROACTIVE_GREETING_COOLDOWN_SECONDS,
-                "cooldown_ignored_for_distance_entry": True,
-                "warning_event_id": warning_event["event"]["event_id"],
-            },
-        }
-    )
+    # Build meta dictionary, including warning_event_id only if warning_event exists
+    meta = {
+        "policy": "distance_threshold",
+        "threshold_cm": threshold_cm,
+        "distance_cm": payload.distance,
+        "cooldown_seconds": PROACTIVE_GREETING_COOLDOWN_SECONDS,
+        "cooldown_ignored_for_distance_entry": True,
+    }
+    if warning_event:
+        meta["warning_event_id"] = warning_event["event"]["event_id"]
+
+    try:
+        greeting_event = save_device_event(
+            {
+                "session_id": session_id,
+                "event_type": "proactive_greeting",
+                "device_id": device_id,
+                "trigger_source": trigger_source,
+                "distance": payload.distance,
+                "sensor": payload.model_dump(),
+                "state_level": state["level"],
+                "state_alerts": state["alerts"],
+                "generated_text": greeting_text,
+                "played": False,
+                "status": "pending",
+                "meta": meta,
+            }
+        )
+    except Exception as exc:
+        logger.error("[proactive_greeting] Failed to create event: %s", exc, exc_info=True)
+        raise
     return {
         "type": "proactive_greeting",
         "threshold_cm": threshold_cm,
         "distance_cm": payload.distance,
         "text": greeting_text,
         "device_event": greeting_event["event"],
-        "warning_event": warning_event["event"],
+        "warning_event": warning_event["event"] if warning_event else None,
         "cooldown_seconds": PROACTIVE_GREETING_COOLDOWN_SECONDS,
     }

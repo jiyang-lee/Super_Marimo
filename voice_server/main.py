@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 import wave
 import sys
@@ -8,7 +9,7 @@ from typing import Any
 
 import numpy as np
 import soundfile as sf
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -24,6 +25,11 @@ if "config" in sys.modules:
 from config import (
     MOCK_MODE,
     RUN_MODE,
+    HF_STT_BACKEND,
+    HF_STT_ENDPOINT_URL,
+    HF_STT_MODEL_ID,
+    HF_TOKEN,
+    HF_TTS_ENDPOINT_URL,
     STT_COMPUTE_TYPE,
     STT_DEVICE,
     STT_MODEL_SIZE,
@@ -34,6 +40,7 @@ from config import (
     TTS_MODEL_ID,
     TTS_VOICE_NAME,
     _STT_CONFIG,
+    _STT_HF_RUNTIME_STATE,
     _STT_RUNTIME_STATES,
     _TTS_RUNTIME_STATE,
     logger,
@@ -47,8 +54,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -65,6 +72,15 @@ app.add_middleware(PrivateNetworkCorsMiddleware)
 class TtsPayload(BaseModel):
     text: str
     voice_name: str | None = None
+
+
+def sanitize_tts_text(text: str) -> str:
+    cleaned = text or ""
+    cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", cleaned)
+    cleaned = re.sub(r"[^0-9가-힣\s]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
 
 
 @app.exception_handler(Exception)
@@ -105,6 +121,8 @@ def favicon() -> JSONResponse:
 @app.get("/ready")
 def ready() -> JSONResponse:
     stt_models_status: dict[str, Any] = {}
+    stt_external = HF_STT_BACKEND == "serverless" or bool(HF_STT_ENDPOINT_URL)
+    backend = "mock" if MOCK_MODE else ("hf_endpoint" if (stt_external or HF_TTS_ENDPOINT_URL) else "local")
     if MOCK_MODE:
         for key in ("fast", "accurate"):
             stt_models_status[key] = {
@@ -120,12 +138,12 @@ def ready() -> JSONResponse:
     else:
         for key in ("fast", "accurate"):
             stt_models_status[key] = {
-                "loaded": key in _STT_RUNTIME_STATES,
-                "device": _STT_RUNTIME_STATES.get(key, {}).get("device"),
-                "compute_type": _STT_RUNTIME_STATES.get(key, {}).get("compute_type"),
+                "loaded": stt_external or key in _STT_RUNTIME_STATES,
+                "device": HF_STT_BACKEND if stt_external else _STT_RUNTIME_STATES.get(key, {}).get("device"),
+                "compute_type": None if stt_external else _STT_RUNTIME_STATES.get(key, {}).get("compute_type"),
                 "size": _STT_CONFIG[key]["size"],
             }
-        tts_ready = _TTS_RUNTIME_STATE["ready"]
+        tts_ready = bool(HF_TTS_ENDPOINT_URL) or _TTS_RUNTIME_STATE["ready"]
         ready_state = all(item["loaded"] for item in stt_models_status.values()) and tts_ready
         tts_runtime_voice_name = _TTS_RUNTIME_STATE["voice_name"]
         tts_error = _TTS_RUNTIME_STATE["error"]
@@ -138,6 +156,14 @@ def ready() -> JSONResponse:
             "server": "voice",
             "run_mode": RUN_MODE,
             "mock_mode": MOCK_MODE,
+            "backend": backend,
+            "hf_stt_backend": HF_STT_BACKEND,
+            "hf_stt_model_id": HF_STT_MODEL_ID,
+            "hf_token_configured": bool(HF_TOKEN),
+            "hf_stt_endpoint_configured": bool(HF_STT_ENDPOINT_URL),
+            "hf_tts_endpoint_configured": bool(HF_TTS_ENDPOINT_URL),
+            "hf_stt_last_latency_ms": _STT_HF_RUNTIME_STATE.get("last_latency_ms"),
+            "hf_stt_last_error": _STT_HF_RUNTIME_STATE.get("last_error"),
             "stt_models": stt_models_status,
             "stt_device": STT_DEVICE,
             "stt_compute_type": STT_COMPUTE_TYPE,
@@ -149,6 +175,8 @@ def ready() -> JSONResponse:
             "tts_ready": tts_ready,
             "tts_runtime_voice_name": tts_runtime_voice_name,
             "tts_error": tts_error,
+            "tts_last_latency_ms": _TTS_RUNTIME_STATE.get("last_latency_ms"),
+            "tts_last_error": _TTS_RUNTIME_STATE.get("last_error"),
             "tts_cache_dir": str(SUPERTONIC_CACHE_DIR),
             "tts_model_dir": str(SUPERTONIC_MODEL_DIR),
         },
@@ -156,7 +184,7 @@ def ready() -> JSONResponse:
 
 
 @app.post("/stt")
-async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, Any]:
+async def stt(audio: UploadFile = File(...), model: str = "fast", session_id: str = Query(None)) -> dict[str, Any]:
     if model not in {"fast", "accurate"}:
         raise HTTPException(status_code=400, detail="model must be 'fast' or 'accurate'")
 
@@ -184,6 +212,7 @@ async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, A
                 "segments": [],
                 "mock": False,
                 "model": model,
+                "session_id": session_id,
                 "warning": "audio_too_short",
             }
 
@@ -198,6 +227,7 @@ async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, A
             "segments": segment_list,
             "mock": False,
             "model": model,
+            "session_id": session_id,
         }
     finally:
         os.remove(audio_path)
@@ -205,7 +235,8 @@ async def stt(audio: UploadFile = File(...), model: str = "fast") -> dict[str, A
 
 @app.post("/tts")
 def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
-    if not payload.text.strip():
+    sanitized_text = sanitize_tts_text(payload.text)
+    if not sanitized_text:
         raise HTTPException(status_code=400, detail="text is required")
 
     output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
@@ -217,9 +248,12 @@ def tts(payload: TtsPayload, background_tasks: BackgroundTasks) -> FileResponse:
         background_tasks.add_task(os.remove, output_path)
         return FileResponse(output_path, media_type="audio/wav", filename="mock_tts.wav")
 
-    wav_bytes, _resolved_voice = synthesize(payload.text, voice_name=payload.voice_name)
-    tts_instance = get_tts_runtime()["tts"]
-    tts_instance.save_audio(wav_bytes, output_path)
+    wav_bytes, _resolved_voice = synthesize(sanitized_text, voice_name=payload.voice_name)
+    if isinstance(wav_bytes, (bytes, bytearray)) and bytes(wav_bytes[:4]) == b"RIFF":
+        Path(output_path).write_bytes(bytes(wav_bytes))
+    else:
+        tts_instance = get_tts_runtime()["tts"]
+        tts_instance.save_audio(wav_bytes, output_path)
     background_tasks.add_task(os.remove, output_path)
     return FileResponse(output_path, media_type="audio/wav", filename="tts.wav")
 
@@ -229,23 +263,34 @@ def startup_load_stt_models():
     if MOCK_MODE:
         logger.info("Mock mode: skipping model eager-loading.")
         return
-    logger.info("Eager-loading STT models...")
-    for key in ("fast", "accurate"):
-        try:
-            get_stt_model(key)
-            state = _STT_RUNTIME_STATES.get(key, {})
-            logger.info(
-                "STT model '%s' (%s) loaded on %s",
-                key,
-                _STT_CONFIG[key]["size"],
-                state.get("device", "unknown"),
-            )
-        except Exception as exc:
-            logger.error("Failed to load STT model '%s': %s", key, exc)
+    if HF_STT_BACKEND == "serverless" and HF_TOKEN:
+        _STT_HF_RUNTIME_STATE.update({"ready": True, "backend": "serverless", "model_id": HF_STT_MODEL_ID, "last_error": None})
+        logger.info("HF serverless STT configured; skipping local STT eager-loading.")
+    elif HF_STT_ENDPOINT_URL:
+        _STT_HF_RUNTIME_STATE.update({"ready": True, "backend": "endpoint", "model_id": HF_STT_MODEL_ID, "last_error": None})
+        logger.info("HF STT endpoint configured; skipping local STT eager-loading.")
+    else:
+        logger.info("Eager-loading STT models...")
+        for key in ("fast", "accurate"):
+            try:
+                get_stt_model(key)
+                state = _STT_RUNTIME_STATES.get(key, {})
+                logger.info(
+                    "STT model '%s' (%s) loaded on %s",
+                    key,
+                    _STT_CONFIG[key]["size"],
+                    state.get("device", "unknown"),
+                )
+            except Exception as exc:
+                logger.error("Failed to load STT model '%s': %s", key, exc)
     try:
-        logger.info("Eager-loading TTS model and voice style...")
-        runtime = get_tts_runtime()
-        logger.info("TTS voice style ready: %s", runtime["voice_name"])
+        if HF_TTS_ENDPOINT_URL:
+            _TTS_RUNTIME_STATE.update({"loaded": True, "ready": True, "error": None})
+            logger.info("HF TTS endpoint configured; skipping local TTS eager-loading.")
+        else:
+            logger.info("Eager-loading TTS model and voice style...")
+            runtime = get_tts_runtime()
+            logger.info("TTS voice style ready: %s", runtime["voice_name"])
     except Exception as exc:
         _TTS_RUNTIME_STATE.update({"loaded": False, "ready": False, "error": str(exc)})
         logger.error("Failed to load TTS model: %s", exc)

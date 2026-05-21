@@ -46,6 +46,15 @@ class _FastAPI:
         return decorator
 
 
+class _BackgroundTasks:
+    def __init__(self):
+        self.tasks = []
+
+    def add_task(self, func, *args, **kwargs):
+        self.tasks.append((func, args, kwargs))
+        return None
+
+
 class _HTTPException(Exception):
     def __init__(self, status_code: int, detail: str):
         super().__init__(detail)
@@ -55,6 +64,7 @@ class _HTTPException(Exception):
 
 fastapi.FastAPI = _FastAPI
 fastapi.HTTPException = _HTTPException
+fastapi.BackgroundTasks = _BackgroundTasks
 
 fastapi_cors = sys.modules.setdefault("fastapi.middleware.cors", types.ModuleType("fastapi.middleware.cors"))
 
@@ -173,7 +183,8 @@ def test_ask_routes_through_api_server(monkeypatch) -> None:
             "interaction_id": 7,
             "session_created": True,
             "messages_saved": 2,
-            "tts_text": f"answer: {text}",
+            "llm_answer": f"answer: {text}",
+            "tts_text": f"sound: {text}",
         },
     )
     monkeypatch.setattr(
@@ -203,4 +214,47 @@ def test_ask_routes_through_api_server(monkeypatch) -> None:
     assert saved_sessions[-1] == "11111111-1111-1111-1111-111111111111"
     assert captured_api_call["persona_memo"] == "persona memo"
     assert captured_api_call["system_memo"] == "system memo"
+    assert captured_tts_call["text"] == "sound: test question"
     assert captured_tts_call["voice_name"] == "F2"
+
+
+def test_ask_strips_json_wrapper_before_tts(monkeypatch) -> None:
+    saved_sessions: list[str] = []
+    captured_tts_call: dict[str, object] = {}
+
+    monkeypatch.setattr(voice_main.session_store, "load", lambda: None)
+    monkeypatch.setattr(voice_main.session_store, "save", lambda session_id: saved_sessions.append(session_id))
+    monkeypatch.setattr(voice_main, "api_health", lambda: {"ok": True, "data": {"ok": True}})
+    monkeypatch.setattr(
+        voice_main,
+        "ask_api_server",
+        lambda text, session_id, persona_memo=None, system_memo=None: {
+            "saved": True,
+            "session_id": session_id,
+            "interaction_id": 8,
+            "session_created": False,
+            "messages_saved": 1,
+            "llm_answer": '{"answer":"안녕하세요."}',
+            "tts_text": '{"answer":"안녕하세요."}',
+        },
+    )
+    monkeypatch.setattr(
+        voice_main,
+        "synthesize_tts",
+        lambda text, voice_name=None: captured_tts_call.update({"text": text, "voice_name": voice_name})
+        or f"C:/temp/{text}.wav",
+    )
+
+    payload = voice_main.AskPayload(
+        text="test question",
+        session_id="11111111-1111-1111-1111-111111111111",
+        speak=True,
+        persona_memo="persona memo",
+        system_memo="system memo",
+        voice_name="F2",
+    )
+    response = voice_main.ask(payload)
+
+    assert response.answer == "안녕하세요."
+    assert captured_tts_call["text"] == "안녕하세요."
+    assert saved_sessions[-1] == "11111111-1111-1111-1111-111111111111"

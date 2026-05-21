@@ -1,134 +1,273 @@
 from __future__ import annotations
 
 import re
+from types import SimpleNamespace
 from typing import Any
 
 from config import MOCK_MODE
+from contracts import build_contract
+
+
+_WEATHER_CUES = (
+    "날씨",
+    "weather",
+    "온도",
+    "습도",
+    "기온",
+    "비",
+    "눈",
+    "temperature",
+    "humidity",
+)
+
+_DISTANCE_CUES = (
+    "거리",
+    "distance",
+    "가까워",
+    "멀어",
+    "가까이",
+    "멀리",
+    "근접",
+    "얼마나 멀",
+    "얼마나 가까",
+)
+
+_RISK_CUES = (
+    "상태",
+    "위험",
+    "경고",
+    "수위",
+    "조도",
+    "sensor",
+    "sensor state",
+    "현재 상태",
+)
+
+_SETTING_CUES = (
+    "켜줘",
+    "꺼줘",
+    "켜기",
+    "끄기",
+    "enable",
+    "disable",
+    "on",
+    "off",
+    "설정",
+    "바꿔",
+    "변경",
+    "조정",
+    "threshold",
+)
 
 
 def _normalize(text: str) -> str:
-    value = (text or "").lower()
+    value = (text or "").casefold()
     value = re.sub(r"\s+", " ", value)
     return value.strip()
 
 
-def _summarize_sensor(payload: Any) -> str:
-    sensor = getattr(payload, "sensor", None) or {}
-    state = getattr(payload, "state", None) or {}
-    values: list[str] = []
-    for key, label in (
-        ("temperature", "온도"),
-        ("humidity", "습도"),
-        ("light", "조도"),
-        ("water_level", "수위"),
-        ("distance", "거리"),
-    ):
-        if sensor.get(key) is not None:
-            values.append(f"{label} {sensor[key]}")
-    sensor_text = ", ".join(values) if values else "센서 값이 아직 없어요"
-    level = state.get("level", "normal")
-    return f"지금 상태는 {level}이에요. {sensor_text}."
+def _payload_dict(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if hasattr(value, "model_dump"):
+        return dict(value.model_dump())
+    if isinstance(value, dict):
+        return dict(value)
+    if hasattr(value, "__dict__"):
+        return dict(vars(value))
+    return {}
 
 
-def _infer_action_proposal(question: str) -> dict[str, Any] | None:
-    normalized = _normalize(question)
-    if not normalized:
-        return None
+def _question_text(payload: Any) -> str:
+    return str(getattr(payload, "question", "") or "").strip()
 
-    wake_off_cues = ("wake off", "wake 끄", "wake 꺼", "깨우기 꺼", "깨우기 끄")
-    wake_on_cues = ("wake on", "wake 켜", "깨우기 켜", "깨우기 시작")
-    distance_off_cues = ("distance detection off", "거리 감지 꺼", "거리감지 꺼", "거리 감지 끄")
-    distance_on_cues = ("distance detection on", "거리 감지 켜", "거리감지 켜", "거리 감지 시작")
-    voice_off_cues = ("web voice off", "web 음성 끄", "웹 음성 끄", "웹 보이스 끄", "음성 꺼")
-    voice_on_cues = ("web voice on", "web 음성 켜", "웹 음성 켜", "웹 보이스 켜", "음성 켜")
 
-    if any(cue in normalized for cue in wake_off_cues):
-        return {
-            "action_type": "update_runtime_settings",
-            "patch": {"wake_enabled": False},
-            "summary": "깨우기 기능을 껐어요.",
-        }
-    if any(cue in normalized for cue in wake_on_cues):
-        return {
-            "action_type": "update_runtime_settings",
-            "patch": {"wake_enabled": True},
-            "summary": "깨우기 기능을 켰어요.",
-        }
-    if any(cue in normalized for cue in distance_off_cues):
-        return {
-            "action_type": "update_runtime_settings",
-            "patch": {"distance_detection_enabled": False},
-            "summary": "거리 감지를 껐어요.",
-        }
-    if any(cue in normalized for cue in distance_on_cues):
-        return {
-            "action_type": "update_runtime_settings",
-            "patch": {"distance_detection_enabled": True},
-            "summary": "거리 감지를 켰어요.",
-        }
-    if any(cue in normalized for cue in voice_off_cues):
-        return {
-            "action_type": "update_runtime_settings",
-            "patch": {"web_voice_enabled": False},
-            "summary": "웹 음성을 껐어요.",
-        }
-    if any(cue in normalized for cue in voice_on_cues):
-        return {
-            "action_type": "update_runtime_settings",
-            "patch": {"web_voice_enabled": True},
-            "summary": "웹 음성을 켰어요.",
-        }
+def _contains_any(text: str, cues: tuple[str, ...]) -> bool:
+    return any(cue in text for cue in cues)
 
-    threshold_match = re.search(
-        r"(?:threshold|기준|거리 기준|distance threshold)[^\d]{0,12}(\d+(?:\.\d+)?)\s*(?:cm|센치|센티|센티미터)?",
-        normalized,
+
+def _looks_like_setting_request(question: str) -> bool:
+    return _contains_any(question, _SETTING_CUES)
+
+
+def _is_weather_question(payload: Any) -> bool:
+    question = _normalize(_question_text(payload))
+    return bool(question) and not _looks_like_setting_request(question) and _contains_any(question, _WEATHER_CUES)
+
+
+def _is_distance_question(payload: Any) -> bool:
+    question = _normalize(_question_text(payload))
+    if not question:
+        return False
+    if _looks_like_setting_request(question):
+        return False
+    if _contains_any(question, _WEATHER_CUES):
+        return False
+    return _contains_any(question, _DISTANCE_CUES)
+
+
+def _is_sensor_risk_question(payload: Any) -> bool:
+    question = _normalize(_question_text(payload))
+    if not question:
+        return False
+    if _looks_like_setting_request(question):
+        return False
+    if _is_weather_question(payload) or _is_distance_question(payload):
+        return False
+    return _contains_any(question, _RISK_CUES)
+
+
+def _sensor_summary(payload: Any) -> str:
+    sensor = _payload_dict(getattr(payload, "sensor", None))
+    state = _payload_dict(getattr(payload, "state", None))
+    parts: list[str] = []
+
+    level = str(state.get("level") or "").strip()
+    if level:
+        parts.append(f"현재 상태는 {level}입니다.")
+
+    temperature = sensor.get("temperature")
+    humidity = sensor.get("humidity")
+    water_level = sensor.get("water_level_normalized_0_100")
+    if water_level is None:
+        water_level = sensor.get("water_level_recent_avg_2h")
+    if water_level is None:
+        water_level = sensor.get("water_level")
+    light = sensor.get("light_normalized_0_100")
+    if light is None:
+        light = sensor.get("light_daytime_avg_13_18")
+    if light is None:
+        light = sensor.get("light")
+
+    if temperature is not None:
+        parts.append(f"기온은 {float(temperature):.1f}도입니다.")
+    if humidity is not None:
+        parts.append(f"습도는 {float(humidity):.1f}%입니다.")
+    if water_level is not None:
+        parts.append(f"수위는 {float(water_level):.1f}%입니다.")
+    if light is not None:
+        parts.append(f"조도는 {float(light):.1f}%입니다.")
+
+    return " ".join(parts).strip() or "현재 소스 세부 정보를 읽을 수 없습니다."
+
+
+def _weather_contract(payload: Any) -> dict[str, Any]:
+    sensor = _payload_dict(getattr(payload, "sensor", None))
+    temperature = sensor.get("temperature")
+    humidity = sensor.get("humidity")
+
+    parts = ["현재 날씨는 직접 조회하지 않고, 세부 정보로만 안내합니다."]
+    if temperature is not None:
+        parts.append(f"기온은 {float(temperature):.1f}도입니다.")
+    if humidity is not None:
+        parts.append(f"습도는 {float(humidity):.1f}%입니다.")
+    if len(parts) == 1:
+        parts.append("참고할 날씨 정보가 없습니다.")
+
+    return build_contract(
+        answer=" ".join(parts),
+        action_proposal=None,
+        confidence=0.94,
+        reason="weather_question",
     )
-    if threshold_match:
-        value = float(threshold_match.group(1))
-        if value > 0:
-            return {
-                "action_type": "update_runtime_settings",
-                "patch": {"distance_threshold_cm": value},
-                "summary": f"거리 기준을 {value:g}cm로 바꿨어요.",
-            }
-
-    return None
 
 
-def build_mock_contract(payload: Any) -> dict[str, Any]:
-    question = str(getattr(payload, "question", "") or "").strip()
-    use_sensor_context = bool(getattr(payload, "use_sensor_context", False))
-    action_proposal = _infer_action_proposal(question)
+def _distance_contract(payload: Any) -> dict[str, Any]:
+    sensor = _payload_dict(getattr(payload, "sensor", None))
+    runtime_settings = _payload_dict(getattr(payload, "runtime_settings", None))
 
-    if not use_sensor_context:
-        answer = "센서 정보가 없어서 지금 상태를 바로 보기는 어려워요."
-        if action_proposal is not None:
-            answer = f"{answer} 요청하신 설정은 바꿔볼 수 있어요."
-        return {
-            "answer": answer,
-            "action_proposal": action_proposal,
-            "confidence": 0.45 if action_proposal is not None else 0.3,
-            "reason": "센서 컨텍스트가 꺼져 있어도 질문 의도만으로 기본 판단을 만들었어요.",
-        }
+    distance = sensor.get("distance")
+    threshold = runtime_settings.get("distance_threshold_cm")
+    inside = runtime_settings.get("distance_inside_threshold")
 
-    answer = _summarize_sensor(payload)
-    if action_proposal is not None:
-        answer = f"{answer} 요청하신 설정을 바꿀게요."
+    parts = ["거리 기준으로 보면"]
+    if distance is not None:
+        parts.append(f"현재 거리는 {float(distance):.1f}cm입니다.")
+    if threshold is not None:
+        try:
+            parts.append(f"기준은 {float(threshold):.0f}cm입니다.")
+        except (TypeError, ValueError):
+            pass
+    if inside is True:
+        parts.append("지금은 기준 안쪽입니다.")
+    elif inside is False:
+        parts.append("지금은 기준 바깥쪽입니다.")
 
-    return {
-        "answer": answer,
-        "action_proposal": action_proposal,
-        "confidence": 0.88 if action_proposal is not None else 0.66,
-        "reason": "질문과 센서 상태를 함께 보고 답을 만들었어요.",
-    }
+    return build_contract(
+        answer=" ".join(parts),
+        action_proposal=None,
+        confidence=0.92,
+        reason="distance_question",
+    )
 
 
-def get_chain():
-    from langchain_core.runnables import RunnableLambda
+def _risk_contract(payload: Any) -> dict[str, Any]:
+    return build_contract(
+        answer=_sensor_summary(payload),
+        action_proposal=None,
+        confidence=0.9,
+        reason="sensor_state_summary",
+    )
+
+
+def _general_model_payload(payload: Any) -> Any:
+    data = _payload_dict(payload)
+    data["use_sensor_context"] = False
+    data["sensor"] = None
+    data["state"] = None
+    data["runtime_settings"] = None
+    data["action_result"] = None
+    return SimpleNamespace(**data)
+
+
+def _setting_model_payload(payload: Any) -> Any:
+    data = _payload_dict(payload)
+    data["use_sensor_context"] = False
+    data["sensor"] = None
+    data["state"] = None
+    return SimpleNamespace(**data)
+
+
+def _general_mock_contract(payload: Any) -> dict[str, Any]:
+    question = _question_text(payload)
+    if question:
+        answer = f"모의 모드입니다. 질문 '{question}'에 대한 실제 모델 답변은 사용할 수 없습니다."
+    else:
+        answer = "모의 모드에서는 실제 모델 답변을 생성하지 않습니다."
+    return build_contract(
+        answer=answer,
+        action_proposal=None,
+        confidence=0.2,
+        reason="mock_general_dialogue",
+    )
+
+
+def generate_contract(payload: Any) -> dict[str, Any]:
+    from model_engine import generate_contract as _generate_contract
+
+    return _generate_contract(payload)
+
+
+def route_contract(payload: Any) -> dict[str, Any]:
+    if _is_weather_question(payload):
+        return _weather_contract(payload)
+    if _is_distance_question(payload):
+        return _distance_contract(payload)
+    if _is_sensor_risk_question(payload):
+        return _risk_contract(payload)
+
+    if _looks_like_setting_request(_normalize(_question_text(payload))):
+        return generate_contract(_setting_model_payload(payload))
 
     if MOCK_MODE:
-        return RunnableLambda(build_mock_contract)
+        return _general_mock_contract(payload)
+    return generate_contract(_general_model_payload(payload))
 
-    from model_engine import generate_contract
 
-    return RunnableLambda(generate_contract)
+class DispatchChain:
+    def invoke(self, payload: Any) -> dict[str, Any]:
+        return route_contract(payload)
+
+
+def get_chain() -> DispatchChain:
+    return DispatchChain()

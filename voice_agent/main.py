@@ -5,13 +5,14 @@ import logging
 import os
 import tempfile
 import uuid
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -38,6 +39,7 @@ DEFAULT_STT_MODEL = os.getenv("STT_MODEL", "fast")
 VOICE_AGENT_PORT = int(os.getenv("VOICE_AGENT_PORT", "8003"))
 SHARED_AUDIO_DIR = os.getenv("SHARED_AUDIO_DIR", "shared/audio")
 EVENT_POLLER_INTERVAL = float(os.getenv("EVENT_POLLER_INTERVAL", "1.0"))
+TTS_WARMUP_TEXT = os.getenv("TTS_WARMUP_TEXT", "안녕")
 
 logger = logging.getLogger("voice_agent")
 
@@ -48,12 +50,15 @@ event_poller = EventPoller(
     api_client,
     tts_client,
     interval_sec=EVENT_POLLER_INTERVAL,
+    event_types=["proactive_greeting"],
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Voice Agent starting...")
+    if TTS_WARMUP_TEXT.strip():
+        synthesize_tts(TTS_WARMUP_TEXT, prefix="warmup")
     event_poller.start()
     yield
     logger.info("Voice Agent shutting down...")
@@ -65,8 +70,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -96,6 +101,7 @@ class AskResponse(BaseModel):
     session_id: str
     api_health: dict[str, Any]
     tts_ok: bool
+    tts_queued: bool = False
     tts_path: Optional[str] = None
     interaction_id: Optional[int] = None
     session_created: Optional[bool] = None
@@ -112,6 +118,7 @@ class SpeakPayload(BaseModel):
 class SpeakResponse(BaseModel):
     saved: bool
     tts_ok: bool
+    tts_queued: bool = False
     tts_path: Optional[str] = None
     session_id: str
     message_saved: bool = False
@@ -152,6 +159,7 @@ def ask_api_server(
             persona_memo=persona_memo,
             system_memo=system_memo,
             use_sensor_context=True,
+            session_kind="voice",
         )
     except requests.HTTPError as exc:
         logger.error("[ask] api-server returned HTTP error: %s | url=%s | status=%s", exc, exc.request.url if exc.request else "N/A", exc.response.status_code if exc.response else "N/A")
@@ -161,21 +169,83 @@ def ask_api_server(
         raise HTTPException(status_code=503, detail=f"api-server unreachable: {exc}") from exc
 
 
+_SPOKEN_TEXT_KEYS = ("answer", "tts_text", "llm_answer", "response", "text", "content")
+
+
+def _unwrap_spoken_text(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE | re.DOTALL).strip()
+    json_start = cleaned.find("{")
+    json_end = cleaned.rfind("}")
+    if json_start != -1:
+        json_blob = cleaned[json_start : json_end + 1] if json_end > json_start else cleaned[json_start:]
+        try:
+            parsed = json.loads(json_blob)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            for key in _SPOKEN_TEXT_KEYS:
+                value = parsed.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            for key in _SPOKEN_TEXT_KEYS:
+                value = parsed.get(key)
+                if value not in (None, ""):
+                    return str(value).strip()
+
+    return cleaned
+
+
 def extract_answer(api_result: dict[str, Any]) -> str:
-    answer = str(
-        api_result.get("tts_text")
-        or api_result.get("llm_answer")
+    answer = _unwrap_spoken_text(
+        api_result.get("llm_answer")
         or api_result.get("answer")
+        or api_result.get("tts_text")
         or ""
-    ).strip()
+    )
     if not answer:
         raise HTTPException(status_code=502, detail="api-server returned an empty answer")
     return answer
 
 
-def synthesize_tts(text: str, voice_name: Optional[str] = None) -> Optional[str]:
+def extract_tts_text(api_result: dict[str, Any]) -> str:
+    text = _unwrap_spoken_text(
+        api_result.get("tts_text")
+        or api_result.get("llm_answer")
+        or api_result.get("answer")
+        or ""
+    )
+    if not text:
+        raise HTTPException(status_code=502, detail="api-server returned an empty tts text")
+    return text
+
+
+def _resolve_session_id(explicit_session_id: Optional[str]) -> str:
+    if explicit_session_id:
+        return explicit_session_id
+
+    stored_session_id = session_store.load()
+    if not stored_session_id:
+        return str(uuid.uuid4())
+
     try:
-        path = tts_client.synthesize_to_file(text, voice_name=voice_name, prefix="ask")
+        payload = api_client.get_json(f"{API_SERVER_URL}/sessions/{stored_session_id}", timeout=10)
+        session = payload.get("session") or {}
+        if session.get("ended_at"):
+            session_store.clear()
+            return str(uuid.uuid4())
+    except Exception:
+        return stored_session_id
+
+    return stored_session_id
+
+
+def synthesize_tts(text: str, voice_name: Optional[str] = None, prefix: str = "ask") -> Optional[str]:
+    try:
+        path = tts_client.synthesize_to_file(text, voice_name=voice_name, prefix=prefix)
         return str(path)
     except Exception as exc:
         logger.warning("TTS synthesis failed: %s", exc)
@@ -196,27 +266,45 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(payload: AskPayload) -> AskResponse:
-    session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
+def ask(payload: AskPayload, background_tasks: BackgroundTasks = None) -> AskResponse:
+    session_id = _resolve_session_id(payload.session_id)
     session_store.save(session_id)
 
     a_health = api_health()
     if not a_health.get("ok"):
+        logger.error("[ask] api-server unavailable: %s", a_health.get("error"))
         raise HTTPException(status_code=503, detail=f"api-server unavailable: {a_health.get('error')}")
 
-    api_result = ask_api_server(
-        payload.text,
-        session_id,
-        persona_memo=payload.persona_memo,
-        system_memo=payload.system_memo,
-    )
+    try:
+        api_result = ask_api_server(
+            payload.text,
+            session_id,
+            persona_memo=payload.persona_memo,
+            system_memo=payload.system_memo,
+        )
+    except HTTPException as exc:
+        logger.error("[ask] voice interaction failed: %s | session_id=%s | text=%s", exc.detail, session_id, payload.text)
+        raise
+    except Exception as exc:
+        logger.error("[ask] unexpected error in voice interaction: %s | session_id=%s", exc, session_id)
+        raise HTTPException(status_code=500, detail="Unexpected error in voice interaction") from exc
+    
     answer = extract_answer(api_result)
+    tts_text = extract_tts_text(api_result)
     tts_path: Optional[str] = None
     tts_ok = False
+    tts_queued = False
 
     if payload.speak:
-        tts_path = synthesize_tts(answer, voice_name=payload.voice_name)
-        tts_ok = tts_path is not None
+        if background_tasks is not None:
+            background_tasks.add_task(synthesize_tts, tts_text, payload.voice_name, "ask")
+            tts_queued = True
+            tts_ok = True
+        else:
+            tts_path = synthesize_tts(tts_text, voice_name=payload.voice_name)
+            tts_ok = tts_path is not None
+            if not tts_ok:
+                logger.warning("[ask] TTS synthesis failed for answer: %s | session_id=%s", tts_text[:100], session_id)
 
     resolved_session_id = str(api_result.get("session_id") or session_id)
     session_store.save(resolved_session_id)
@@ -227,6 +315,7 @@ def ask(payload: AskPayload) -> AskResponse:
         session_id=resolved_session_id,
         api_health=a_health,
         tts_ok=tts_ok,
+        tts_queued=tts_queued,
         tts_path=tts_path,
         interaction_id=api_result.get("interaction_id"),
         session_created=api_result.get("session_created"),
@@ -235,13 +324,14 @@ def ask(payload: AskPayload) -> AskResponse:
 
 
 @app.post("/speak", response_model=SpeakResponse)
-def speak(payload: SpeakPayload) -> SpeakResponse:
-    session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
+def speak(payload: SpeakPayload, background_tasks: BackgroundTasks = None) -> SpeakResponse:
+    session_id = _resolve_session_id(payload.session_id)
     session_store.save(session_id)
 
     tts_path: Optional[str] = None
     tts_ok = False
     message_saved = False
+    tts_queued = False
 
     if payload.save_message:
         try:
@@ -250,20 +340,27 @@ def speak(payload: SpeakPayload) -> SpeakResponse:
                 role="assistant",
                 content=payload.text,
                 meta={"source": "voice_agent_speak", "kind": "wake_greeting"},
+                session_kind="voice",
             )
             message_saved = True
         except Exception as exc:
             logger.warning("[speak] session_message save failed: %s", exc)
 
     try:
-        tts_path = synthesize_tts(payload.text, voice_name=payload.voice_name)
-        tts_ok = tts_path is not None
+        if background_tasks is not None:
+            background_tasks.add_task(synthesize_tts, payload.text, payload.voice_name, "speak")
+            tts_ok = True
+            tts_queued = True
+        else:
+            tts_path = synthesize_tts(payload.text, voice_name=payload.voice_name, prefix="speak")
+            tts_ok = tts_path is not None
     except Exception as exc:
         logger.error("[speak] TTS synthesis failed: %s", exc)
 
     return SpeakResponse(
         saved=True,
         tts_ok=tts_ok,
+        tts_queued=tts_queued,
         tts_path=tts_path,
         session_id=session_id,
         message_saved=message_saved,

@@ -1,0 +1,104 @@
+.report-page {
+  display: grid;
+  gap: 18px;
+}
+
+.sensor-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.sensor-switch-panel {
+  min-height: 420px;
+  border: 3px solid #8b5e24;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #fff9e3, #fff3cc);
+  box-shadow: 0 16px 28px rgba(78, 45, 12, 0.18);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 10px;
+  margin-bottom: 0;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #355338;
+}
+
+.panel-body {
+  padding: 16px 20px 20px;
+}
+
+.mode-switch {
+  display: inline-flex;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  flex-wrap: wrap;
+}
+
+.mode-button {
+  min-width: 102px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #23301a;
+  font-weight: 800;
+}
+
+.mode-button.is-active {
+  background: linear-gradient(180deg, #7bd469, #3d8d34);
+  color: #fff;
+}
+
+.weekly-list {
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-card {
+  min-height: 2cm;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(148, 99, 37, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 21px;
+}
+
+.weekly-date {
+  color: #238a34;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.weekly-text {
+  text-align: right;
+  white-space: nowrap;
+  color: #443d2d;
+}
+
+@media (max-width: 640px) {
+  .weekly-card {
+    align-items: flex-start;
+    flex-direction: column;
+    font-size: 16px;
+  }
+
+  .weekly-text {
+    text-align: left;
+    white-space: normal;
+  }
+}

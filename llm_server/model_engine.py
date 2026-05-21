@@ -6,8 +6,19 @@ import unicodedata
 from threading import Lock
 from typing import Any, Optional
 
-from config import LLM_MODEL_ID, LLM_MODEL_REVISION, logger
+from config import (
+    HF_LLM_BACKEND,
+    HF_LLM_ENDPOINT_URL,
+    HF_LLM_ROUTER_BASE_URL,
+    HF_LLM_ROUTER_MODEL,
+    HF_TIMEOUT_SEC,
+    HF_TOKEN,
+    LLM_MODEL_ID,
+    LLM_MODEL_REVISION,
+    logger,
+)
 from contracts import build_contract, coerce_contract
+from hf_endpoint_client import HF_LLM_RUNTIME_STATE, chat_completion, extract_text, post_json
 
 _MODEL_BUNDLE: Optional[dict[str, Any]] = None
 _MODEL_LOCK = Lock()
@@ -15,9 +26,11 @@ _MODEL_LOCK = Lock()
 
 def normalize_answer(answer: str) -> str:
     cleaned = unicodedata.normalize("NFKC", answer or "")
+    cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
     cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
-    cleaned = re.sub(r"[\x00-\x1f\x7f]", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", cleaned)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
 
@@ -73,6 +86,32 @@ def get_readiness_state() -> dict[str, Any]:
     try:
         import torch
 
+        if HF_LLM_BACKEND == "router" and HF_TOKEN:
+            return {
+                "ok": True,
+                "ready": True,
+                "mode": "hf_router",
+                "model_loaded": True,
+                "cuda_available": torch.cuda.is_available(),
+                "device": "hf_router",
+                "error": HF_LLM_RUNTIME_STATE.get("last_error"),
+                "error_type": None,
+                "last_latency_ms": HF_LLM_RUNTIME_STATE.get("last_latency_ms"),
+            }
+
+        if HF_LLM_ENDPOINT_URL:
+            return {
+                "ok": True,
+                "ready": True,
+                "mode": "hf_endpoint",
+                "model_loaded": True,
+                "cuda_available": torch.cuda.is_available(),
+                "device": "hf_endpoint",
+                "error": HF_LLM_RUNTIME_STATE.get("last_error"),
+                "error_type": None,
+                "last_latency_ms": HF_LLM_RUNTIME_STATE.get("last_latency_ms"),
+            }
+
         bundle = get_model_bundle()
         return {
             "ok": True,
@@ -109,32 +148,69 @@ def _safe_plain_text(payload: Any) -> str:
     if hasattr(runtime_settings, "model_dump"):
         runtime_settings = runtime_settings.model_dump()
 
-    values: list[str] = []
-    for key, label in (
-        ("temperature", "온도"),
-        ("humidity", "습도"),
-        ("light", "조도"),
-        ("water_level", "수위"),
-        ("distance", "거리"),
-    ):
-        if isinstance(sensor, dict) and sensor.get(key) is not None:
-            values.append(f"{label} {sensor[key]}")
+    question = str(getattr(payload, "question", "") or "").strip().lower()
+    distance_keywords = ("거리", "distance", "가까워", "멀어", "threshold", "near", "far", "근접")
+    is_distance_question = any(keyword in question for keyword in distance_keywords)
 
-    sensor_text = ", ".join(values) if values else "센서 값이 아직 없어요"
-    state_level = state.get("level", "normal") if isinstance(state, dict) else "normal"
-    runtime_text = f"runtime_settings: {runtime_settings}" if runtime_settings else ""
-    if runtime_text:
-        return f"지금 상태는 {state_level}이에요. {sensor_text}. {runtime_text}"
-    return f"지금 상태는 {state_level}이에요. {sensor_text}."
+    def _num(key: str) -> float | None:
+        try:
+            value = sensor.get(key) if isinstance(sensor, dict) else None
+            return None if value is None else float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _first_num(*keys: str) -> float | None:
+        for key in keys:
+            value = _num(key)
+            if value is not None:
+                return value
+        return None
+
+    if is_distance_question:
+        distance = _num("distance")
+        threshold = runtime_settings.get("distance_threshold_cm") if isinstance(runtime_settings, dict) else None
+        inside = runtime_settings.get("distance_inside_threshold") if isinstance(runtime_settings, dict) else None
+        parts = ["어떻게 거리 기준을 알실까요"]
+        if distance is not None:
+            parts.append(f"현재 거리는 {distance:.1f}cm입니다.")
+        if threshold is not None:
+            try:
+                parts.append(f"기준은 {float(threshold):.0f}cm입니다.")
+            except (TypeError, ValueError):
+                pass
+        if inside is True:
+            parts.append("지금은 기준 안쪽입니다.")
+        elif inside is False:
+            parts.append("지금은 기준 바깜쪽입니다.")
+        return " ".join(parts)
+
+    temperature = _num("temperature")
+    humidity = _num("humidity")
+    water_level = _first_num("water_level_normalized_0_100", "water_level_recent_avg_2h", "water_level")
+    light = _first_num("light_normalized_0_100", "light_daytime_avg_13_18", "light")
+    state_level = str(state.get("level") or "normal").strip() or "normal"
+
+    parts = [f"현재 상태는 {state_level}입니다."]
+    if temperature is not None:
+        parts.append(f"기온 {temperature:.1f}도")
+    if humidity is not None:
+        parts.append(f"습도 {humidity:.1f}%")
+    if water_level is not None:
+        parts.append(f"수위 {water_level:.1f}%")
+    if light is not None:
+        parts.append(f"조도 {light:.1f}%")
+
+    if len(parts) == 1:
+        return "현재 센서 값을 바로 읽지 못했습니다."
+    return " / ".join(parts)
 
 
 def _extract_json_blob(text: str) -> str | None:
-    cleaned = (text or "").strip()
+    cleaned = normalize_answer(text)
     if not cleaned:
         return None
 
-    # 코드블록 마커 제거 (```json ... ```)
-    cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
+    cleaned = re.sub(r"```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace("```", "").strip()
 
     start = cleaned.find("{")
@@ -197,19 +273,19 @@ def _sanitize_action_proposal(action_proposal: Any) -> dict[str, Any] | None:
             if numeric_value <= 0:
                 continue
             sanitized_patch[key] = numeric_value
-        else:
-            if isinstance(value, bool):
-                sanitized_patch[key] = value
-                continue
-            if isinstance(value, (int, float)):
-                sanitized_patch[key] = bool(value)
-                continue
-            if isinstance(value, str):
-                normalized = value.strip().lower()
-                if normalized in {"true", "1", "yes", "on", "켜", "켜기"}:
-                    sanitized_patch[key] = True
-                elif normalized in {"false", "0", "no", "off", "끄", "끄기"}:
-                    sanitized_patch[key] = False
+            continue
+        if isinstance(value, bool):
+            sanitized_patch[key] = value
+            continue
+        if isinstance(value, (int, float)):
+            sanitized_patch[key] = bool(value)
+            continue
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                sanitized_patch[key] = True
+            elif normalized in {"false", "0", "no", "off"}:
+                sanitized_patch[key] = False
 
     if not sanitized_patch:
         return None
@@ -226,11 +302,11 @@ def _build_fallback_contract(payload: Any, *, raw_text: str = "") -> dict[str, A
     answer = normalize_answer(raw_text)
     if not answer:
         answer = _safe_plain_text(payload)
-    question = str(getattr(payload, "question", "") or "").strip()
-    if question and len(answer) < 80:
-        lowered = question.lower()
-        if any(k in lowered for k in ("wake", "깨우기", "distance", "거리", "voice", "음성", "보이스", "threshold", "기준")):
-            answer = f"{answer} 설정을 바꾸고 싶으시면 더 명확하게 말씀해 주세요."
+
+    question = str(getattr(payload, "question", "") or "").strip().lower()
+    if question and len(answer) < 60 and any(keyword in question for keyword in ("일반", "안녕", "hello", "hi", "how", "뭐")):
+        answer = f"{answer} 조금 더 구체적으로 말해 주면 더 정확하게 답할 수 있습니다."
+
     return build_contract(
         answer=answer,
         action_proposal=None,
@@ -240,54 +316,26 @@ def _build_fallback_contract(payload: Any, *, raw_text: str = "") -> dict[str, A
 
 
 def parse_contract_text(text: str, payload: Any | None = None) -> dict[str, Any]:
-    # Regex-based preemptive rescue for the "answer" field
-    # Highly robust defense for LLM JSON breakdown cases
-    extracted_answer = None
-    
-    # 1) re.DOTALL을 사용해 개행 문자가 포함된 긴 문자열도 완벽하게 추출
-    match = re.search(r'"answer"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', text, re.DOTALL)
-    if match:
-        try:
-            extracted_answer = json.loads(f'"{match.group(1)}"')
-        except Exception:
-            extracted_answer = match.group(1)
-            
-    # 2) 만약 1차 정규식으로 구출에 실패한 경우, 뒷부분이 잘린 JSON 형태에서도 answer를 구출할 수 있는 백업 정규식 시도
-    if not extracted_answer:
-        lazy_match = re.search(r'"answer"\s*:\s*"(.*?)"(?:\s*,|\s*\})', text, re.DOTALL)
-        if lazy_match:
-            try:
-                extracted_answer = json.loads(f'"{lazy_match.group(1)}"')
-            except Exception:
-                extracted_answer = lazy_match.group(1)
-
     blob = _extract_json_blob(text)
     if blob is None:
-        raw_text = extracted_answer if extracted_answer else text
-        return _build_fallback_contract(payload, raw_text=raw_text)
+        return _build_fallback_contract(payload, raw_text=text)
 
     try:
         raw = json.loads(blob)
     except json.JSONDecodeError:
-        raw_text = extracted_answer if extracted_answer else text
-        return _build_fallback_contract(payload, raw_text=raw_text)
+        return _build_fallback_contract(payload, raw_text=text)
 
     contract = coerce_contract(raw)
     if contract is None:
-        # Extract answer from parsed raw dict or fallback to regex match
         fallback_text = str(raw.get("answer") or "") if isinstance(raw, dict) else ""
-        if not fallback_text and extracted_answer:
-            fallback_text = extracted_answer
         return _build_fallback_contract(payload, raw_text=fallback_text or text)
 
     contract["answer"] = normalize_answer(str(contract.get("answer") or "")) or _safe_plain_text(payload)
-    if not contract["answer"] and extracted_answer:
-        contract["answer"] = normalize_answer(extracted_answer)
-
-    contract["reason"] = normalize_answer(str(contract.get("reason") or ""))
+    contract["reason"] = str(contract.get("reason") or "").strip()
     contract["action_proposal"] = _sanitize_action_proposal(contract.get("action_proposal"))
-    if contract["action_proposal"] is None and raw.get("action_proposal") is not None:
+    if contract["action_proposal"] is None and isinstance(raw, dict) and raw.get("action_proposal") is not None:
         contract["reason"] = "action_proposal_rejected"
+
     confidence = contract.get("confidence")
     try:
         contract["confidence"] = max(0.0, min(float(confidence), 1.0))
@@ -297,18 +345,76 @@ def parse_contract_text(text: str, payload: Any | None = None) -> dict[str, Any]
 
 
 def generate_contract(payload: Any) -> dict[str, Any]:
-    import torch
-
     from prompt_builder import build_history_messages, build_system_prompt, build_user_prompt
+
+    messages = [{"role": "system", "content": build_system_prompt(payload)}]
+    messages.extend(build_history_messages(payload))
+    messages.append({"role": "user", "content": build_user_prompt(payload)})
+    max_new_tokens = 36 if bool(getattr(payload, "use_sensor_context", False)) else 48
+
+    if HF_LLM_BACKEND == "router" and HF_TOKEN:
+        try:
+            response, latency_ms = chat_completion(
+                base_url=HF_LLM_ROUTER_BASE_URL,
+                api_key=HF_TOKEN,
+                model=HF_LLM_ROUTER_MODEL,
+                messages=messages,
+                max_tokens=max_new_tokens,
+                timeout=HF_TIMEOUT_SEC,
+            )
+            HF_LLM_RUNTIME_STATE.update(
+                {
+                    "ready": True,
+                    "backend": "router",
+                    "model": HF_LLM_ROUTER_MODEL,
+                    "last_latency_ms": latency_ms,
+                    "last_error": None,
+                }
+            )
+            text = extract_text(response)
+            if not text:
+                return _build_fallback_contract(payload, raw_text="")
+            return parse_contract_text(text, payload)
+        except Exception as exc:
+            HF_LLM_RUNTIME_STATE.update({"ready": False, "last_error": str(exc)})
+            logger.warning("HF Router LLM failed, trying next LLM backend: %s", exc)
+
+    if HF_LLM_ENDPOINT_URL:
+        request_body = {
+            "messages": messages,
+            "inputs": messages[-1]["content"],
+            "parameters": {
+                "max_new_tokens": max_new_tokens,
+                "temperature": 0.0,
+                "do_sample": False,
+                "return_full_text": False,
+            },
+        }
+        try:
+            response, latency_ms = post_json(HF_LLM_ENDPOINT_URL, request_body, token=HF_TOKEN, timeout=HF_TIMEOUT_SEC)
+            HF_LLM_RUNTIME_STATE.update(
+                {
+                    "ready": True,
+                    "backend": "endpoint",
+                    "model": LLM_MODEL_ID,
+                    "last_latency_ms": latency_ms,
+                    "last_error": None,
+                }
+            )
+            text = extract_text(response)
+            if not text:
+                return _build_fallback_contract(payload, raw_text="")
+            return parse_contract_text(text, payload)
+        except Exception as exc:
+            HF_LLM_RUNTIME_STATE.update({"ready": False, "last_error": str(exc)})
+            logger.warning("HF LLM endpoint failed, falling back to local model: %s", exc)
+
+    import torch
 
     bundle = get_model_bundle()
     tokenizer = bundle["tokenizer"]
     model = bundle["model"]
     device = bundle["device"]
-
-    messages = [{"role": "system", "content": build_system_prompt(payload)}]
-    messages.extend(build_history_messages(payload))
-    messages.append({"role": "user", "content": build_user_prompt(payload)})
 
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
@@ -317,23 +423,13 @@ def generate_contract(payload: Any) -> dict[str, Any]:
         output_ids = model.generate(
             **inputs,
             do_sample=False,
-            max_new_tokens=192,
-            repetition_penalty=1.08,
-            no_repeat_ngram_size=2,
-            length_penalty=0.9,
-            pad_token_id=tokenizer.eos_token_id,
+            max_new_tokens=max_new_tokens,
+            temperature=0.0,
+            top_p=1.0,
         )
 
     generated_ids = output_ids[0][inputs["input_ids"].shape[-1] :]
-    decoded = tokenizer.decode(generated_ids, skip_special_tokens=True)
-    contract = parse_contract_text(decoded, payload)
-    if not contract.get("answer"):
-        contract["answer"] = _safe_plain_text(payload)
-    contract.setdefault("reason", "")
-    contract.setdefault("confidence", 0.0)
-    contract.setdefault("action_proposal", None)
-    return contract
-
-
-def generate_answer(payload: Any) -> str:
-    return str(generate_contract(payload).get("answer", ""))
+    text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    if not text.strip():
+        return _build_fallback_contract(payload, raw_text=text)
+    return parse_contract_text(text, payload)

@@ -4,17 +4,20 @@ from uuid import UUID
 from fastapi import HTTPException
 from psycopg.types.json import Json
 
+from services.session_kind import normalize_session_kind
 
-def ensure_session(conn, session_id: UUID) -> tuple[dict[str, Any], bool]:
+
+def ensure_session(conn, session_id: UUID, session_kind: Optional[str] = None) -> tuple[dict[str, Any], bool]:
+    resolved_session_kind = normalize_session_kind(session_kind)
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO session (session_id)
-            VALUES (%s)
+            INSERT INTO session (session_id, session_kind)
+            VALUES (%s, %s)
             ON CONFLICT DO NOTHING
-            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta
+            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta, session_kind
             """,
-            (session_id,),
+            (session_id, resolved_session_kind),
         )
         row = cur.fetchone()
         if row is not None:
@@ -23,14 +26,27 @@ def ensure_session(conn, session_id: UUID) -> tuple[dict[str, Any], bool]:
         cur.execute(
             """
             UPDATE session
-            SET last_seen_at = NOW()
+            SET last_seen_at = NOW(),
+                session_kind = COALESCE(session_kind, %s)
             WHERE session_id = %s
-            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta
+              AND ended_at IS NULL
+            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta, session_kind
             """,
-            (session_id,),
+            (resolved_session_kind, session_id),
         )
         row = cur.fetchone()
         if row is None:
+            cur.execute(
+                """
+                SELECT ended_at
+                FROM session
+                WHERE session_id = %s
+                """,
+                (session_id,),
+            )
+            existing = cur.fetchone()
+            if existing is not None and existing.get("ended_at") is not None:
+                raise HTTPException(status_code=409, detail="session has already ended")
             raise HTTPException(status_code=500, detail="session row could not be created")
         return row, False
 
@@ -43,7 +59,7 @@ def update_session_turn(conn, session_id: UUID) -> dict[str, Any]:
             SET last_seen_at = NOW(),
                 turn_count = turn_count + 1
             WHERE session_id = %s
-            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta
+            RETURNING session_id, session_kind, created_at, last_seen_at, ended_at, turn_count, meta
             """,
             (session_id,),
         )
@@ -61,7 +77,7 @@ def update_session_meta(conn, session_id: UUID, meta_patch: dict[str, Any]) -> d
             SET last_seen_at = NOW(),
                 meta = COALESCE(meta, '{}'::jsonb) || %s::jsonb
             WHERE session_id = %s
-            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta
+            RETURNING session_id, session_kind, created_at, last_seen_at, ended_at, turn_count, meta
             """,
             (Json(meta_patch or {}), session_id),
         )
@@ -80,7 +96,7 @@ def end_session(conn, session_id: UUID, meta: Optional[dict[str, Any]] = None) -
                 last_seen_at = NOW(),
                 meta = COALESCE(meta, '{}'::jsonb) || %s::jsonb
             WHERE session_id = %s
-            RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta
+            RETURNING session_id, session_kind, created_at, last_seen_at, ended_at, turn_count, meta
             """,
             (Json(meta or {}), session_id),
         )

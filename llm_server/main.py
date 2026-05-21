@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,7 +16,20 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from chain_builder import get_chain
-from config import LLM_MODEL_ID, LLM_MODEL_REVISION, MOCK_MODE, RUN_MODE, logger
+from config import (
+    HF_LLM_BACKEND,
+    HF_LLM_ENDPOINT_URL,
+    HF_LLM_ROUTER_BASE_URL,
+    HF_LLM_ROUTER_MODEL,
+    HF_TIMEOUT_SEC,
+    HF_TOKEN,
+    LLM_MODEL_ID,
+    LLM_MODEL_REVISION,
+    MOCK_MODE,
+    RUN_MODE,
+    logger,
+)
+from hf_endpoint_client import HF_LLM_RUNTIME_STATE, chat_completion, post_json
 from model_engine import get_readiness_state
 
 
@@ -56,7 +67,8 @@ class GeneratePayload(BaseModel):
     use_sensor_context: bool = False
 
 
-GeneratePayload.model_rebuild()
+if hasattr(GeneratePayload, "model_rebuild"):
+    GeneratePayload.model_rebuild()
 
 
 @app.exception_handler(Exception)
@@ -109,21 +121,29 @@ def ready() -> JSONResponse:
             "server": "llm",
             "run_mode": RUN_MODE,
             "mock_mode": MOCK_MODE,
+            "backend": "mock" if MOCK_MODE else ("hf_router" if HF_LLM_BACKEND == "router" else ("hf_endpoint" if HF_LLM_ENDPOINT_URL else "local")),
+            "hf_llm_backend": HF_LLM_BACKEND,
+            "hf_llm_endpoint_configured": bool(HF_LLM_ENDPOINT_URL),
+            "hf_llm_router_model": HF_LLM_ROUTER_MODEL,
+            "hf_token_configured": bool(HF_TOKEN),
             "model": LLM_MODEL_ID,
             "revision": LLM_MODEL_REVISION,
-            "framework": "langchain",
+            "framework": "python",
             "model_loaded": readiness["model_loaded"],
             "cuda_available": readiness["cuda_available"],
             "device": readiness["device"],
             "mode": readiness["mode"],
             "error": readiness["error"],
             "error_type": readiness["error_type"],
+            "last_latency_ms": readiness.get("last_latency_ms"),
         },
     )
 
 
 @app.post("/generate")
-def generate(payload: GeneratePayload) -> dict[str, Any]:
+def generate(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, GeneratePayload):
+        payload = GeneratePayload.model_validate(payload) if hasattr(GeneratePayload, "model_validate") else GeneratePayload.parse_obj(payload)
     contract = get_chain().invoke(payload)
     if not isinstance(contract, dict):
         contract = {
@@ -137,5 +157,39 @@ def generate(payload: GeneratePayload) -> dict[str, Any]:
     contract.setdefault("confidence", 0.0)
     contract.setdefault("reason", "")
     contract["mock"] = MOCK_MODE
-    contract["framework"] = "langchain"
+    contract["framework"] = "python"
     return contract
+
+
+@app.on_event("startup")
+def startup_warm_hf_endpoint() -> None:
+    if MOCK_MODE:
+        return
+    try:
+        if HF_LLM_BACKEND == "router" and HF_TOKEN:
+            _, latency_ms = chat_completion(
+                base_url=HF_LLM_ROUTER_BASE_URL,
+                api_key=HF_TOKEN,
+                model=HF_LLM_ROUTER_MODEL,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+                timeout=HF_TIMEOUT_SEC,
+            )
+            HF_LLM_RUNTIME_STATE.update({"ready": True, "backend": "router", "model": HF_LLM_ROUTER_MODEL, "last_latency_ms": latency_ms, "last_error": None})
+            return
+        if not HF_LLM_ENDPOINT_URL:
+            return
+        _, latency_ms = post_json(
+            HF_LLM_ENDPOINT_URL,
+            {
+                "messages": [{"role": "user", "content": "ping"}],
+                "inputs": "ping",
+                "parameters": {"max_new_tokens": 1, "temperature": 0.0, "do_sample": False},
+            },
+            token=HF_TOKEN,
+            timeout=HF_TIMEOUT_SEC,
+        )
+        HF_LLM_RUNTIME_STATE.update({"ready": True, "backend": "endpoint", "model": LLM_MODEL_ID, "last_latency_ms": latency_ms, "last_error": None})
+    except Exception as exc:
+        HF_LLM_RUNTIME_STATE.update({"ready": False, "last_error": str(exc)})
+        logger.warning("HF LLM warmup failed: %s", exc)

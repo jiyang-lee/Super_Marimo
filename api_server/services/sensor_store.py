@@ -5,6 +5,8 @@ from psycopg.types.json import Json
 
 from extensions.db import cleanup_old_realtime_rows, get_db_connection
 from schemas import SensorPayload
+from services.sensor_analytics import build_sensor_payload, build_sensor_semantics, build_sensor_summary, compute_sensor_metrics
+from services.sensor_judge import judge_sensor_state
 from utils import normalize_datetime, normalize_response_payload
 
 
@@ -29,8 +31,6 @@ def expand_sensor_row(row: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]
     if row is None:
         return None
     payload = extract_payload(row)
-    payload.pop("light_raw", None)
-    payload.pop("water_raw", None)
     return {
         "reading_id": row["reading_id"],
         "created_at": normalize_datetime(row["created_at"]),
@@ -81,18 +81,23 @@ def load_latest_sensor_payload() -> SensorPayload:
     try:
         with get_db_connection() as conn:
             realtime_row = get_latest_sensor_row(conn, "realtime")
+            hourly_row = get_latest_sensor_row(conn, "hourly")
+            metrics = compute_sensor_metrics(
+                conn,
+                current_payload=None,
+                current_sensor_type=None,
+            )
     except Exception:
         return default_sensor_payload()
 
     realtime_payload = extract_payload(realtime_row)
+    hourly_payload = extract_payload(hourly_row)
 
-    if realtime_payload:
-        fallback["temperature"] = realtime_payload.get("temperature", fallback["temperature"])
-        fallback["humidity"] = realtime_payload.get("humidity", fallback["humidity"])
-        fallback["light"] = realtime_payload.get("light", fallback["light"])
-        fallback["water_level"] = realtime_payload.get("water_level", fallback["water_level"])
-        fallback["distance"] = realtime_payload.get("distance", fallback["distance"])
-
+    merged = build_sensor_payload(realtime_payload, hourly_payload, metrics=metrics)
+    state = judge_sensor_state(SensorPayload(**merged), metrics=metrics)
+    merged["sensor_semantics"] = build_sensor_semantics(metrics)
+    merged["sensor_summary"] = build_sensor_summary(merged, state, metrics)
+    fallback.update(merged)
     return SensorPayload(**fallback)
 
 

@@ -5,9 +5,15 @@ __pycache__/
 
 # Audio captures
 arduino/captures/*.wav
+bridge/captures/*.wav
 
 # Temp files
 _tiny_test.wav
+
+# Local environment files and virtualenv
+.env.gpu
+arduino/wemos/.env
+venv-bridge/
 
 # Frontend build
 frontend/node_modules/

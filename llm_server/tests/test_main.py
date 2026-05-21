@@ -1,59 +1,50 @@
 from __future__ import annotations
 
 import sys
-import types
 from importlib import util
 from pathlib import Path
 from types import SimpleNamespace
 
 
 CURRENT_DIR = Path(__file__).resolve().parents[1]
-if str(CURRENT_DIR) not in sys.path:
-    sys.path.insert(0, str(CURRENT_DIR))
-
-
-class _RunnableLambda:
-    def __init__(self, func):
-        self.func = func
-
-    def invoke(self, value):
-        return self.func(value)
-
-    def __or__(self, other):
-        return self
-
-
-langchain_runnables = types.ModuleType("langchain_core.runnables")
-langchain_runnables.RunnableLambda = _RunnableLambda
-sys.modules["langchain_core.runnables"] = langchain_runnables
+sys.path = [entry for entry in sys.path if Path(entry).resolve() != CURRENT_DIR.resolve()]
+sys.path.insert(0, str(CURRENT_DIR))
 
 _ORIGINAL_CONFIG = sys.modules.get("config")
-sys.modules.pop("config", None)
+for _module_name in ("config", "chain_builder", "model_engine", "prompt_builder", "hf_endpoint_client", "main"):
+    sys.modules.pop(_module_name, None)
 
 
 def _load_module(module_name: str, path: Path):
     spec = util.spec_from_file_location(module_name, path)
     assert spec is not None and spec.loader is not None
     module = util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
 
 try:
     prompt_builder = _load_module("llm_server_prompt_builder", CURRENT_DIR / "prompt_builder.py")
+    sys.modules["prompt_builder"] = prompt_builder
     model_engine = _load_module("llm_server_model_engine", CURRENT_DIR / "model_engine.py")
+    sys.modules["model_engine"] = model_engine
     chain_builder = _load_module("llm_server_chain_builder", CURRENT_DIR / "chain_builder.py")
-    main_module = _load_module("llm_server_main", CURRENT_DIR / "main.py")
+    sys.modules["chain_builder"] = chain_builder
+    main_module = _load_module("main", CURRENT_DIR / "main.py")
 finally:
     if _ORIGINAL_CONFIG is None:
         sys.modules.pop("config", None)
     else:
         sys.modules["config"] = _ORIGINAL_CONFIG
 
+if str(CURRENT_DIR) in sys.path:
+    sys.path.remove(str(CURRENT_DIR))
 
-def test_build_system_prompt_mentions_json_contract() -> None:
+
+def test_build_system_prompt_requests_natural_dialogue() -> None:
     payload = SimpleNamespace(
-        question="wake off",
+        question="안녕",
         history=[],
         sensor=None,
         state=None,
@@ -64,28 +55,118 @@ def test_build_system_prompt_mentions_json_contract() -> None:
 
     prompt = prompt_builder.build_system_prompt(payload)
 
-    assert "JSON 객체 하나만" in prompt
     assert "action_proposal" in prompt
     assert "wake_enabled" in prompt
+    assert "반드시 한국어로만 답한다" in prompt
+    assert "JSON object 하나만 반환한다" in prompt
+    assert "markdown fence" in prompt
+    assert "자연스러운 한국어 1~3문장" in prompt
     assert "custom persona memo" in prompt
     assert "custom system memo" in prompt
 
 
-def test_build_mock_contract_proposes_runtime_action() -> None:
+def test_build_user_prompt_omits_distance_context_for_general_dialogue() -> None:
     payload = SimpleNamespace(
-        question="wake off",
-        use_sensor_context=True,
-        sensor={"temperature": 23.5, "humidity": 55, "distance": 120},
-        state={"alerts": ["door_open"], "level": "warning"},
+        question="오늘 뭐해?",
+        history=[],
+        sensor={"distance": 42.0, "temperature": 28.0},
+        state={"level": "warning"},
+        runtime_settings={"distance_threshold_cm": 50.0},
+        session_summary="최근 대화 없음",
+        action_result=None,
+        use_sensor_context=False,
     )
 
-    contract = chain_builder.build_mock_contract(payload)
+    prompt = prompt_builder.build_user_prompt(payload)
 
-    assert contract["action_proposal"] is not None
-    assert contract["action_proposal"]["patch"]["wake_enabled"] is False
-    assert "온도 23.5" in contract["answer"]
-    assert "warning" in contract["answer"]
-    assert contract["confidence"] >= 0.8
+    assert "distance_context" not in prompt
+    assert "sensor:" not in prompt
+    assert "state:" not in prompt
+
+
+def test_route_contract_sends_general_dialogue_to_model_without_sensor_context(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_generate_contract(payload):  # noqa: ANN001
+        captured["question"] = payload.question
+        captured["use_sensor_context"] = payload.use_sensor_context
+        captured["history"] = payload.history
+        return {"answer": "모델 답변", "action_proposal": None, "confidence": 0.8, "reason": "model"}
+
+    monkeypatch.setattr(chain_builder, "generate_contract", fake_generate_contract)
+
+    payload = SimpleNamespace(
+        question="오늘 뭐해?",
+        history=[{"role": "user", "content": "hello"}],
+        sensor={"distance": 10},
+        state={"level": "warning"},
+        runtime_settings={"distance_threshold_cm": 50},
+        use_sensor_context=True,
+    )
+
+    result = chain_builder.route_contract(payload)
+
+    assert result["answer"] == "모델 답변"
+    assert captured["question"] == "오늘 뭐해?"
+    assert captured["use_sensor_context"] is False
+    assert captured["history"] == [{"role": "user", "content": "hello"}]
+
+
+def test_route_contract_keeps_sensor_questions_on_rule_path() -> None:
+    weather = SimpleNamespace(
+        question="오늘 날씨 어때?",
+        sensor={"temperature": 28.0, "humidity": 57.0},
+        state={"level": "normal"},
+        runtime_settings={},
+        use_sensor_context=True,
+    )
+    distance = SimpleNamespace(
+        question="거리 가까워?",
+        sensor={"distance": 42.0},
+        state={"level": "normal"},
+        runtime_settings={"distance_threshold_cm": 50.0, "distance_inside_threshold": False},
+        use_sensor_context=True,
+    )
+    risk = SimpleNamespace(
+        question="지금 상태 어때?",
+        sensor={"temperature": 28.0, "humidity": 57.0, "light": 14.0},
+        state={"level": "warning"},
+        runtime_settings={},
+        use_sensor_context=True,
+    )
+
+    weather_contract = chain_builder.route_contract(weather)
+    distance_contract = chain_builder.route_contract(distance)
+    risk_contract = chain_builder.route_contract(risk)
+
+    assert weather_contract["reason"] == "weather_question"
+    assert distance_contract["reason"] == "distance_question"
+    assert risk_contract["reason"] == "sensor_state_summary"
+
+
+def test_route_contract_sends_setting_intent_to_model(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_generate_contract(payload):  # noqa: ANN001
+        captured["question"] = payload.question
+        captured["use_sensor_context"] = payload.use_sensor_context
+        return {"answer": "설정 변경", "action_proposal": None, "confidence": 0.7, "reason": "model"}
+
+    monkeypatch.setattr(chain_builder, "generate_contract", fake_generate_contract)
+
+    payload = SimpleNamespace(
+        question="거리 감지 꺼줘",
+        sensor={"distance": 42.0},
+        state={"level": "warning"},
+        runtime_settings={"distance_threshold_cm": 50.0},
+        use_sensor_context=True,
+    )
+
+    result = chain_builder.route_contract(payload)
+
+    assert result["answer"] == "설정 변경"
+    assert captured["question"] == "거리 감지 꺼줘"
+    assert captured["use_sensor_context"] is False
 
 
 def test_parse_contract_text_rejects_invalid_action_and_falls_back() -> None:
@@ -110,11 +191,20 @@ def test_parse_contract_text_rejects_invalid_action_and_falls_back() -> None:
     assert fallback_contract["confidence"] == 0.2
 
 
+def test_normalize_answer_preserves_readable_text() -> None:
+    text = model_engine.normalize_answer("Hello, world!\r\n안녕?")
+
+    assert "Hello" in text
+    assert "world" in text
+    assert "안녕" in text
+    assert "!" in text
+
+
 def test_generate_endpoint_returns_structured_contract(monkeypatch) -> None:
     class _DummyChain:
         def invoke(self, payload):
             return {
-                "answer": "알겠어요.",
+                "answer": "안녕하세요.",
                 "action_proposal": None,
                 "confidence": 0.5,
                 "reason": "dummy",
@@ -125,9 +215,9 @@ def test_generate_endpoint_returns_structured_contract(monkeypatch) -> None:
     payload = main_module.GeneratePayload(question="hello")
     result = main_module.generate(payload)
 
-    assert result["answer"] == "알겠어요."
+    assert result["answer"] == "안녕하세요."
     assert result["action_proposal"] is None
-    assert result["framework"] == "langchain"
+    assert result["framework"] == "python"
 
 
 def test_parse_contract_text_robust_regex_fallback() -> None:
@@ -142,12 +232,139 @@ def test_parse_contract_text_robust_regex_fallback() -> None:
         'Here is the response in json format:\n'
         '```json\n'
         '{\n'
-        '  "answer": "기온 24도이고 아주 괜찮은 상태예요!",\n'
+        '  "answer": "기온 24도이고 지금 상태는 정상입니다.",\n'
         '  "confidence": "high",\n'
-        '  "action_proposal": None\n'
+        '  "action_proposal": null\n'
         '}\n'
         '```'
     )
     contract = model_engine.parse_contract_text(bad_json_but_has_answer, payload)
-    assert "기온 24도이고 아주 괜찮은 상태예요!" in contract["answer"]
+
+    assert "기온 24도" in contract["answer"]
     assert contract["action_proposal"] is None
+
+
+
+def test_safe_plain_text_prefers_normalized_sensor_values() -> None:
+    payload = SimpleNamespace(
+        question="status",
+        sensor={
+            "temperature": 27.0,
+            "humidity": 57.0,
+            "water_level": 199.0,
+            "water_level_normalized_0_100": 73.0,
+            "light": 765.0,
+            "light_normalized_0_100": 28.0,
+        },
+        state={"level": "normal"},
+        runtime_settings={},
+    )
+
+    text = model_engine._safe_plain_text(payload)
+
+    assert "199.0" not in text
+    assert "765.0" not in text
+    assert "73.0%" in text
+    assert "28.0%" in text
+
+
+def test_hf_llm_response_extracts_chat_completion_text() -> None:
+    hf_client = _load_module("llm_server_hf_endpoint_client_test", CURRENT_DIR / "hf_endpoint_client.py")
+
+    text = hf_client.extract_text(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"answer":"안녕하세요","action_proposal":null,"confidence":0.9,"reason":"ok"}'
+                    }
+                }
+            ]
+        }
+    )
+
+    assert '"answer":"안녕하세요"' in text
+
+
+def test_generate_contract_uses_hf_endpoint_without_loading_local_model(monkeypatch) -> None:
+    payload = SimpleNamespace(
+        question="hello",
+        history=[],
+        sensor=None,
+        state=None,
+        runtime_settings={},
+        use_sensor_context=False,
+    )
+
+    monkeypatch.setattr(model_engine, "HF_LLM_ENDPOINT_URL", "https://example.test/llm")
+    monkeypatch.setattr(model_engine, "HF_TOKEN", "hf_test")
+    monkeypatch.setattr(model_engine, "post_json", lambda *args, **kwargs: ({"generated_text": '{"answer":"안녕","action_proposal":null,"confidence":0.8,"reason":"hf"}'}, 12.3))
+    monkeypatch.setattr(model_engine, "get_model_bundle", lambda: (_ for _ in ()).throw(AssertionError("local model should not load")))
+
+    contract = model_engine.generate_contract(payload)
+
+    assert contract["answer"] == "안녕"
+    assert contract["reason"] == "hf"
+
+
+def test_generate_contract_uses_hf_router_qwen(monkeypatch) -> None:
+    payload = SimpleNamespace(
+        question="hello",
+        history=[],
+        sensor=None,
+        state=None,
+        runtime_settings={},
+        use_sensor_context=False,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_chat_completion(**kwargs):
+        captured.update(kwargs)
+        return (
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"answer":"안녕하세요. 무엇을 도와드릴까요?","action_proposal":null,"confidence":0.9,"reason":"router"}'
+                        }
+                    }
+                ]
+            },
+            15.0,
+        )
+
+    monkeypatch.setattr(model_engine, "HF_LLM_BACKEND", "router")
+    monkeypatch.setattr(model_engine, "HF_TOKEN", "hf_test")
+    monkeypatch.setattr(model_engine, "HF_LLM_ROUTER_BASE_URL", "https://router.huggingface.co/v1")
+    monkeypatch.setattr(model_engine, "HF_LLM_ROUTER_MODEL", "Qwen/Qwen3-14B:nscale")
+    monkeypatch.setattr(model_engine, "chat_completion", fake_chat_completion)
+    monkeypatch.setattr(model_engine, "get_model_bundle", lambda: (_ for _ in ()).throw(AssertionError("local model should not load")))
+
+    contract = model_engine.generate_contract(payload)
+
+    assert contract["answer"] == "안녕하세요. 무엇을 도와드릴까요?"
+    assert contract["reason"] == "router"
+    assert captured["model"] == "Qwen/Qwen3-14B:nscale"
+
+
+
+def test_sensor_summary_prefers_normalized_values() -> None:
+    payload = SimpleNamespace(
+        question="status",
+        sensor={
+            "temperature": 27.0,
+            "humidity": 57.0,
+            "water_level": 199.0,
+            "water_level_normalized_0_100": 73.0,
+            "light": 765.0,
+            "light_normalized_0_100": 28.0,
+        },
+        state={"level": "normal"},
+    )
+
+    text = chain_builder._sensor_summary(payload)
+
+    assert "199.0" not in text
+    assert "765.0" not in text
+    assert "73.0%" in text
+    assert "28.0%" in text

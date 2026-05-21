@@ -5,6 +5,8 @@ import wave
 from pathlib import Path
 from typing import Any, Callable
 
+from bridge.core.vad_profile import build_vad_profile
+
 SAMPLE_RATE = 16_000
 CHANNELS = 1
 SAMPLE_WIDTH = 2
@@ -81,6 +83,7 @@ class SerialListener:
         on_segment: Callable[[bytes], None],
         on_speech_started: Callable[[float], None] = None,
         on_speech_ended: Callable[[int, int, int], None] = None,
+        is_boosted: Callable[[], bool] | None = None,
     ) -> None:
         pre_roll = collections.deque(maxlen=self.args.pre_roll_frames)
         active_frames: list[bytes] = []
@@ -98,15 +101,16 @@ class SerialListener:
                     continue
 
                 rms = compute_rms(frame)
+                vad = build_vad_profile(self.args, boosted=bool(is_boosted and is_boosted()))
 
                 if not active:
                     pre_roll.append(frame)
-                    if rms >= self.args.start_rms:
+                    if rms >= vad.start_rms:
                         start_hits += 1
                     else:
                         start_hits = 0
 
-                    if start_hits >= self.args.start_frames:
+                    if start_hits >= vad.start_frames:
                         active = True
                         active_frames = list(pre_roll)
                         silence_hits = 0
@@ -116,12 +120,12 @@ class SerialListener:
                     continue
 
                 active_frames.append(frame)
-                if rms <= self.args.stop_rms:
+                if rms <= vad.stop_rms:
                     silence_hits += 1
                 else:
                     silence_hits = 0
 
-                if silence_hits >= self.args.silence_frames or len(active_frames) >= max_active_frames:
+                if silence_hits >= vad.silence_frames or len(active_frames) >= max_active_frames:
                     if on_speech_ended:
                         on_speech_ended(len(active_frames), silence_hits, max_active_frames)
                     pcm = b"".join(active_frames)

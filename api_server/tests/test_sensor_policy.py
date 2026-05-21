@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from services.sensor_judge import judge_hourly_state, judge_realtime_state
@@ -29,6 +30,40 @@ class _DummyConn:
         return _DummyCursor()
 
 
+class _SessionAwareCursor:
+    def __init__(self, row: dict[str, object] | None):
+        self.row = row
+        self.last_sql = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, sql, params=None):
+        self.last_sql = str(sql)
+
+    def fetchone(self):
+        if "FROM session" in self.last_sql:
+            return self.row
+        return None
+
+
+class _SessionAwareConn:
+    def __init__(self, row: dict[str, object] | None):
+        self.row = row
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return _SessionAwareCursor(self.row)
+
+
 def _runtime_settings(**overrides):
     value = {
         "distance_detection_enabled": True,
@@ -41,14 +76,15 @@ def _runtime_settings(**overrides):
     return value
 
 
-def test_judge_realtime_state_uses_distance_threshold(monkeypatch) -> None:
+def test_judge_realtime_state_ignores_distance_for_alerts(monkeypatch) -> None:
     monkeypatch.setattr("config.SENSOR_WARNING_DISTANCE_THRESHOLD_CM", 12.0)
 
     state = judge_realtime_state(SimpleNamespace(light=501.0, distance=11.5))
 
-    assert state["level"] == "warning"
-    assert state["rag"] == "amber"
-    assert "물체가 가까움" in state["alerts"]
+    assert state["level"] == "normal"
+    assert state["rag"] == "green"
+    assert state["alerts"] == []
+    assert state["details"]["distance_role"] == "trigger_only"
 
 
 def test_judge_realtime_state_includes_water_temperature_and_humidity() -> None:
@@ -57,7 +93,7 @@ def test_judge_realtime_state_includes_water_temperature_and_humidity() -> None:
             light=600.0,
             distance=100.0,
             water_level=69.0,
-            temperature=28.0,
+            temperature=31.0,
             humidity=29.0,
         )
     )
@@ -65,12 +101,13 @@ def test_judge_realtime_state_includes_water_temperature_and_humidity() -> None:
     assert state["level"] == "danger"
     assert state["rag"] == "red"
     assert state["alerts"] == ["수위가 낮음", "기온이 높음", "습도가 낮음"]
+    assert state["details"]["water_level_meaning"] == "higher is better"
 
 
 def test_judge_hourly_state_uses_requested_thresholds() -> None:
     state = judge_hourly_state(
         SimpleNamespace(
-            temperature=28.0,
+            temperature=31.0,
             humidity=29.0,
             water_level=70.0,
         )
@@ -79,6 +116,55 @@ def test_judge_hourly_state_uses_requested_thresholds() -> None:
     assert state["level"] == "danger"
     assert state["rag"] == "red"
     assert state["alerts"] == ["기온이 높음", "습도가 낮음", "수위가 낮음"]
+    assert state["details"]["water_level_meaning"] == "higher is better"
+
+
+def test_judge_realtime_state_temperature_threshold_is_30() -> None:
+    normal_state = judge_realtime_state(
+        SimpleNamespace(
+            light=600.0,
+            distance=100.0,
+            water_level=80.0,
+            temperature=29.0,
+            humidity=40.0,
+        )
+    )
+    hot_state = judge_realtime_state(
+        SimpleNamespace(
+            light=600.0,
+            distance=100.0,
+            water_level=80.0,
+            temperature=30.0,
+            humidity=40.0,
+        )
+    )
+
+    assert normal_state["level"] == "normal"
+    assert hot_state["level"] == "warning"
+    assert "기온이 높음" in hot_state["alerts"]
+
+
+def test_judge_realtime_state_uses_rolling_averages() -> None:
+    state = judge_realtime_state(
+        SimpleNamespace(
+            light=100.0,
+            distance=40.0,
+            water_level=95.0,
+            temperature=24.0,
+            humidity=40.0,
+        ),
+        metrics={
+            "current_hour": 14,
+            "water_level_recent_avg_2h": 62.0,
+            "light_daytime_avg_13_18": 420.0,
+        },
+    )
+
+    assert state["level"] == "danger"
+    assert "수위가 낮음" in state["alerts"]
+    assert "조도가 낮음" in state["alerts"]
+    assert state["details"]["water_level_recent_avg_2h"] == 62.0
+    assert state["details"]["light_daytime_avg_13_18"] == 420.0
 
 
 def test_build_realtime_next_action_returns_proactive_greeting_on_distance_entry(monkeypatch) -> None:
@@ -127,6 +213,56 @@ def test_build_realtime_next_action_returns_proactive_greeting_on_distance_entry
     assert [event["event_type"] for event in saved_events] == ["sensor_warning", "proactive_greeting"]
     assert saved_events[0]["status"] == "tts_generated"
     assert saved_events[0]["played"] is False
+
+
+def test_build_realtime_next_action_emits_greeting_even_with_recent_session(monkeypatch) -> None:
+    saved_events: list[dict[str, object]] = []
+    inside_updates: list[bool] = []
+
+    def fake_save_device_event(payload: dict[str, object]) -> dict[str, object]:
+        saved_events.append(payload)
+        return {
+            "saved": True,
+            "event": {
+                "event_id": len(saved_events),
+                "event_type": payload["event_type"],
+            },
+        }
+
+    monkeypatch.setattr("services.sensor_policy.save_device_event", fake_save_device_event)
+    monkeypatch.setattr(
+        "services.sensor_policy.get_db_connection",
+        lambda: _SessionAwareConn({"last_seen_at": datetime.now(timezone.utc), "ended_at": None}),
+    )
+    monkeypatch.setattr("services.sensor_policy.get_runtime_settings", lambda: _runtime_settings())
+    monkeypatch.setattr("services.sensor_policy.set_distance_inside_threshold", lambda inside: inside_updates.append(inside))
+    monkeypatch.setattr(
+        "services.sensor_policy.can_emit_sensor_warning",
+        lambda conn, device_id, now=None: {"allowed": True, "last_warning_at": None, "cooldown_remaining_sec": 0},
+    )
+    monkeypatch.setattr(
+        "services.sensor_policy.can_emit_proactive_greeting",
+        lambda conn: {"allowed": True, "last_greeting_at": None, "cooldown_remaining_sec": 0},
+    )
+    monkeypatch.setattr("services.sensor_policy._resolve_greeting_text", lambda: "가까이 와 주셔서 고마워요.")
+
+    payload = SimpleNamespace(
+        light=501.0,
+        distance=49.0,
+        model_dump=lambda: {"distance": 49.0, "light": 501.0},
+    )
+
+    result = build_realtime_next_action(
+        payload,
+        session_id="11111111-1111-1111-1111-111111111111",
+        device_id="rp2040-01",
+        trigger_source="sensor",
+    )
+
+    assert result["type"] == "proactive_greeting"
+    assert result["text"] == "가까이 와 주셔서 고마워요."
+    assert inside_updates == [True]
+    assert [event["event_type"] for event in saved_events] == ["sensor_warning", "proactive_greeting"]
 
 
 def test_build_realtime_next_action_skips_when_distance_detection_off(monkeypatch) -> None:

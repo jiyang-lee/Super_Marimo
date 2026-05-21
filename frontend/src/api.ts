@@ -122,6 +122,7 @@ export interface AskAgentOptions {
 
 export interface SessionSummary {
   session_id: string;
+  session_kind?: string;
   created_at: string;
   last_seen_at: string;
   ended_at: string | null;
@@ -144,6 +145,7 @@ export interface SessionMessage {
 export interface SessionDetail {
   session: {
     session_id: string;
+    session_kind?: string;
     created_at: string;
     last_seen_at: string;
     ended_at: string | null;
@@ -161,6 +163,13 @@ export interface SensorReading {
   humidity?: number;
   light?: number;
   water_level?: number;
+  water_level_recent_avg_2h?: number;
+  light_daytime_avg_13_18?: number;
+  light_normalized_0_100?: number;
+  water_level_normalized_0_100?: number;
+  water_level_sample_count?: number;
+  light_daytime_sample_count?: number;
+  light_daytime_window_label?: string;
   distance?: number;
   state_level?: string;
   rag?: string;
@@ -169,9 +178,19 @@ export interface SensorReading {
 
 export interface SensorLatest {
   latest_realtime: SensorReading | null;
+  latest_hourly: SensorReading | null;
   latest_merged: SensorReading | null;
+  latest_state?: {
+    level?: string;
+    rag?: string;
+    alerts?: string[];
+    details?: Record<string, unknown>;
+  } | null;
+  sensor_semantics?: Record<string, unknown>;
+  sensor_summary?: string | null;
   runtime_settings?: RuntimeSettings;
   distance_inside_threshold?: boolean;
+  wake_eligible?: boolean;
 }
 
 export interface RuntimeSettings {
@@ -226,8 +245,12 @@ export async function checkLlmHealth(): Promise<LlmHealth> {
   return fetchJson<LlmHealth>(`${LLM}/health`);
 }
 
-export async function listSessions(limit = 5): Promise<SessionSummary[]> {
-  const data = await fetchJson<{ sessions: SessionSummary[] }>(`${API}/sessions?limit=${limit}`);
+export async function listSessions(limit = 5, kind: 'chat' | 'voice' = 'chat'): Promise<SessionSummary[]> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    kind,
+  });
+  const data = await fetchJson<{ sessions: SessionSummary[] }>(`${API}/sessions?${params.toString()}`);
   return data.sessions ?? [];
 }
 
@@ -292,6 +315,7 @@ export async function askChat(text: string, sessionId?: string, isTest?: boolean
     body: JSON.stringify({
       question: text,
       session_id: sessionId ?? null,
+      session_kind: 'chat',
       use_sensor_context: true,
       is_test: isTest ?? null,
     }),
