@@ -4,9 +4,11 @@ import { getRuntimeSettings, updateRuntimeSettings, type RuntimeSettings } from 
 import { LiveSensorProvider } from '../contexts/LiveSensorContext';
 
 const NAV_ITEMS = [
-  { path: '/lab', label: 'LAB' },
-  { path: '/report', label: 'REPORT' },
+  { path: '/home', label: 'HOME' },
+  { path: '/sensor', label: 'SENSOR' },
   { path: '/chat', label: 'CHAT' },
+  { path: '/settings', label: 'SETTINGS' },
+  { path: '/lab', label: 'LAB' },
 ];
 
 function makeClock() {

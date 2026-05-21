@@ -1,92 +1,99 @@
-import { useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import '../styles/sensor.css';
 import { getSensorHistory, type SensorReading } from '../api';
 import { useLiveSensor } from '../contexts/LiveSensorContext';
 
-type SensorKey = 'temperature' | 'humidity' | 'light' | 'water_level' | 'distance';
+type SensorKey = 'temperature' | 'humidity' | 'light' | 'water';
 
-const TAB_CONFIGS = {
-  temperature: { label: '온도', suffix: '°C', stroke: '#e11d48', fillStart: 'rgba(225, 29, 72, 0.25)', fillEnd: 'rgba(225, 29, 72, 0)' },
-  humidity: { label: '습도', suffix: '%', stroke: '#0284c7', fillStart: 'rgba(2, 132, 199, 0.25)', fillEnd: 'rgba(2, 132, 199, 0)' },
-  light: { label: '조도', suffix: 'lux', stroke: '#d97706', fillStart: 'rgba(217, 119, 6, 0.25)', fillEnd: 'rgba(217, 119, 6, 0)' },
-  water_level: { label: '수위(raw)', suffix: '', stroke: '#0d9488', fillStart: 'rgba(13, 148, 136, 0.25)', fillEnd: 'rgba(13, 148, 136, 0)' },
-  distance: { label: '거리', suffix: 'cm', stroke: '#4f46e5', fillStart: 'rgba(79, 70, 229, 0.25)', fillEnd: 'rgba(79, 70, 229, 0)' },
-} as const;
-
-function Card({
-  label,
-  value,
-  suffix,
-}: {
+type SensorConfig = {
+  key: SensorKey;
   label: string;
-  value: string | number | null | undefined;
-  suffix?: string;
-}) {
-  const text = value === null || value === undefined || value === '' ? '-' : `${value}${suffix ?? ''}`;
-  return (
-    <div className="rounded-[1.4rem] border-4 border-bark/10 bg-white/90 p-4 shadow-sm">
-      <div className="font-dot text-xs uppercase tracking-wider text-bark/50">{label}</div>
-      <div className="mt-2 text-3xl font-black text-bark">{text}</div>
-    </div>
-  );
+  unit: string;
+  icon: string;
+  accent: string;
+  base: number;
+  range: [number, number];
+  step: number;
+};
+
+type SensorPoint = {
+  date: Date;
+  label: string;
+  value: number;
+};
+
+const SENSOR_CONFIGS: SensorConfig[] = [
+  { key: 'temperature', label: '온도', unit: '℃', icon: '/images/incoming/icon_temperature.png', accent: '#e85b50', base: 24.4, range: [22.5, 27.5], step: 0.18 },
+  { key: 'humidity', label: '습도', unit: '%', icon: '/images/incoming/icon-humidity.png', accent: '#2f90d1', base: 47.8, range: [40, 60], step: 0.8 },
+  { key: 'light', label: '조도', unit: 'lux', icon: '/images/incoming/icon-light.png', accent: '#d38a20', base: 620, range: [380, 1200], step: 26 },
+  { key: 'water', label: '수위', unit: '%', icon: '/images/incoming/icon-water.png', accent: '#21a87e', base: 80.4, range: [72, 88], step: 0.32 },
+];
+
+function formatValue(value: number | null | undefined, fallback = '-'): string {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
 }
 
-function formatState(state: string | null | undefined): string {
-  if (!state) return '데이터 없음';
-  if (state === 'normal') return '괜찮음';
-  if (state === 'warning') return '주의';
-  if (state === 'danger') return '위험';
-  return state;
+function formatDayLabel(date: Date) {
+  return `${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function formatTime(isoString?: string): string {
-  if (!isoString) return '';
-  try {
-    const d = new Date(isoString);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const hh = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${mm}-${dd} ${hh}:${min}`;
-  } catch {
-    return '';
-  }
+function getPointY(value: number, min: number, max: number, height: number, topPadding: number, bottomPadding: number) {
+  const plotHeight = height - topPadding - bottomPadding;
+  const ratio = (value - min) / (max - min || 1);
+  return topPadding + plotHeight - ratio * plotHeight;
 }
 
-function formatTickLabel(date: Date): string {
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${mm}-${dd} ${hh}:${min}`;
-}
+function mapHistoryToPoints(history: SensorReading[], key: SensorKey): SensorPoint[] {
+  const fieldMap: Record<SensorKey, keyof SensorReading> = {
+    temperature: 'temperature',
+    humidity: 'humidity',
+    light: 'light',
+    water: 'water_level',
+  };
+  const field = fieldMap[key];
 
-// Cubic Bezier curve generator
-function getCurvePath(points: { x: number; y: number }[]): string {
-  if (points.length === 0) return '';
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  // 최근 7개만 사용 (team-a UI가 7개 포인트 기반)
+  const recent = history.slice(-7);
 
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    const cpX1 = p0.x + (p1.x - p0.x) / 3;
-    const cpY1 = p0.y;
-    const cpX2 = p0.x + (2 * (p1.x - p0.x)) / 3;
-    const cpY2 = p1.y;
-    d += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
-  }
-  return d;
+  return recent
+    .map((item) => {
+      const val = item[field] as number | undefined;
+      if (val === undefined || val === null) return null;
+      const date = item.created_at ? new Date(item.created_at) : new Date();
+      return {
+        date,
+        label: formatDayLabel(date),
+        value: val,
+      };
+    })
+    .filter((p): p is SensorPoint => p !== null);
 }
 
 export function SensorPage() {
+  const [selectedSensor, setSelectedSensor] = useState<SensorKey>('temperature');
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [history, setHistory] = useState<SensorReading[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<SensorKey>('temperature');
+
   const { sensor, status: sensorStatus, error: sensorError, syncedAt: sensorSyncedAt } = useLiveSensor();
 
-  // Interactive Graph Hover State
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const realtime = sensor?.latest_realtime;
+  const merged = sensor?.latest_merged;
+
+  const sensorStatusItems = useMemo(() => {
+    const getVal = (realtimeVal: number | undefined, mergedVal: number | undefined, fallback = '-') => {
+      const v = realtimeVal ?? mergedVal;
+      return v !== undefined && v !== null ? String(v) : fallback;
+    };
+    return [
+      { label: '온도', value: getVal(realtime?.temperature, merged?.temperature), suffix: '℃', icon: '/images/incoming/icon_temperature.png' },
+      { label: '습도', value: getVal(realtime?.humidity, merged?.humidity), suffix: '%', icon: '/images/incoming/icon-humidity.png' },
+      { label: '수위', value: getVal(merged?.water_level_normalized_0_100, merged?.water_level), suffix: '%', icon: '/images/incoming/icon-water.png' },
+      { label: '조도', value: getVal(merged?.light_normalized_0_100, merged?.light), suffix: 'lux', icon: '/images/incoming/icon-light.png' },
+    ];
+  }, [realtime, merged]);
 
   const load = async () => {
     setLoading(true);
@@ -107,431 +114,227 @@ export function SensorPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const realtime = sensor?.latest_realtime ?? null;
-  const merged = sensor?.latest_merged ?? null;
-  const hasData =
-    realtime?.temperature !== undefined ||
-    realtime?.humidity !== undefined ||
-    realtime?.light !== undefined ||
-    realtime?.water_level !== undefined ||
-    realtime?.distance !== undefined;
+  const selectedConfig = SENSOR_CONFIGS.find((item) => item.key === selectedSensor) ?? SENSOR_CONFIGS[0];
+  const chartPoints = useMemo(() => mapHistoryToPoints(history, selectedSensor), [history, selectedSensor]);
 
-  // Chart configuration
-  const paddingLeft = 70;
-  const paddingRight = 30;
-  const paddingTop = 40;
-  const paddingBottom = 50;
+  // 실제 데이터 기반 range 계산 (데이터 없으면 config 기본값 사용)
+  const dataValues = chartPoints.map((p) => p.value);
+  const dataMin = dataValues.length > 0 ? Math.min(...dataValues) : selectedConfig.range[0];
+  const dataMax = dataValues.length > 0 ? Math.max(...dataValues) : selectedConfig.range[1];
+  // 여유 공간 추가
+  const rangeMin = dataMin - (dataMax - dataMin) * 0.1;
+  const rangeMax = dataMax + (dataMax - dataMin) * 0.1;
 
-  const activeConfig = TAB_CONFIGS[activeTab];
+  const chartWidth = 980;
+  const chartHeight = 391;
+  const chartPadding = { top: 24, right: 24, bottom: 54, left: 72 };
+  const chartPlotWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const chartPlotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const stepX = chartPoints.length > 1 ? chartPlotWidth / (chartPoints.length - 1) : chartPlotWidth;
 
-  // Raw history data for the selected sensor type
-  const chartPointsRaw = history
-    .map((item) => {
-      const val = item[activeTab];
-      return { val, date: item.created_at };
-    })
-    .filter((p): p is { val: number; date: string | undefined } => p.val !== undefined && p.val !== null)
-    .sort((a, b) => {
-      const aTime = a.date ? new Date(a.date).getTime() : 0;
-      const bTime = b.date ? new Date(b.date).getTime() : 0;
-      return aTime - bTime;
-    });
+  const points = chartPoints.map((point, index) => ({
+    ...point,
+    x: chartPadding.left + stepX * index,
+    y: getPointY(point.value, rangeMin, rangeMax, chartHeight, chartPadding.top, chartPadding.bottom),
+  }));
 
-  const tickStepHours = 2;
-  const tickStepMs = tickStepHours * 60 * 60 * 1000;
-  const timestamps = chartPointsRaw
-    .map((point) => {
-      if (!point.date) return null;
-      const time = new Date(point.date).getTime();
-      return Number.isFinite(time) ? time : null;
-    })
-    .filter((time): time is number => time !== null);
+  const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const mouseX = ((event.clientX - rect.left) / rect.width) * chartWidth;
 
-  const timeDomainStart =
-    timestamps.length > 0 ? new Date(Math.min(...timestamps)).getTime() : null;
-  const timeDomainEnd =
-    timestamps.length > 0 ? new Date(Math.max(...timestamps)).getTime() : null;
-  const alignedDomainStart = timeDomainStart !== null ? Math.floor(timeDomainStart / tickStepMs) * tickStepMs : null;
-  const alignedDomainEnd = timeDomainEnd !== null ? Math.ceil(timeDomainEnd / tickStepMs) * tickStepMs : null;
-  const timeDomainSpan =
-    alignedDomainStart !== null && alignedDomainEnd !== null
-      ? Math.max(alignedDomainEnd - alignedDomainStart, tickStepMs)
-      : null;
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
 
-  const minPointSpacing = 80;
-  const chartMinTickWidth = 180;
-  const chartWidth =
-    alignedDomainStart !== null && alignedDomainEnd !== null
-      ? Math.max(
-          800,
-          Math.ceil((alignedDomainEnd - alignedDomainStart) / tickStepMs) * chartMinTickWidth + paddingLeft + paddingRight,
-          Math.max(0, chartPointsRaw.length - 1) * minPointSpacing + paddingLeft + paddingRight,
-        )
-      : 800;
-  const graphWidth = chartWidth - paddingLeft - paddingRight;
-  const graphHeight = 350 - paddingTop - paddingBottom;
-
-  // Default display values if empty
-  const hasHistory = chartPointsRaw.length > 0;
-  const values = chartPointsRaw.map((p) => p.val);
-  let minVal = hasHistory ? Math.min(...values) : 0;
-  let maxVal = hasHistory ? Math.max(...values) : 100;
-
-  if (minVal === maxVal) {
-    minVal = minVal - 5;
-    maxVal = maxVal + 5;
-  } else {
-    const margin = (maxVal - minVal) * 0.15;
-    minVal = minVal - margin;
-    maxVal = maxVal + margin;
-  }
-
-  // Calculate coordinates mapping for raw history points
-  const points = chartPointsRaw.map((p, i) => {
-    const timestamp = p.date ? new Date(p.date).getTime() : NaN;
-    const timeX =
-      alignedDomainStart !== null &&
-      timeDomainSpan !== null &&
-      Number.isFinite(timestamp) &&
-      timeDomainSpan > 0
-        ? paddingLeft + ((timestamp - alignedDomainStart) / timeDomainSpan) * graphWidth
-        : paddingLeft;
-    const indexX = paddingLeft + i * minPointSpacing;
-    const x =
-      Math.max(
-        timeX,
-        chartPointsRaw.length > 1 ? indexX : paddingLeft + graphWidth / 2,
-      );
-    const y = paddingTop + graphHeight - ((p.val - minVal) / (maxVal - minVal)) * graphHeight;
-    return { x, y, val: p.val, date: p.date, timestamp: Number.isFinite(timestamp) ? timestamp : null };
-  });
-
-  const linePath = points.length > 0 ? getCurvePath(points) : '';
-  const fillPath =
-    points.length > 0
-      ? `${linePath} L ${points[points.length - 1].x} ${paddingTop + graphHeight} L ${points[0].x} ${paddingTop + graphHeight} Z`
-      : '';
-
-  // Generate Y scale helper tick lines
-  const tickCount = 5;
-  const yTicks = Array.from({ length: tickCount }).map((_, i) => {
-    const ratio = i / (tickCount - 1);
-    const val = minVal + ratio * (maxVal - minVal);
-    const y = paddingTop + graphHeight - ratio * graphHeight;
-    return { val, y };
-  });
-
-  // Generate X scale helper labels (2-hour aligned ticks)
-  const xTicks: { label: string; x: number }[] = [];
-  if (alignedDomainStart !== null && alignedDomainEnd !== null && timeDomainSpan !== null) {
-    for (let tickTime = alignedDomainStart; tickTime <= alignedDomainEnd; tickTime += tickStepMs) {
-      const x =
-        alignedDomainEnd === alignedDomainStart
-          ? paddingLeft + graphWidth / 2
-          : paddingLeft + ((tickTime - alignedDomainStart) / timeDomainSpan) * graphWidth;
-      xTicks.push({ label: formatTickLabel(new Date(tickTime)), x });
-    }
-  }
-
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (points.length === 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * chartWidth;
-
-    let closestIdx = 0;
-    let minDiff = Infinity;
-    points.forEach((p, idx) => {
-      const diff = Math.abs(p.x - mouseX);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIdx = idx;
+    points.forEach((point, index) => {
+      const distance = Math.abs(point.x - mouseX);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
       }
     });
 
-    setHoveredIndex(closestIdx);
+    setHoveredIndex(closestIndex);
   };
-
-  const handleMouseLeave = () => {
-    setHoveredIndex(null);
-  };
-
-  const activePoint = hoveredIndex !== null ? points[hoveredIndex] : null;
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Header section */}
-      <section className="rounded-[2rem] border-4 border-bark/10 bg-white/90 p-5 shadow-[0_18px_0_rgba(15,23,42,0.05)]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="inline-flex rounded-full border-2 border-sky bg-sky/15 px-3 py-1 font-dot text-xs text-sky">
-              realtime 센서 보기
+    <div className="sensor-page">
+      <div className="sensor-page__inner">
+        <section className="sensor-panel sensor-panel--status" aria-label="현재 센서 상태">
+          <div className="sensor-status-bar" role="list" aria-label="현재 센서 상태 요약">
+            {sensorStatusItems.map((item) => (
+              <div key={item.label} className="sensor-status-item" role="listitem">
+                <span className="sensor-status-item__icon" aria-hidden="true">
+                  <img src={item.icon} alt="" />
+                </span>
+                <span className="sensor-status-item__label">{item.label}</span>
+                <span className="sensor-status-item__value">
+                  {item.value}
+                  <span className="sensor-status-item__suffix">{item.suffix}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="sensor-panel sensor-panel--report" aria-label="센서 리포트">
+          <div className="sensor-report-frame">
+            <div className="sensor-report-frame__inner">
+              <div className="sensor-report-hero">
+                <div className="sensor-report-copy">
+                  <h2 className="sensor-report-copy__title">성장 그래프</h2>
+                  {sensorStatus === 'ready' && sensorSyncedAt && (
+                    <div className="sensor-report-copy__badge">센서 LIVE {sensorSyncedAt}</div>
+                  )}
+                  {sensorStatus === 'loading' && (
+                    <div className="sensor-report-copy__badge">센서 수신 중</div>
+                  )}
+                  {sensorError && (
+                    <div className="sensor-report-copy__badge sensor-report-copy__badge--error">{sensorError}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="sensor-report-tabs sensor-report-tabs--sensor" role="tablist" aria-label="센서 선택">
+                {SENSOR_CONFIGS.map((config) => {
+                  const active = selectedSensor === config.key;
+                  return (
+                    <button
+                      key={config.key}
+                      type="button"
+                      className={`sensor-report-tab sensor-report-tab--sensor ${active ? 'is-active' : ''}`}
+                      aria-pressed={active}
+                      onClick={() => {
+                        setSelectedSensor(config.key);
+                        setHoveredIndex(null);
+                      }}
+                    >
+                      <img className="sensor-report-tab__icon" src={config.icon} alt="" aria-hidden="true" />
+                      <span className="sensor-report-tab__label">{config.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="sensor-graph-card">
+                <div className="sensor-chart-shell">
+                  {loading && (
+                    <div className="sensor-chart-shell__loading">
+                      <div className="sensor-chart-shell__loading-text">데이터를 불러오는 중...</div>
+                    </div>
+                  )}
+                  {error && (
+                    <div className="sensor-chart-shell__error">
+                      <div className="sensor-chart-shell__error-text">{error}</div>
+                    </div>
+                  )}
+                  {!loading && !error && (
+                    <svg
+                      className="sensor-chart-shell__svg"
+                      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                      role="img"
+                      aria-label={`${selectedConfig.label} 최근 측정 그래프`}
+                      onMouseMove={handleMouseMove}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                    >
+                      {Array.from({ length: 5 }, (_, index) => {
+                        const tick = rangeMin + ((rangeMax - rangeMin) * index) / 4;
+                        const y = chartPadding.top + chartPlotHeight - (index / 4) * chartPlotHeight;
+                        return (
+                          <g key={tick}>
+                            <line
+                              x1={chartPadding.left}
+                              x2={chartWidth - chartPadding.right}
+                              y1={y}
+                              y2={y}
+                              className="sensor-chart-shell__grid-line"
+                            />
+                            <text x={chartPadding.left - 14} y={y + 4} textAnchor="end" className="sensor-chart-shell__axis-label">
+                              {Number(tick.toFixed(1))}
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      <line
+                        x1={chartPadding.left}
+                        y1={chartPadding.top}
+                        x2={chartPadding.left}
+                        y2={chartHeight - chartPadding.bottom}
+                        className="sensor-chart-shell__axis"
+                      />
+                      <line
+                        x1={chartPadding.left}
+                        y1={chartHeight - chartPadding.bottom}
+                        x2={chartWidth - chartPadding.right}
+                        y2={chartHeight - chartPadding.bottom}
+                        className="sensor-chart-shell__axis"
+                      />
+
+                      {points.map((point) => (
+                        <text key={point.label} x={point.x} y={chartHeight - 16} textAnchor="middle" className="sensor-chart-shell__week-label">
+                          {point.label}
+                        </text>
+                      ))}
+
+                      {points.length > 1 ? (
+                        <path
+                          d={points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')}
+                          fill="none"
+                          stroke={selectedConfig.accent}
+                          strokeWidth="5.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ) : null}
+
+                      {points.map((point, index) => (
+                        <g key={point.label}>
+                          <circle
+                            cx={point.x}
+                            cy={point.y}
+                            r={hoveredIndex === index ? '7' : '4.5'}
+                            fill={selectedConfig.accent}
+                            stroke="#fff8e7"
+                            strokeWidth="2.4"
+                          />
+                        </g>
+                      ))}
+
+                      {hoveredIndex !== null ? (
+                        <g>
+                          {(() => {
+                            const activePoint = points[hoveredIndex];
+                            const tooltipWidth = 176;
+                            const tooltipHeight = 68;
+                            const tooltipX = activePoint.x + tooltipWidth + 18 > chartWidth ? activePoint.x - tooltipWidth - 18 : activePoint.x + 18;
+                            const tooltipY = chartPadding.top + 16;
+
+                            return (
+                              <g transform={`translate(${tooltipX}, ${tooltipY})`}>
+                                <rect
+                                  width={tooltipWidth}
+                                  height={tooltipHeight}
+                                  rx="14"
+                                  fill="none"
+                                  stroke="none"
+                                />
+                                <text x="88" y="43" textAnchor="middle" className="sensor-chart-tooltip__value">
+                                  {activePoint.value.toFixed(selectedConfig.key === 'light' ? 0 : 1)}
+                                  {selectedConfig.unit}
+                                </text>
+                              </g>
+                            );
+                          })()}
+                        </g>
+                      ) : null}
+                    </svg>
+                  )}
+                </div>
+              </div>
             </div>
-            <h1 className="mt-3 text-4xl font-black text-bark">센서 놀이터</h1>
-            <p className="mt-2 max-w-2xl text-base leading-7 text-bark/70">
-              온도, 습도, 조도, 수위, 거리만 보여줘요. 실시간 값은 공용 센서 소스에서만 읽습니다.
-            </p>
-            <div
-              className="mt-3 inline-flex rounded-full border-2 border-bark/10 bg-white/70 px-3 py-1 font-dot text-xs text-bark/60"
-              title={sensorStatus === 'ready' && sensorSyncedAt ? sensorSyncedAt : sensorError || '센서 상태'}
-            >
-              {sensorStatus === 'ready' && sensorSyncedAt
-                ? `센서 LIVE ${sensorSyncedAt}`
-                : sensorStatus === 'loading'
-                  ? '센서 수신 중'
-                  : '센서 unavailable'}
-            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="rounded-full border-4 border-bark bg-bark px-5 py-3 text-base font-black text-white hover:scale-105 active:scale-95 transition"
-          >
-            {loading ? '불러오는 중...' : '새로고침'}
-          </button>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-[1.2rem] border-4 border-rose-500 bg-rose-500/10 p-4 text-base font-black text-rose-700">
-            {error}
-          </div>
-        )}
-        {sensorError && (
-          <div className="mt-4 rounded-[1.2rem] border-4 border-amber-400 bg-amber-400/10 p-4 text-base font-black text-amber-800">
-            {sensorError}
-          </div>
-        )}
-
-        {!error && !hasData && (
-          <div className="mt-4 rounded-[1.2rem] border-4 border-amber-400 bg-amber-400/10 p-4 text-base font-black text-amber-800">
-            아직 센서 값이 안 들어왔어요. Wemos가 켜져 있는지 확인해 주세요.
-          </div>
-        )}
-      </section>
-
-      {/* Realtime Sensor Value Cards */}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card label="상태" value={formatState(realtime?.state_level)} />
-        <Card label="온도" value={realtime?.temperature} suffix="°C" />
-        <Card label="습도" value={realtime?.humidity} suffix="%" />
-        <Card label="조도" value={merged?.light_normalized_0_100} suffix="%" />
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2">
-        <Card label="수위" value={merged?.water_level_normalized_0_100} suffix="%" />
-        <Card label="거리" value={realtime?.distance} suffix="cm" />
-      </section>
-
-      {/* Retro premium Tab based sensor history chart */}
-      <section className="rounded-[2rem] border-4 border-bark/10 bg-white/90 p-6 shadow-sm flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-bark/10 pb-4">
-          <div>
-            <h2 className="text-xl font-pixel text-bark">센서 정밀 분석 리포트</h2>
-            <p className="mt-1 font-dot text-xs text-bark/50">최근 24회 측정치의 다이내믹 그라디언트 분석 그래프</p>
-          </div>
-
-          {/* Sensor Tabs list */}
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(TAB_CONFIGS) as SensorKey[]).map((key) => {
-              const active = key === activeTab;
-              const cfg = TAB_CONFIGS[key];
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(key);
-                    setHoveredIndex(null);
-                  }}
-                  className={[
-                    'rounded-xl border-2 px-3 py-1.5 font-dot text-xs transition duration-200 active:scale-95',
-                    active
-                      ? `border-[${cfg.stroke}] text-white`
-                      : 'border-bark/10 bg-white/50 text-bark/60 hover:border-bark/30 hover:bg-white',
-                  ].join(' ')}
-                  style={{
-                    backgroundColor: active ? cfg.stroke : undefined,
-                    borderColor: active ? cfg.stroke : undefined,
-                  }}
-                >
-                  {cfg.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Dynamic Canvas Chart (SVG) */}
-        <div className="relative w-full overflow-x-auto rounded-xl border border-bark/10 bg-[#fcfaf2] p-2">
-          {hasHistory ? (
-            <svg
-              viewBox={`0 0 ${chartWidth} 350`}
-              width={chartWidth}
-              height={350}
-              className="block h-auto select-none"
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-            >
-              <defs>
-                <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={activeConfig.stroke} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={activeConfig.stroke} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-
-              {/* Y Scale Guide Lines */}
-              {yTicks.map((tick, i) => (
-                <g key={i}>
-                  <line
-                    x1={paddingLeft}
-                    y1={tick.y}
-                    x2={chartWidth - paddingRight}
-                    y2={tick.y}
-                    stroke="rgba(139, 92, 26, 0.08)"
-                    strokeDasharray="4 4"
-                  />
-                  <text
-                    x={paddingLeft - 12}
-                    y={tick.y + 4}
-                    textAnchor="end"
-                    className="font-dot text-[10px] fill-bark/60"
-                  >
-                    {tick.val.toFixed(1)}
-                    {activeConfig.suffix}
-                  </text>
-                </g>
-              ))}
-
-              {/* X Scale Guide Labels */}
-              {xTicks.map((tick, i) => (
-                <g key={i}>
-                  <line
-                    x1={tick.x}
-                    y1={paddingTop + graphHeight}
-                    x2={tick.x}
-                    y2={paddingTop + graphHeight + 6}
-                    stroke="rgba(139, 92, 26, 0.15)"
-                  />
-                  <text
-                    x={tick.x}
-                    y={paddingTop + graphHeight + 20}
-                    textAnchor="middle"
-                    className="font-dot text-[9px] fill-bark/50"
-                  >
-                    {tick.label}
-                  </text>
-                </g>
-              ))}
-
-              {/* Grid axes */}
-              <line
-                x1={paddingLeft}
-                y1={paddingTop}
-                x2={paddingLeft}
-                y2={paddingTop + graphHeight}
-                stroke="rgba(139, 92, 26, 0.2)"
-                strokeWidth="1.5"
-              />
-              <line
-                x1={paddingLeft}
-                y1={paddingTop + graphHeight}
-                x2={chartWidth - paddingRight}
-                y2={paddingTop + graphHeight}
-                stroke="rgba(139, 92, 26, 0.2)"
-                strokeWidth="1.5"
-              />
-
-              {/* Gradient Shading Area */}
-              {fillPath && <path d={fillPath} fill="url(#chart-gradient)" />}
-
-              {/* Main Curve Line */}
-              {linePath && (
-                <path
-                  d={linePath}
-                  fill="none"
-                  stroke={activeConfig.stroke}
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              )}
-
-              {/* Data points (invisible default, interactive hover circles) */}
-              {points.map((p, i) => (
-                <circle
-                  key={i}
-                  cx={p.x}
-                  cy={p.y}
-                  r="3.5"
-                  className="transition duration-150"
-                  fill={activeConfig.stroke}
-                  stroke="#ffffff"
-                  strokeWidth="1.5"
-                />
-              ))}
-
-              {/* Hover Dot & Interactive Tooltip Container */}
-              {activePoint && (
-                <g>
-                  {/* Vertical Tracking Line */}
-                  <line
-                    x1={activePoint.x}
-                    y1={paddingTop}
-                    x2={activePoint.x}
-                    y2={paddingTop + graphHeight}
-                    stroke={activeConfig.stroke}
-                    strokeOpacity="0.3"
-                    strokeDasharray="3 3"
-                  />
-
-                  {/* Pulsing highlight circles */}
-                  <circle cx={activePoint.x} cy={activePoint.y} r="9" fill={activeConfig.stroke} fillOpacity="0.2" />
-                  <circle cx={activePoint.x} cy={activePoint.y} r="5" fill={activeConfig.stroke} stroke="#ffffff" strokeWidth="2" />
-
-                  {/* Smart Floating Tooltip Box */}
-                  <g
-                    transform={`translate(${
-                      activePoint.x + 15 > 620 ? activePoint.x - 175 : activePoint.x + 15
-                    }, ${activePoint.y - 65 < 15 ? activePoint.y + 15 : activePoint.y - 65})`}
-                  >
-                    <rect
-                      width="160"
-                      height="58"
-                      rx="10"
-                      fill="#fcfaf2"
-                      stroke="rgba(139, 92, 26, 0.2)"
-                      strokeWidth="2.5"
-                      style={{ filter: 'drop-shadow(0px 6px 12px rgba(139,92,26,0.08))' }}
-                    />
-                    <text x="12" y="20" className="font-dot text-[10px] fill-bark/50">
-                      {formatTime(activePoint.date)}
-                    </text>
-                    <text x="12" y="38" className="font-pixel text-[13px] fill-bark">
-                      수치:{' '}
-                      <tspan fill={activeConfig.stroke} style={{ fontWeight: 'bold' }}>
-                        {activePoint.val.toFixed(1)}
-                        {activeConfig.suffix}
-                      </tspan>
-                    </text>
-                  </g>
-                </g>
-              )}
-            </svg>
-          ) : (
-            <div className="flex h-[350px] items-center justify-center font-dot text-sm text-bark/45">
-              분석 리포트를 불러올 과거 기록 데이터가 부족합니다.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Summary report */}
-      <section className="rounded-[1.6rem] border-4 border-bark/10 bg-white/90 p-5">
-        <div className="text-xl font-black text-bark">지금 한 줄 요약</div>
-        <div className="mt-3 rounded-[1.2rem] border-2 border-bark/10 bg-parchment p-4 font-dot text-sm leading-7 text-bark">
-          온도 {realtime?.temperature ?? merged?.temperature ?? '-'}°C / 습도 {realtime?.humidity ?? merged?.humidity ?? '-'}% / 조도 {merged?.light_normalized_0_100 ?? '-'}% /
-          수위 {merged?.water_level_normalized_0_100 ?? '-'}% / 거리 {realtime?.distance ?? merged?.distance ?? '-'}cm
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

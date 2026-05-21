@@ -6,7 +6,7 @@ type MarimoImageProps = {
 
 export function MarimoImage({ size = 'medium', alt = '마리모 캐릭터', className = '' }: MarimoImageProps) {
   const imageSourceBySize = {
-    large: '/images/incoming/marimo-shadow-large.png',
+    large: '/images/incoming/marimo-large.png',
     medium: '/images/incoming/marimo-main.png',
     small: '/images/incoming/marimo-small.png',
   };

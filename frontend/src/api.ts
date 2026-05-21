@@ -2,6 +2,8 @@ const AGENT = import.meta.env.VITE_AGENT_BASE_URL ?? '/agent';
 const API = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const VOICE = import.meta.env.VITE_VOICE_BASE_URL ?? '/voice';
 const LLM = import.meta.env.VITE_LLM_BASE_URL ?? '/llm';
+const VOICE_NAME_STORAGE_KEY = 'super-marimo.voice-name';
+const DEFAULT_TTS_VOICE_NAMES = ['F1', 'F2'] as const;
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -32,6 +34,28 @@ function safeParseJson(raw: string): unknown {
   } catch {
     return raw;
   }
+}
+
+export function getStoredVoiceName(fallback = 'F1'): string {
+  if (typeof window === 'undefined') return fallback;
+  const stored = window.localStorage.getItem(VOICE_NAME_STORAGE_KEY)?.trim();
+  return stored || fallback;
+}
+
+export function setStoredVoiceName(voiceName: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(VOICE_NAME_STORAGE_KEY, voiceName);
+}
+
+export function normalizeVoiceNames(names?: string[] | null): string[] {
+  const cleaned = (names ?? []).map((name) => name.trim()).filter(Boolean);
+  return cleaned.length > 0 ? cleaned : [...DEFAULT_TTS_VOICE_NAMES];
+}
+
+export function resolveVoiceNamePreference(availableNames?: string[] | null, fallback = 'F1'): string {
+  const options = normalizeVoiceNames(availableNames);
+  const stored = getStoredVoiceName(options[0] ?? fallback);
+  return options.includes(stored) ? stored : options[0] ?? fallback;
 }
 
 export interface ServiceHealth {
@@ -308,7 +332,7 @@ export async function ingestRealtimeSensor(payload: { light: number; distance: n
   });
 }
 
-export async function askChat(text: string, sessionId?: string, isTest?: boolean): Promise<AskResult> {
+export async function askChat(text: string, sessionId?: string, isTest?: boolean, voiceName?: string): Promise<AskResult> {
   return fetchJson<AskResult>(`${API}/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -318,6 +342,7 @@ export async function askChat(text: string, sessionId?: string, isTest?: boolean
       session_kind: 'chat',
       use_sensor_context: true,
       is_test: isTest ?? null,
+      voice_name: voiceName ?? null,
     }),
   });
 }

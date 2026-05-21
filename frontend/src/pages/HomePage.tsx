@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import '../styles/home.css';
 import { MarimoImage } from '../components/MarimoImage';
 
 const homeNotices = [
@@ -14,6 +16,37 @@ const questItems = [
 ];
 
 export function HomePage() {
+  const noticeContentRef = useRef<HTMLDivElement | null>(null);
+  const [isNoticeCentered, setIsNoticeCentered] = useState(false);
+
+  useEffect(() => {
+    const content = noticeContentRef.current;
+
+    if (!content) {
+      return;
+    }
+
+    const updateNoticeAlignment = () => {
+      setIsNoticeCentered(content.scrollHeight <= content.clientHeight + 1);
+    };
+
+    updateNoticeAlignment();
+
+    const resizeObserver = new ResizeObserver(updateNoticeAlignment);
+    resizeObserver.observe(content);
+
+    const mutationObserver = new MutationObserver(updateNoticeAlignment);
+    mutationObserver.observe(content, { childList: true, subtree: true, characterData: true });
+
+    window.addEventListener('resize', updateNoticeAlignment);
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener('resize', updateNoticeAlignment);
+    };
+  }, []);
+
   return (
     <section className="home-stage" aria-label="Home stage">
       <div className="home-stage__layout">
@@ -22,7 +55,16 @@ export function HomePage() {
             공지사항
           </h2>
           <div className="home-board__surface">
-            <div className="home-board__content home-board__content--notice">
+            <div
+              ref={noticeContentRef}
+              className={[
+                'home-board__content',
+                'home-board__content--notice',
+                isNoticeCentered ? 'home-board__content--notice-centered' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
               {homeNotices.map((notice) => (
                 <p key={notice}>{notice}</p>
               ))}
@@ -63,6 +105,19 @@ export function HomePage() {
           </div>
         </section>
       </div>
+
+      <img
+        className="home-stage__grass"
+        src="/images/incoming/grass-pattern3-1.png"
+        alt=""
+        aria-hidden="true"
+      />
+      <img
+        className="home-stage__grass home-stage__grass--right"
+        src="/images/incoming/grass-pattern3-1.png"
+        alt=""
+        aria-hidden="true"
+      />
     </section>
   );
 }

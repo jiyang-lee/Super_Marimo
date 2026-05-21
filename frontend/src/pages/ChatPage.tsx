@@ -3,6 +3,7 @@ import {
   askChat,
   deleteSession,
   getSessionDetail,
+  getStoredVoiceName,
   listSessions,
   synthesizeTts,
   updateRuntimeSettings,
@@ -249,7 +250,7 @@ export function ChatPage() {
 
   const play = async (text: string) => {
     try {
-      const blob = await synthesizeTts(text);
+      const blob = await synthesizeTts(text, getStoredVoiceName());
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);
@@ -343,7 +344,7 @@ export function ChatPage() {
     });
 
     try {
-      const result = await askChat(value, sessionId);
+      const result = await askChat(value, sessionId, false, getStoredVoiceName());
       const nextId = result.session_id;
 
       const action = result.action_result;
