@@ -6,8 +6,19 @@ import unicodedata
 from threading import Lock
 from typing import Any, Optional
 
-from config import LLM_MODEL_ID, LLM_MODEL_REVISION, logger
+from config import (
+    HF_LLM_BACKEND,
+    HF_LLM_ENDPOINT_URL,
+    HF_LLM_ROUTER_BASE_URL,
+    HF_LLM_ROUTER_MODEL,
+    HF_TIMEOUT_SEC,
+    HF_TOKEN,
+    LLM_MODEL_ID,
+    LLM_MODEL_REVISION,
+    logger,
+)
 from contracts import build_contract, coerce_contract
+from hf_endpoint_client import HF_LLM_RUNTIME_STATE, chat_completion, extract_text, post_json
 
 _MODEL_BUNDLE: Optional[dict[str, Any]] = None
 _MODEL_LOCK = Lock()
@@ -74,6 +85,32 @@ def get_readiness_state() -> dict[str, Any]:
 
     try:
         import torch
+
+        if HF_LLM_BACKEND == "router" and HF_TOKEN:
+            return {
+                "ok": True,
+                "ready": True,
+                "mode": "hf_router",
+                "model_loaded": True,
+                "cuda_available": torch.cuda.is_available(),
+                "device": "hf_router",
+                "error": HF_LLM_RUNTIME_STATE.get("last_error"),
+                "error_type": None,
+                "last_latency_ms": HF_LLM_RUNTIME_STATE.get("last_latency_ms"),
+            }
+
+        if HF_LLM_ENDPOINT_URL:
+            return {
+                "ok": True,
+                "ready": True,
+                "mode": "hf_endpoint",
+                "model_loaded": True,
+                "cuda_available": torch.cuda.is_available(),
+                "device": "hf_endpoint",
+                "error": HF_LLM_RUNTIME_STATE.get("last_error"),
+                "error_type": None,
+                "last_latency_ms": HF_LLM_RUNTIME_STATE.get("last_latency_ms"),
+            }
 
         bundle = get_model_bundle()
         return {
@@ -308,22 +345,79 @@ def parse_contract_text(text: str, payload: Any | None = None) -> dict[str, Any]
 
 
 def generate_contract(payload: Any) -> dict[str, Any]:
-    import torch
-
     from prompt_builder import build_history_messages, build_system_prompt, build_user_prompt
+
+    messages = [{"role": "system", "content": build_system_prompt(payload)}]
+    messages.extend(build_history_messages(payload))
+    messages.append({"role": "user", "content": build_user_prompt(payload)})
+    max_new_tokens = 36 if bool(getattr(payload, "use_sensor_context", False)) else 48
+
+    if HF_LLM_BACKEND == "router" and HF_TOKEN:
+        try:
+            response, latency_ms = chat_completion(
+                base_url=HF_LLM_ROUTER_BASE_URL,
+                api_key=HF_TOKEN,
+                model=HF_LLM_ROUTER_MODEL,
+                messages=messages,
+                max_tokens=max_new_tokens,
+                timeout=HF_TIMEOUT_SEC,
+            )
+            HF_LLM_RUNTIME_STATE.update(
+                {
+                    "ready": True,
+                    "backend": "router",
+                    "model": HF_LLM_ROUTER_MODEL,
+                    "last_latency_ms": latency_ms,
+                    "last_error": None,
+                }
+            )
+            text = extract_text(response)
+            if not text:
+                return _build_fallback_contract(payload, raw_text="")
+            return parse_contract_text(text, payload)
+        except Exception as exc:
+            HF_LLM_RUNTIME_STATE.update({"ready": False, "last_error": str(exc)})
+            logger.warning("HF Router LLM failed, trying next LLM backend: %s", exc)
+
+    if HF_LLM_ENDPOINT_URL:
+        request_body = {
+            "messages": messages,
+            "inputs": messages[-1]["content"],
+            "parameters": {
+                "max_new_tokens": max_new_tokens,
+                "temperature": 0.0,
+                "do_sample": False,
+                "return_full_text": False,
+            },
+        }
+        try:
+            response, latency_ms = post_json(HF_LLM_ENDPOINT_URL, request_body, token=HF_TOKEN, timeout=HF_TIMEOUT_SEC)
+            HF_LLM_RUNTIME_STATE.update(
+                {
+                    "ready": True,
+                    "backend": "endpoint",
+                    "model": LLM_MODEL_ID,
+                    "last_latency_ms": latency_ms,
+                    "last_error": None,
+                }
+            )
+            text = extract_text(response)
+            if not text:
+                return _build_fallback_contract(payload, raw_text="")
+            return parse_contract_text(text, payload)
+        except Exception as exc:
+            HF_LLM_RUNTIME_STATE.update({"ready": False, "last_error": str(exc)})
+            logger.warning("HF LLM endpoint failed, falling back to local model: %s", exc)
+
+    import torch
 
     bundle = get_model_bundle()
     tokenizer = bundle["tokenizer"]
     model = bundle["model"]
     device = bundle["device"]
 
-    messages = [{"role": "system", "content": build_system_prompt(payload)}]
-    messages.extend(build_history_messages(payload))
-    messages.append({"role": "user", "content": build_user_prompt(payload)})
-
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    max_new_tokens = 64 if not bool(getattr(payload, "use_sensor_context", False)) else 48
 
     with torch.inference_mode():
         output_ids = model.generate(

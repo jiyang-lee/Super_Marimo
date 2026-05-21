@@ -92,7 +92,7 @@ class Bridge:
             api_bridge=self.api_bridge,
             on_playing=self._on_audio_playing,
             on_played=self._on_audio_played,
-            should_suppress_proactive=self.is_conversation_active,
+            should_suppress_proactive=self.should_suppress_proactive_audio,
         )
         
         # ?ㅻ뵒???낅젰 ?뚯뒪 ?꾪솚 吏??(serial ?먮뒗 mic)
@@ -125,6 +125,10 @@ class Bridge:
             self.tts_mute_until = max(current, time.time() + playback_sec + 0.2)
 
     def _on_audio_played(self, filename: str) -> None:
+        if self.is_web_voice_mode():
+            self.clear_voice_windows()
+            print(f"[mode] web voice enabled; bridge audio ignored after {filename}")
+            return
         if filename.startswith("event_proactive_greeting_"):
             ttl = getattr(self.args, "distance_followup_timeout_sec", 30)
             self.distance_followup_until = time.time() + ttl
@@ -151,10 +155,45 @@ class Bridge:
         if not bool(settings.get("wake_enabled", True)):
             print("[wake] ignored because wake mode is off")
             return False
+        if bool(settings.get("web_voice_enabled", False)):
+            print("[wake] ignored because web voice mode is on")
+            return False
         if not bool(status.get("wake_eligible")):
             print("[wake] ignored because distance is below threshold")
             return False
         return True
+
+    def is_web_voice_mode(self) -> bool:
+        try:
+            status = self.api_bridge.sensor_runtime_status()
+        except Exception as exc:
+            print(f"[mode] runtime status unavailable, bridge voice gate open: {exc}")
+            return False
+        settings = status.get("settings") or {}
+        return bool(settings.get("web_voice_enabled", False))
+
+    def should_suppress_proactive_audio(self) -> bool:
+        return self.is_web_voice_mode() or self.is_conversation_active()
+
+    def clear_voice_windows(self) -> None:
+        self.armed_until = 0.0
+        self.distance_followup_until = 0.0
+        self.reply_window_until = 0.0
+        self.transcript_buffer = ""
+
+    def is_spurious_english_transcript(self, transcript: str) -> bool:
+        value = re.sub(r"\s+", " ", (transcript or "").strip().lower())
+        value = value.strip(" .,!?:;\"'")
+        if re.search(r"[가-힣]", value):
+            return False
+        common_noise = {
+            "you",
+            "thank you",
+            "thanks",
+            "would you reserve a seat",
+            "reserve a seat",
+        }
+        return value in common_noise
 
     def _is_inside_distance_followup(self) -> bool:
         return time.time() <= self.distance_followup_until
@@ -247,6 +286,11 @@ class Bridge:
             print("[check] voice-agent logs: docker logs super-marimo-voice-agent")
 
     def handle_segment(self, pcm_bytes: bytes) -> None:
+        if self.is_web_voice_mode():
+            self.clear_voice_windows()
+            print("[mode] web voice enabled; bridge voice ignored")
+            return
+
         if time.time() <= float(getattr(self, "tts_mute_until", 0.0)):
             print("[stt] skipped during tts playback")
             return
@@ -284,6 +328,10 @@ class Bridge:
             return
 
         if not transcript:
+            return
+
+        if self.is_spurious_english_transcript(transcript):
+            print(f"[stt] ignored likely HF hallucination: {transcript}")
             return
 
         if has_exit_phrase(transcript):

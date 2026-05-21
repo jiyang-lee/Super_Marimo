@@ -29,6 +29,28 @@ def test_normal_tts_still_opens_reply_window() -> None:
     assert bridge.reply_window_until > 0.0
 
 
+def test_web_voice_mode_blocks_reply_window_after_proactive_audio() -> None:
+    class _FakeApiBridge:
+        def sensor_runtime_status(self):
+            return {"settings": {"web_voice_enabled": True}}
+
+    bridge = Bridge.__new__(Bridge)
+    bridge.args = type("Args", (), {"reply_boost_sec": 12, "distance_followup_timeout_sec": 30})()
+    bridge.api_bridge = _FakeApiBridge()
+    bridge.armed_until = time.time() + 10
+    bridge.distance_followup_until = 0.0
+    bridge.reply_window_until = 0.0
+    bridge.transcript_buffer = "noise"
+    bridge.suppress_next_reply_boost = False
+
+    bridge._on_audio_played("event_proactive_greeting_1.wav")
+
+    assert bridge.armed_until == 0.0
+    assert bridge.distance_followup_until == 0.0
+    assert bridge.reply_window_until == 0.0
+    assert bridge.transcript_buffer == ""
+
+
 def test_exit_phrase_ends_session_without_llm_tts(monkeypatch) -> None:
     calls = {"ask": 0, "end": 0}
     suppressed: list[float] = []
@@ -78,6 +100,47 @@ def test_exit_phrase_ends_session_without_llm_tts(monkeypatch) -> None:
     assert suppressed == [30]
 
 
+def test_web_voice_mode_skips_stt_and_llm() -> None:
+    calls = {"stt": 0, "ask": 0}
+
+    class _FakeApiBridge:
+        active_session_id = "session-1"
+
+        def sensor_runtime_status(self):
+            return {"settings": {"web_voice_enabled": True}}
+
+        def ask(self, *args, **kwargs):
+            calls["ask"] += 1
+
+    class _FakeSttClient:
+        def transcribe(self, wav_bytes):
+            calls["stt"] += 1
+            return "안녕"
+
+    class _FakeLogger:
+        def log(self, *args, **kwargs):
+            return None
+
+    bridge = Bridge.__new__(Bridge)
+    bridge.args = SimpleNamespace(min_segment_sec=0.01, reply_min_segment_sec=0.01, wake_min_segment_sec=0.01)
+    bridge.api_bridge = _FakeApiBridge()
+    bridge.stt_client = _FakeSttClient()
+    bridge.event_logger = _FakeLogger()
+    bridge.armed_until = time.time() + 10
+    bridge.distance_followup_until = time.time() + 10
+    bridge.reply_window_until = time.time() + 10
+    bridge.transcript_buffer = "old"
+
+    pcm_bytes = b"\x00\x00" * 400
+    bridge.handle_segment(pcm_bytes)
+
+    assert calls == {"stt": 0, "ask": 0}
+    assert bridge.armed_until == 0.0
+    assert bridge.distance_followup_until == 0.0
+    assert bridge.reply_window_until == 0.0
+    assert bridge.transcript_buffer == ""
+
+
 def test_reply_window_triggers_answer_turn_without_wake(monkeypatch) -> None:
     calls = {"answer": 0}
 
@@ -124,6 +187,47 @@ def test_reply_window_triggers_answer_turn_without_wake(monkeypatch) -> None:
     bridge.handle_segment(pcm_bytes)
 
     assert calls["answer"] == 1
+
+
+def test_spurious_english_transcript_does_not_trigger_reply() -> None:
+    calls = {"answer": 0}
+
+    class _FakeApiBridge:
+        active_session_id = "session-1"
+
+        def sensor_runtime_status(self):
+            return {"settings": {"web_voice_enabled": False}}
+
+    class _FakeSttClient:
+        def transcribe(self, wav_bytes):
+            return "Would you reserve a seat?"
+
+    class _FakeLogger:
+        def log(self, *args, **kwargs):
+            return None
+
+    bridge = Bridge.__new__(Bridge)
+    bridge.args = SimpleNamespace(
+        min_segment_sec=0.01,
+        reply_min_segment_sec=0.01,
+        wake_min_segment_sec=0.01,
+        wake_timeout_sec=12,
+        reply_boost_sec=12,
+    )
+    bridge.api_bridge = _FakeApiBridge()
+    bridge.stt_client = _FakeSttClient()
+    bridge.event_logger = _FakeLogger()
+    bridge.armed_until = 0.0
+    bridge.distance_followup_until = 0.0
+    bridge.reply_window_until = time.time() + 10
+    bridge.suppress_next_reply_boost = False
+    bridge.transcript_buffer = ""
+    bridge.answer_turn = lambda text: calls.__setitem__("answer", calls["answer"] + 1)
+
+    pcm_bytes = b"\x00\x00" * 400
+    bridge.handle_segment(pcm_bytes)
+
+    assert calls["answer"] == 0
 
 
 def test_tts_mute_skips_segments_during_playback(monkeypatch) -> None:

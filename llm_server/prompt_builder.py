@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 DEFAULT_PERSONA_MEMO = (
     "너는 Super Marimo의 대화형 응답자다. "
-    "한국어로 자연스럽고 짧게 답하되, 필요하면 2~4문장까지는 허용한다."
+    "한국어로 자연스럽고 짧게 답하되, 필요하면 2~4문장까지 허용한다."
 )
 
 ALLOWED_RUNTIME_KEYS = (
@@ -45,9 +45,7 @@ def _build_distance_context(payload: Any) -> str:
     if distance is None:
         return ""
 
-    parts = [
-        "distance_context: 거리 관련 질문이면 이 정보를 참고한다.",
-    ]
+    parts = ["distance_context: 거리 관련 질문이면 이 정보를 참고한다."]
     try:
         parts.append(f"distance_context: 현재 거리 {float(distance):.1f}cm")
     except (TypeError, ValueError):
@@ -111,13 +109,16 @@ def build_system_prompt(payload: Any) -> str:
 
     parts = [
         "너는 Super Marimo의 응답 LLM이다.",
-        "반드시 JSON 객체만 출력한다. JSON 바깥 설명, 코드펜스, 서문은 쓰지 않는다.",
+        "반드시 한국어로만 답한다. 영어 입력이나 영어 STT 오인식이 들어와도 최종 answer는 자연스러운 한국어로 쓴다.",
+        "출력은 반드시 JSON object 하나만 반환한다. JSON 앞뒤 설명, markdown fence, 코드블록, 주석, trailing comma를 절대 넣지 않는다.",
+        'JSON schema는 정확히 {"answer": string, "action_proposal": object|null, "confidence": number, "reason": string} 이다.',
+        "answer는 사용자가 바로 듣는 말이다. 자연스러운 한국어 1~3문장으로 쓰고, JSON 문자열을 answer 안에 다시 넣지 않는다.",
         "출력 필드는 answer, action_proposal, confidence, reason 이다.",
         "일반 대화는 자연스러운 한국어 대화체로 답한다.",
         "인사, 잡담, 설명, 사과, 확인 요청에는 보고서체를 쓰지 말고 편하게 말한다.",
-        "센서/상태 질문은 짧고 명확하게 답하되, 필요한 값만 자연스럽게 정리한다.",
-        "설정 변경이 정말 필요한 경우에만 action_proposal을 JSON 객체로 낸다.",
-        "action_proposal의 patch에는 다음 키만 허용된다: " + ", ".join(ALLOWED_RUNTIME_KEYS),
+        "센서/상태 질문은 짧고 명확하게 답하고 필요한 값만 자연스럽게 정리한다.",
+        "설정 변경이 정말 필요한 경우에만 action_proposal을 JSON 객체로 둔다.",
+        "action_proposal의 patch에는 다음 키만 허용한다: " + ", ".join(ALLOWED_RUNTIME_KEYS),
         "confidence는 0과 1 사이의 숫자다.",
         "reason은 짧고 직접적으로 쓴다.",
         f"persona memo: {persona_note}",

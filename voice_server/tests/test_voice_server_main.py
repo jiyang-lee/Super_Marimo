@@ -9,6 +9,9 @@ _ORIGINAL_MODULES = {
     name: sys.modules.get(name)
     for name in (
         "config",
+        "hf_endpoint_client",
+        "stt_engine",
+        "tts_engine",
         "fastapi",
         "fastapi.middleware.cors",
         "fastapi.responses",
@@ -78,7 +81,24 @@ fastapi.FastAPI = _FastAPI
 fastapi.HTTPException = _HTTPException
 fastapi.BackgroundTasks = _BackgroundTasks
 fastapi.File = _File
+fastapi.Query = _File
 fastapi.UploadFile = _UploadFile
+
+huggingface_hub = sys.modules.setdefault("huggingface_hub", types.ModuleType("huggingface_hub"))
+
+
+class _InferenceClient:
+    response = {"text": "안녕"}
+
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def automatic_speech_recognition(self, audio_path, model=None):
+        return self.response
+
+
+huggingface_hub.InferenceClient = _InferenceClient
 
 fastapi_cors = sys.modules.setdefault("fastapi.middleware.cors", types.ModuleType("fastapi.middleware.cors"))
 
@@ -143,8 +163,14 @@ starlette_requests.Request = _Request
 
 
 VOICE_DIR = Path(__file__).resolve().parents[1]
+sys.path = [entry for entry in sys.path if Path(entry).resolve() != VOICE_DIR.resolve()]
+sys.path.insert(0, str(VOICE_DIR))
+for _module_name in ("config", "hf_endpoint_client", "stt_engine", "tts_engine"):
+    sys.modules.pop(_module_name, None)
 MAIN_PATH = VOICE_DIR / "main.py"
 TTS_ENGINE_PATH = VOICE_DIR / "tts_engine.py"
+STT_ENGINE_PATH = VOICE_DIR / "stt_engine.py"
+HF_CLIENT_PATH = VOICE_DIR / "hf_endpoint_client.py"
 
 spec = util.spec_from_file_location("voice_server_main", MAIN_PATH)
 assert spec is not None and spec.loader is not None
@@ -156,6 +182,16 @@ try:
     assert tts_spec is not None and tts_spec.loader is not None
     tts_engine = util.module_from_spec(tts_spec)
     tts_spec.loader.exec_module(tts_engine)
+
+    stt_spec = util.spec_from_file_location("voice_server_stt_engine", STT_ENGINE_PATH)
+    assert stt_spec is not None and stt_spec.loader is not None
+    stt_engine = util.module_from_spec(stt_spec)
+    stt_spec.loader.exec_module(stt_engine)
+
+    hf_spec = util.spec_from_file_location("voice_server_hf_endpoint_client", HF_CLIENT_PATH)
+    assert hf_spec is not None and hf_spec.loader is not None
+    hf_endpoint_client = util.module_from_spec(hf_spec)
+    hf_spec.loader.exec_module(hf_endpoint_client)
 finally:
     for name, module in _ORIGINAL_MODULES.items():
         if module is None:
@@ -187,3 +223,35 @@ def test_ready_exposes_available_voice_names(monkeypatch) -> None:
     assert payload.status_code == 200
     assert content["ready"] is True
     assert content["tts_voice_names"] == ["F1", "F2"]
+
+
+def test_hf_stt_response_normalizes_to_segments() -> None:
+    text, language, segments = stt_engine.normalize_hf_stt_response(
+        {"text": "안녕하세요", "chunks": [{"text": "안녕하세요", "timestamp": [0.0, 1.2]}]}
+    )
+
+    assert text == "안녕하세요"
+    assert language == "ko"
+    assert segments[0].text == "안녕하세요"
+    assert segments[0].end == 1.2
+
+
+def test_hf_audio_payload_decodes_base64() -> None:
+    payload = {"audio_base64": "UklGRg=="}
+
+    assert hf_endpoint_client.decode_audio_payload(payload) == b"RIFF"
+
+
+def test_hf_serverless_stt_uses_inference_client(monkeypatch, tmp_path) -> None:
+    audio_path = tmp_path / "sample.wav"
+    audio_path.write_bytes(b"RIFF")
+    monkeypatch.setattr(stt_engine, "HF_TOKEN", "hf_test")
+    monkeypatch.setattr(stt_engine, "HF_STT_MODEL_ID", "openai/whisper-large-v3")
+
+    payload, latency_ms = stt_engine.transcribe_with_hf_serverless(str(audio_path))
+    text, language, segments = stt_engine.normalize_hf_stt_response(payload)
+
+    assert latency_ms >= 0
+    assert text == "안녕"
+    assert language == "ko"
+    assert segments[0].text == "안녕"

@@ -7,3 +7,4 @@ soundfile==0.12.1
 faster-whisper==1.1.0
 supertonic==1.2.3
 requests==2.32.3
+huggingface_hub==0.36.0

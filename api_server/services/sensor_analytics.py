@@ -4,6 +4,8 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+from psycopg.types.json import Json
+
 from schemas import HourlySensorPayload, RealtimeSensorPayload, SensorPayload
 from utils import now_kst
 
@@ -410,7 +412,7 @@ def rebuild_sensor_reading_states(conn) -> int:
                         state_alerts = %s
                     WHERE reading_id = %s
                     """,
-                    (state.get("level"), state.get("alerts", []), row["reading_id"]),
+                    (state.get("level"), Json(state.get("alerts", [])), row["reading_id"]),
                 )
             updated_count += 1
 

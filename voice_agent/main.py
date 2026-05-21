@@ -39,6 +39,7 @@ DEFAULT_STT_MODEL = os.getenv("STT_MODEL", "fast")
 VOICE_AGENT_PORT = int(os.getenv("VOICE_AGENT_PORT", "8003"))
 SHARED_AUDIO_DIR = os.getenv("SHARED_AUDIO_DIR", "shared/audio")
 EVENT_POLLER_INTERVAL = float(os.getenv("EVENT_POLLER_INTERVAL", "1.0"))
+TTS_WARMUP_TEXT = os.getenv("TTS_WARMUP_TEXT", "안녕")
 
 logger = logging.getLogger("voice_agent")
 
@@ -56,6 +57,8 @@ event_poller = EventPoller(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Voice Agent starting...")
+    if TTS_WARMUP_TEXT.strip():
+        synthesize_tts(TTS_WARMUP_TEXT, prefix="warmup")
     event_poller.start()
     yield
     logger.info("Voice Agent shutting down...")

@@ -2,6 +2,9 @@ from functools import lru_cache
 from typing import Any
 
 from config import (
+    HF_TIMEOUT_SEC,
+    HF_TOKEN,
+    HF_TTS_ENDPOINT_URL,
     _TTS_RUNTIME,
     _TTS_RUNTIME_LOCK,
     _TTS_RUNTIME_STATE,
@@ -11,6 +14,7 @@ from config import (
     TTS_LANG,
     TTS_VOICE_NAME,
 )
+from hf_endpoint_client import decode_audio_payload, post_json
 
 
 @lru_cache(maxsize=1)
@@ -67,6 +71,30 @@ def get_tts_runtime() -> dict[str, Any]:
 
 
 def synthesize(text: str, voice_name: str | None = None) -> tuple[bytes, str]:
+    if HF_TTS_ENDPOINT_URL:
+        try:
+            resolved_voice_name = voice_name or TTS_VOICE_NAME
+            payload, latency_ms = post_json(
+                HF_TTS_ENDPOINT_URL,
+                {"inputs": text, "text": text, "voice_name": resolved_voice_name, "lang": TTS_LANG},
+                token=HF_TOKEN,
+                timeout=HF_TIMEOUT_SEC,
+            )
+            wav_bytes = decode_audio_payload(payload)
+            _TTS_RUNTIME_STATE.update(
+                {
+                    "loaded": True,
+                    "ready": True,
+                    "voice_name": resolved_voice_name,
+                    "last_latency_ms": latency_ms,
+                    "last_error": None,
+                }
+            )
+            return wav_bytes, resolved_voice_name
+        except Exception as exc:
+            _TTS_RUNTIME_STATE.update({"ready": False, "last_error": str(exc)})
+            logger.warning("HF TTS endpoint failed, falling back to local TTS: %s", exc)
+
     runtime = get_tts_runtime()
     tts = runtime["tts"]
     available_voice_names = runtime.get("available_voice_names", [])

@@ -7,3 +7,4 @@ langchain-core==0.3.29
 torch==2.5.1
 transformers==4.57.3
 accelerate==1.2.1
+openai==2.8.1
