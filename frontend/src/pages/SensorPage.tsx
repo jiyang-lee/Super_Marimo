@@ -89,7 +89,7 @@ export function SensorPage() {
   const history = useMemo(() => buildLastSevenDays(selectedConfig), [selectedConfig]);
 
   const chartWidth = 980;
-  const chartHeight = 360;
+  const chartHeight = 391;
   const chartPadding = { top: 24, right: 24, bottom: 54, left: 72 };
   const chartPlotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const chartPlotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
@@ -162,7 +162,8 @@ export function SensorPage() {
                         setHoveredIndex(null);
                       }}
                     >
-                      {config.label}
+                      <img className="sensor-report-tab__icon" src={config.icon} alt="" aria-hidden="true" />
+                      <span className="sensor-report-tab__label">{config.label}</span>
                     </button>
                   );
                 })}
@@ -223,7 +224,7 @@ export function SensorPage() {
                         d={points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')}
                         fill="none"
                         stroke={selectedConfig.accent}
-                        strokeWidth="4.5"
+                        strokeWidth="5.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
@@ -234,10 +235,10 @@ export function SensorPage() {
                         <circle
                           cx={point.x}
                           cy={point.y}
-                          r={hoveredIndex === index ? '6' : '3.5'}
+                          r={hoveredIndex === index ? '7' : '4.5'}
                           fill={selectedConfig.accent}
                           stroke="#fff8e7"
-                          strokeWidth="2"
+                          strokeWidth="2.4"
                         />
                       </g>
                     ))}
