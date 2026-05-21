@@ -111,7 +111,7 @@ def ready() -> JSONResponse:
             "mock_mode": MOCK_MODE,
             "model": LLM_MODEL_ID,
             "revision": LLM_MODEL_REVISION,
-            "framework": "langchain",
+            "framework": "python",
             "model_loaded": readiness["model_loaded"],
             "cuda_available": readiness["cuda_available"],
             "device": readiness["device"],
@@ -137,5 +137,5 @@ def generate(payload: GeneratePayload) -> dict[str, Any]:
     contract.setdefault("confidence", 0.0)
     contract.setdefault("reason", "")
     contract["mock"] = MOCK_MODE
-    contract["framework"] = "langchain"
+    contract["framework"] = "python"
     return contract
