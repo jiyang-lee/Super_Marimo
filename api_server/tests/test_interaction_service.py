@@ -260,6 +260,52 @@ def test_handle_interaction_strips_json_wrapper_from_tts_text(monkeypatch) -> No
     assert result["tts_text"] == "안녕하세요."
 
 
+def test_handle_interaction_extracts_answer_from_malformed_json_like_text(monkeypatch) -> None:
+    runtime_state = {
+        "distance_detection_enabled": True,
+        "wake_enabled": True,
+        "web_voice_enabled": False,
+        "distance_threshold_cm": 50.0,
+        "distance_inside_threshold": False,
+    }
+    _patch_common_flow(monkeypatch, runtime_state)
+
+    async def fake_request_llm(
+        question,
+        sensor,
+        state,
+        runtime_settings,
+        use_sensor_context,
+        history=None,
+        session_summary=None,
+        action_result=None,
+        persona_memo=None,
+        system_memo=None,
+    ):
+        return {
+            "answer": '{"answer":"안녕하세요.","action_proposal":null,"confidence":0.85',
+            "action_proposal": None,
+            "confidence": 0.3,
+            "reason": "no proposal",
+        }
+
+    monkeypatch.setattr(service, "request_llm", fake_request_llm)
+
+    result = asyncio.run(
+        service.handle_interaction(
+            session_id=uuid4(),
+            session_kind="chat",
+            text="hello",
+            sensor=None,
+            use_sensor_context=True,
+            source="ask",
+        )
+    )
+
+    assert result["llm_answer"] == "안녕하세요."
+    assert result["tts_text"] == "안녕하세요."
+
+
 def test_handle_interaction_falls_back_to_text_resolution(monkeypatch) -> None:
     runtime_state = {
         "distance_detection_enabled": True,

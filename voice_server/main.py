@@ -78,7 +78,7 @@ def sanitize_tts_text(text: str) -> str:
     cleaned = text or ""
     cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
     cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", cleaned)
-    cleaned = re.sub(r"[^0-9가-힣\s]", " ", cleaned)
+    cleaned = re.sub(r"[^0-9가-힣\s%]", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
 

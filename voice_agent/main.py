@@ -180,8 +180,8 @@ def _unwrap_spoken_text(text: str) -> str:
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE | re.DOTALL).strip()
     json_start = cleaned.find("{")
     json_end = cleaned.rfind("}")
-    if json_start != -1:
-        json_blob = cleaned[json_start : json_end + 1] if json_end > json_start else cleaned[json_start:]
+    if json_start != -1 and json_end > json_start:
+        json_blob = cleaned[json_start : json_end + 1]
         try:
             parsed = json.loads(json_blob)
         except json.JSONDecodeError:

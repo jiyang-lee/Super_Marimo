@@ -48,6 +48,13 @@ class EventPoller:
             self._stop_event.wait(self.interval_sec)
 
     def _poll_once(self) -> None:
+        try:
+            res = self.api_client.get_json(f"{self.api_client.api_server_url}/sensor/runtime-settings", timeout=10)
+            if res.get("settings", {}).get("web_voice_enabled"):
+                return
+        except Exception as exc:
+            logger.warning("Failed to check runtime settings in EventPoller: %s", exc)
+
         while True:
             try:
                 result = self.api_client.list_events(

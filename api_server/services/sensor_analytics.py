@@ -283,7 +283,8 @@ def build_sensor_summary(sensor: dict[str, Any], state: dict[str, Any], metrics:
         parts.append(f"조도 {light:.1f}%")
 
     level = str(state.get("level") or "normal").strip() or "normal"
-    prefix = f"현재 센서 상태는 {level}입니다."
+    level_kr = {"normal": "정상", "warning": "주의", "critical": "위험"}.get(level, level)
+    prefix = f"현재 센서 상태는 {level_kr}입니다."
     if not parts:
         return prefix + " 현재 센서 값을 바로 읽지 못했습니다."
     return f"{prefix} " + " / ".join(parts) + "."

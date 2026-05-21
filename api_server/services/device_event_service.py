@@ -19,6 +19,7 @@ ALLOWED_EVENT_STATUSES = {
     "playing",
     "played",
     "failed",
+    "skipped",
 }
 
 

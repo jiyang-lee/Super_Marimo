@@ -126,6 +126,16 @@ def test_tts_client_strips_json_wrapper_before_synthesis(tmp_path) -> None:
     assert unwrap_spoken_text('```json\n{"tts_text":"깨워드릴게요."}\n```') == "깨워드릴게요."
 
 
+def test_tts_client_extracts_answer_from_malformed_json_like_text(tmp_path) -> None:
+    api_client = _ApiClientForTts()
+    client = TtsClient(api_client, output_dir=str(tmp_path))
+
+    path = client.synthesize_to_file('{"answer":"안녕하세요.","confidence":0.85', voice_name="F2", prefix="wake")
+
+    assert path.exists()
+    assert api_client.calls == [("안녕하세요.", "F2")]
+
+
 def test_tts_client_reuses_cached_audio(tmp_path) -> None:
     api_client = _ApiClientForTts()
     client = TtsClient(api_client, output_dir=str(tmp_path))

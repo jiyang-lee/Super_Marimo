@@ -16,6 +16,7 @@ class AudioPlayer:
         on_playing: Callable[[str], None] | None = None,
         on_played: Callable[[str], None] | None = None,
         should_suppress_proactive: Callable[[], bool] | None = None,
+        is_web_mode: Callable[[], bool] | None = None,
     ):
         self.audio_dir = Path(shared_audio_dir)
         self.poll_interval_ms = poll_interval_ms
@@ -24,6 +25,7 @@ class AudioPlayer:
         self.on_playing = on_playing
         self.on_played = on_played
         self.should_suppress_proactive = should_suppress_proactive
+        self.is_web_mode = is_web_mode
         self.suppress_proactive_until = 0.0
 
     def suppress_proactive_for(self, ttl_sec: float) -> None:
@@ -55,8 +57,24 @@ class AudioPlayer:
         except Exception as exc:
             print(f"[audio_player] status update failed: {exc}")
 
+    def _flush_old_audio(self) -> None:
+        if not self.audio_dir.exists():
+            return
+        wav_files = list(self.audio_dir.glob("*.wav"))
+        for wav_path in wav_files:
+            name = wav_path.name
+            event_id = self._extract_event_id(name)
+            if event_id is not None:
+                self._update_status(event_id, "skipped")
+            print(f"[audio_player] flushing old audio {name} on startup")
+            try:
+                wav_path.unlink()
+            except OSError:
+                pass
+
     def start(self) -> None:
         print(f"[audio_player] watching {self.audio_dir}")
+        self._flush_old_audio()
         while True:
             self._poll_once()
             time.sleep(self.poll_interval_ms / 1000.0)
@@ -75,8 +93,22 @@ class AudioPlayer:
             return
 
         wav_files = sorted(self.audio_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime)
+        
+        web_mode_active = self.is_web_mode is not None and self.is_web_mode()
+
         for wav_path in wav_files:
             name = wav_path.name
+            
+            if web_mode_active:
+                event_id = self._extract_event_id(name)
+                print(f"[audio_player] suppressing audio {name} because web mode is active")
+                self._update_status(event_id, "skipped")
+                try:
+                    wav_path.unlink()
+                except OSError:
+                    pass
+                continue
+
             if not self._should_play_file(name):
                 event_id = self._extract_event_id(name)
                 print(f"[audio_player] deleting unsupported event audio {name}")

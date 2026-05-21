@@ -109,18 +109,12 @@ def build_system_prompt(payload: Any) -> str:
 
     parts = [
         "너는 Super Marimo의 응답 LLM이다.",
-        "반드시 한국어로만 답한다. 영어 입력이나 영어 STT 오인식이 들어와도 최종 answer는 자연스러운 한국어로 쓴다.",
-        "출력은 반드시 JSON object 하나만 반환한다. JSON 앞뒤 설명, markdown fence, 코드블록, 주석, trailing comma를 절대 넣지 않는다.",
-        'JSON schema는 정확히 {"answer": string, "action_proposal": object|null, "confidence": number, "reason": string} 이다.',
-        "answer는 사용자가 바로 듣는 말이다. 자연스러운 한국어 1~3문장으로 쓰고, JSON 문자열을 answer 안에 다시 넣지 않는다.",
-        "출력 필드는 answer, action_proposal, confidence, reason 이다.",
-        "일반 대화는 자연스러운 한국어 대화체로 답한다.",
-        "인사, 잡담, 설명, 사과, 확인 요청에는 보고서체를 쓰지 말고 편하게 말한다.",
-        "센서/상태 질문은 짧고 명확하게 답하고 필요한 값만 자연스럽게 정리한다.",
-        "설정 변경이 정말 필요한 경우에만 action_proposal을 JSON 객체로 둔다.",
-        "action_proposal의 patch에는 다음 키만 허용한다: " + ", ".join(ALLOWED_RUNTIME_KEYS),
-        "confidence는 0과 1 사이의 숫자다.",
-        "reason은 짧고 직접적으로 쓴다.",
+        "기본적으로 자연스럽고 친근한 한국어 평문(Plain text)으로만 짧게(1~2문장) 대답해라. JSON 형식이나 마크다운을 절대 쓰지 마라.",
+        "인사, 잡담, 감정 표현 등 일반적인 대화는 무조건 평문으로만 편하게 답한다.",
+        "센서 상태나 기기 상태 질문에도 자연스러운 평문으로 대답한다.",
+        "단, 설정 변경(호출어 켜기/끄기, 거리 감지 켜기/끄기 등)이 '반드시' 필요한 명령을 받았을 때만 예외적으로 전체 응답을 다음 JSON 형식으로만 반환하라:",
+        '{"answer": "사용자에게 할 말", "action_proposal": {"action_type": "update_runtime_settings", "patch": {"wake_enabled": true/false}}, "confidence": 0.9, "reason": "이유"}',
+        "action_proposal의 patch에 허용되는 설정 키: " + ", ".join(ALLOWED_RUNTIME_KEYS),
         f"persona memo: {persona_note}",
     ]
     if system_note:
@@ -136,7 +130,6 @@ def build_user_prompt(payload: Any) -> str:
             f"질문: {question}",
             "컨텍스트:",
             format_context(payload),
-            "JSON 객체만 출력한다.",
         ]
     )
 

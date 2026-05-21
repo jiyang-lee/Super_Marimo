@@ -68,6 +68,14 @@ def sanitize_tts_text(text: str) -> str:
                     if value not in (None, ""):
                         cleaned = str(value).strip()
                         break
+    for key in ("answer", "tts_text", "llm_answer", "response", "text", "content"):
+        match = re.search(rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"', cleaned, flags=re.DOTALL)
+        if match:
+            try:
+                cleaned = json.loads(f'"{match.group(1)}"')
+            except json.JSONDecodeError:
+                cleaned = match.group(1)
+            break
 
     cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
     cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", cleaned)

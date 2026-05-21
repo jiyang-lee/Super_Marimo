@@ -10,6 +10,7 @@ from services.device_event_service import (
     normalize_event_type,
     save_device_event,
     update_event_status,
+    ALLOWED_EVENT_STATUSES,
 )
 
 router = APIRouter()
@@ -51,9 +52,8 @@ def device_event_mark_played(event_id: int) -> dict[str, Any]:
 @router.put("/events/{event_id}/status")
 def device_event_update_status(event_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     status = str(payload.get("status") or "").strip()
-    allowed = {"pending", "processing", "tts_generated", "playing", "played", "failed"}
-    if status not in allowed:
-        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(allowed)}")
+    if status not in ALLOWED_EVENT_STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(ALLOWED_EVENT_STATUSES)}")
     return update_event_status(event_id, status)
 
 

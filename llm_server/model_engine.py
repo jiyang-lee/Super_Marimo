@@ -189,8 +189,9 @@ def _safe_plain_text(payload: Any) -> str:
     water_level = _first_num("water_level_normalized_0_100", "water_level_recent_avg_2h", "water_level")
     light = _first_num("light_normalized_0_100", "light_daytime_avg_13_18", "light")
     state_level = str(state.get("level") or "normal").strip() or "normal"
+    state_level_kr = {"normal": "정상", "warning": "주의", "critical": "위험"}.get(state_level, state_level)
 
-    parts = [f"현재 상태는 {state_level}입니다."]
+    parts = [f"현재 상태는 {state_level_kr}입니다."]
     if temperature is not None:
         parts.append(f"기온 {temperature:.1f}도")
     if humidity is not None:
@@ -201,7 +202,7 @@ def _safe_plain_text(payload: Any) -> str:
         parts.append(f"조도 {light:.1f}%")
 
     if len(parts) == 1:
-        return "현재 센서 값을 바로 읽지 못했습니다."
+        return "죄송해요, 다시 말씀해 주실래요?"
     return " / ".join(parts)
 
 

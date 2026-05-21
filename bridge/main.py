@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import json
@@ -47,8 +47,8 @@ def unwrap_spoken_text(text: str) -> str:
     value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.IGNORECASE | re.DOTALL).strip()
     json_start = value.find("{")
     json_end = value.rfind("}")
-    if json_start != -1:
-        json_blob = value[json_start : json_end + 1] if json_end > json_start else value[json_start:]
+    if json_start != -1 and json_end > json_start:
+        json_blob = value[json_start : json_end + 1]
         try:
             parsed = json.loads(json_blob)
         except json.JSONDecodeError:
@@ -62,6 +62,14 @@ def unwrap_spoken_text(text: str) -> str:
                 candidate = parsed.get(key)
                 if candidate not in (None, ""):
                     return str(candidate).strip()
+
+    for key in ("answer", "tts_text", "llm_answer", "response", "text", "content"):
+        match = re.search(rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"', value, flags=re.DOTALL)
+        if match:
+            try:
+                return json.loads(f'"{match.group(1)}"')
+            except json.JSONDecodeError:
+                return match.group(1)
     return value
 
 
@@ -93,6 +101,7 @@ class Bridge:
             on_playing=self._on_audio_playing,
             on_played=self._on_audio_played,
             should_suppress_proactive=self.should_suppress_proactive_audio,
+            is_web_mode=self.is_web_voice_mode,
         )
         
         # ?ㅻ뵒???낅젰 ?뚯뒪 ?꾪솚 吏??(serial ?먮뒗 mic)
