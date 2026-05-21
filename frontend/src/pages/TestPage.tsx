@@ -1,41 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getLatestSensor,
   getRuntimeSettings,
   listEvents,
   updateRuntimeSettings,
   type DeviceEvent,
   type RuntimeSettings,
-  type SensorLatest,
 } from '../api';
+import { useLiveSensor } from '../contexts/LiveSensorContext';
 
 function formatValue(value: unknown, suffix = '') {
   if (value === null || value === undefined || value === '') return '-';
   return `${value}${suffix}`;
-}
-
-function formatNormalizedWithRaw(normalized: unknown, raw: unknown, suffix = '') {
-  const normalizedText = formatValue(normalized, suffix);
-  const rawText = formatValue(raw);
-  if (rawText === '-') {
-    return normalizedText;
-  }
-  return `${normalizedText} (raw ${rawText})`;
-}
-
-function normalizeToPercent(value: unknown, reference: unknown) {
-  const current = Number(value);
-  const base = Number(reference);
-  if (!Number.isFinite(current) || !Number.isFinite(base) || base <= 0) return null;
-  const normalized = Math.round((current / base) * 100);
-  return Math.max(0, Math.min(100, normalized));
-}
-
-function normalizeLightRange(value: unknown) {
-  const current = Number(value);
-  if (!Number.isFinite(current)) return null;
-  const normalized = Math.round(((current - 2) / (700 - 2)) * 100);
-  return Math.max(0, Math.min(100, normalized));
 }
 
 function timeLabel(value?: string | null) {
@@ -49,14 +24,16 @@ function isWebMode(settings: RuntimeSettings | null) {
 
 export function TestPage() {
   const [settings, setSettings] = useState<RuntimeSettings | null>(null);
-  const [sensor, setSensor] = useState<SensorLatest | null>(null);
   const [events, setEvents] = useState<DeviceEvent[]>([]);
   const [error, setError] = useState('');
   const [syncedAt, setSyncedAt] = useState('');
   const [savingMode, setSavingMode] = useState(false);
+  const { sensor, status: sensorStatus, error: sensorError, syncedAt: sensorSyncedAt, refresh: refreshSensor } =
+    useLiveSensor();
 
   const webMode = isWebMode(settings);
-  const mergedSensor = sensor?.latest_merged ?? sensor?.latest_realtime ?? null;
+  const realtimeSensor = sensor?.latest_realtime ?? null;
+  const mergedSensor = sensor?.latest_merged ?? null;
 
   const distanceAlerts = useMemo(
     () =>
@@ -71,25 +48,19 @@ export function TestPage() {
 
   const sensorCards = useMemo(
     () => [
-      { label: '온도', value: formatValue(mergedSensor?.temperature, ' C') },
-      { label: '습도', value: formatValue(mergedSensor?.humidity, '%') },
+      { label: '온도', value: formatValue(realtimeSensor?.temperature ?? mergedSensor?.temperature, ' C') },
+      { label: '습도', value: formatValue(realtimeSensor?.humidity ?? mergedSensor?.humidity, '%') },
       {
         label: '조도',
-        value: formatNormalizedWithRaw(
-          mergedSensor?.light_normalized_0_100 ?? normalizeLightRange(mergedSensor?.light),
-          mergedSensor?.light,
-        ),
+        value: formatValue(mergedSensor?.light_normalized_0_100, '%'),
       },
       {
         label: '수위',
-        value: formatNormalizedWithRaw(
-          mergedSensor?.water_level_normalized_0_100 ?? normalizeToPercent(mergedSensor?.water_level, mergedSensor?.water_level_recent_avg_2h),
-          mergedSensor?.water_level,
-        ),
+        value: formatValue(mergedSensor?.water_level_normalized_0_100, '%'),
       },
-      { label: '거리', value: formatValue(mergedSensor?.distance, 'cm') },
+      { label: '거리', value: formatValue(realtimeSensor?.distance ?? mergedSensor?.distance, 'cm') },
     ],
-    [mergedSensor],
+    [mergedSensor, realtimeSensor],
   );
 
   const currentCards = useMemo(
@@ -116,16 +87,15 @@ export function TestPage() {
   const refreshBoard = async () => {
     setError('');
     try {
-      const [nextSettings, nextSensor, nextEvents] = await Promise.all([
+      const [nextSettings, nextEvents] = await Promise.all([
         getRuntimeSettings(),
-        getLatestSensor(),
         listEvents({ limit: 20 }),
       ]);
 
       setSettings(nextSettings.settings);
-      setSensor(nextSensor);
       setEvents(nextEvents.events ?? []);
       setSyncedAt(new Date().toLocaleTimeString('ko-KR'));
+      void refreshSensor();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'load failed');
     }
@@ -167,6 +137,9 @@ export function TestPage() {
           <span style={{ fontSize: 12, color: '#667085', fontFamily: '"Cascadia Mono", "SFMono-Regular", Consolas, monospace' }}>
             sync {syncedAt || '...'}
           </span>
+          <span style={{ fontSize: 12, color: sensorStatus === 'ready' ? '#2f6f3e' : '#667085', fontFamily: '"Cascadia Mono", "SFMono-Regular", Consolas, monospace' }}>
+            {sensorStatus === 'ready' && sensorSyncedAt ? `센서 LIVE ${sensorSyncedAt}` : sensorStatus === 'loading' ? '센서 수신 중' : '센서 unavailable'}
+          </span>
           <button className="lab-btn lab-btn-secondary" onClick={() => void refreshBoard()}>
             새로고침
           </button>
@@ -174,6 +147,7 @@ export function TestPage() {
       </div>
 
       {error && <div className="lab-log-item bad">{error}</div>}
+      {sensorError && <div className="lab-log-item warn">{sensorError}</div>}
 
       <div className="lab-sub-panel">
         <div className="lab-sub-panel-head">

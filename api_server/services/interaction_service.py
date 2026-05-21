@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from typing import Any, Optional
@@ -30,11 +31,46 @@ DEFAULT_PERSONA_MEMO = (
 )
 
 
+def _sanitize_llm_sensor_payload(sensor: Optional[SensorPayload]) -> Optional[dict[str, Any]]:
+    if sensor is None:
+        return None
+    sensor_data = sensor.model_dump()
+    if sensor_data.get("water_level_normalized_0_100") is not None or sensor_data.get("water_level_recent_avg_2h") is not None:
+        sensor_data.pop("water_level", None)
+    if sensor_data.get("light_normalized_0_100") is not None or sensor_data.get("light_daytime_avg_13_18") is not None:
+        sensor_data.pop("light", None)
+    return sensor_data
+
+
 def sanitize_tts_text(text: str) -> str:
-    cleaned = unicodedata.normalize("NFKC", text or "")
+    cleaned = unicodedata.normalize("NFKC", text or "").strip()
+    if not cleaned:
+        return ""
+
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE | re.DOTALL).strip()
+    json_start = cleaned.find("{")
+    json_end = cleaned.rfind("}")
+    if json_start != -1:
+        json_blob = cleaned[json_start : json_end + 1] if json_end > json_start else cleaned[json_start:]
+        try:
+            parsed = json.loads(json_blob)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            for key in ("answer", "tts_text", "llm_answer", "response", "text", "content"):
+                value = parsed.get(key)
+                if isinstance(value, str) and value.strip():
+                    cleaned = value.strip()
+                    break
+            else:
+                for key in ("answer", "tts_text", "llm_answer", "response", "text", "content"):
+                    value = parsed.get(key)
+                    if value not in (None, ""):
+                        cleaned = str(value).strip()
+                        break
+
     cleaned = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", cleaned)
     cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", cleaned)
-    cleaned = re.sub(r"[^0-9가-힣\s]", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
 
@@ -71,7 +107,7 @@ async def request_llm(
     resolved_system_memo = system_memo.strip() if system_memo else None
     request_body = {
         "question": question,
-        "sensor": sensor.model_dump() if sensor is not None else None,
+        "sensor": _sanitize_llm_sensor_payload(sensor),
         "state": state,
         "runtime_settings": runtime_settings,
         "history": history or [],
@@ -114,6 +150,24 @@ async def handle_interaction(
 
     if use_sensor_context:
         active_sensor = active_sensor or load_latest_sensor_payload()
+        if active_sensor is not None:
+            latest_sensor = load_latest_sensor_payload()
+            active_sensor_data = active_sensor.model_dump()
+            latest_sensor_data = latest_sensor.model_dump()
+            for key in (
+                "water_level_recent_avg_2h",
+                "water_level_normalized_0_100",
+                "water_level_sample_count",
+                "light_daytime_avg_13_18",
+                "light_normalized_0_100",
+                "light_daytime_sample_count",
+                "light_daytime_window_label",
+                "sensor_semantics",
+                "sensor_summary",
+            ):
+                if active_sensor_data.get(key) is None and latest_sensor_data.get(key) is not None:
+                    active_sensor_data[key] = latest_sensor_data[key]
+            active_sensor = SensorPayload(**active_sensor_data)
         state = judge_sensor_state(active_sensor)
 
     with get_db_connection() as conn:
@@ -172,7 +226,8 @@ async def handle_interaction(
             persona_memo=resolved_persona_memo,
             system_memo=resolved_system_memo,
         )
-        answer = str(llm.get("answer", "")).strip()
+        raw_answer = str(llm.get("answer", "")).strip()
+        answer = sanitize_tts_text(raw_answer) or raw_answer
         if not answer:
             if source in ("voice", "voice_agent"):
                 save_device_event(

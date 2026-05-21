@@ -77,7 +77,7 @@ def _as_int_list(value, default):
 
 
 WIFI_SSID = _pick("WIFI_SSID", "U+NetE3CC")
-WIFI_PASSWORD = _pick("WIFI_PASSWORD", "CHANGE_ME")
+WIFI_PASSWORD = _pick("WIFI_PASSWORD", "G7D99A@476")
 API_BASE_URL = _pick("API_BASE_URL", "http://192.168.219.43:8000")
 REALTIME_INGEST_URL = _pick("REALTIME_INGEST_URL", API_BASE_URL + "/sensor/realtime-ingest")
 

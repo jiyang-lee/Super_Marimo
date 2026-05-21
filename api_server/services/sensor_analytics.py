@@ -248,7 +248,7 @@ def build_sensor_semantics(metrics: dict[str, Any]) -> dict[str, Any]:
         "water_level_meaning": "water level is interpreted as a percentage and is better when it is higher",
         "water_level_recent_avg_2h": metrics.get("water_level_recent_avg_2h"),
         "water_level_sample_count": metrics.get("water_level_sample_count", 0),
-        "light_meaning": "light is interpreted as the raw measured value and compared with the daytime average reference",
+        "light_meaning": "light is interpreted as a percentage and is better when it is higher",
         "light_daytime_avg_13_18": metrics.get("light_daytime_avg_13_18"),
         "light_daytime_sample_count": metrics.get("light_daytime_sample_count", 0),
         "distance_meaning": "distance is used only for environment conversation trigger",
@@ -259,29 +259,31 @@ def build_sensor_semantics(metrics: dict[str, Any]) -> dict[str, Any]:
 def build_sensor_summary(sensor: dict[str, Any], state: dict[str, Any], metrics: dict[str, Any]) -> str:
     temperature = _coerce_float(sensor.get("temperature"))
     humidity = _coerce_float(sensor.get("humidity"))
-    water_level = _coerce_float(sensor.get("water_level"))
-    light = _coerce_float(sensor.get("light"))
-    water_avg = _coerce_float(metrics.get("water_level_recent_avg_2h"))
-    light_avg = _coerce_float(metrics.get("light_daytime_avg_13_18"))
+    water_level = _coerce_float(sensor.get("water_level_normalized_0_100"))
+    if water_level is None:
+        water_level = _coerce_float(metrics.get("water_level_recent_avg_2h"))
+    if water_level is None:
+        water_level = _coerce_float(sensor.get("water_level"))
+    light = _coerce_float(sensor.get("light_normalized_0_100"))
+    if light is None:
+        light = _coerce_float(metrics.get("light_daytime_avg_13_18"))
+    if light is None:
+        light = _coerce_float(sensor.get("light"))
 
     parts: list[str] = []
     if temperature is not None:
         parts.append(f"기온 {temperature:.1f}도")
     if humidity is not None:
-        parts.append(f"습도 {humidity:.1f}퍼센트")
+        parts.append(f"습도 {humidity:.1f}%")
     if water_level is not None:
-        parts.append(f"수위 {water_level:.1f}퍼센트")
-    elif water_avg is not None:
-        parts.append(f"수위 최근 평균 {water_avg:.1f}퍼센트")
+        parts.append(f"수위 {water_level:.1f}%")
     if light is not None:
-        parts.append(f"조도 {light:.1f}럭스")
-    elif light_avg is not None:
-        parts.append(f"조도 평균 {light_avg:.1f}럭스")
+        parts.append(f"조도 {light:.1f}%")
 
     level = str(state.get("level") or "normal").strip() or "normal"
     prefix = f"현재 센서 상태는 {level}입니다."
     if not parts:
-        return prefix + " 현재 센서 값이 아직 없습니다."
+        return prefix + " 현재 센서 값을 바로 읽지 못했습니다."
     return f"{prefix} " + " / ".join(parts) + "."
 
 

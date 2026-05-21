@@ -10,6 +10,7 @@ import {
   type SessionSummary,
 } from '../api';
 import { flushSync } from 'react-dom';
+import { useLiveSensor } from '../contexts/LiveSensorContext';
 import '../styles/report.css';
 import '../styles/chat.css';
 import '../styles/speech.css';
@@ -165,6 +166,7 @@ export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const feedRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const { sensor, status: sensorStatus, error: sensorError, syncedAt: sensorSyncedAt } = useLiveSensor();
 
   const orderedMessages = [...(detail?.messages ?? [])].sort(
     (left, right) => Number(left.message_id) - Number(right.message_id),
@@ -173,6 +175,8 @@ export function ChatPage() {
   const sidebarTitle = '대화 목록';
   const detailTitle = String(detail?.session?.meta?.title ?? '').trim();
   const sessionTitle = activeSession?.title?.trim() || detailTitle || '마리모 대화';
+  const liveSensor = sensor?.latest_realtime ?? sensor?.latest_merged ?? null;
+  const mergedSensor = sensor?.latest_merged ?? null;
 
   const refreshSessions = async (selectId?: string) => {
     const rows = await listSessions(30, 'chat');
@@ -475,6 +479,26 @@ export function ChatPage() {
             <div className="flex flex-col">
               <div className="font-dot text-[10px] font-bold uppercase tracking-[0.18em] text-bark/45">대화 제목</div>
               <div className="font-dot text-lg font-bold text-bark">{sessionTitle}</div>
+              <div
+                className="mt-1 inline-flex items-center gap-2 rounded-full border border-bark/10 bg-white/80 px-2.5 py-1 font-dot text-[10px] text-bark/60"
+                title={sensorError || (sensorSyncedAt ?? '')}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    sensorStatus === 'ready' ? 'bg-green-500' : sensorStatus === 'loading' ? 'bg-amber-400' : 'bg-rose-500'
+                  }`}
+                />
+                <span>
+                  {sensorStatus === 'ready' && sensorSyncedAt
+                    ? `센서 LIVE ${sensorSyncedAt}`
+                    : sensorStatus === 'loading'
+                      ? '센서 수신 중'
+                      : '센서 unavailable'}
+                </span>
+                {liveSensor?.distance !== undefined ? <span>거리 {liveSensor.distance}cm</span> : null}
+                {mergedSensor?.water_level_normalized_0_100 !== undefined ? <span>수위 {mergedSensor.water_level_normalized_0_100}%</span> : null}
+                {mergedSensor?.light_normalized_0_100 !== undefined ? <span>조도 {mergedSensor.light_normalized_0_100}%</span> : null}
+              </div>
             </div>
           </div>
         </div>

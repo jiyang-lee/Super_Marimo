@@ -177,3 +177,38 @@ def test_request_llm_includes_persona_and_system_memo(monkeypatch) -> None:
     assert client.payload["persona_memo"] == "custom persona"
     assert client.payload["system_memo"] == "custom system"
     assert client.payload["runtime_settings"] == {}
+
+
+def test_request_llm_sanitizes_raw_water_and_light_when_normalized_values_exist(monkeypatch) -> None:
+    client = _DummyClient()
+    monkeypatch.setattr(interaction_service.httpx, "AsyncClient", lambda timeout: client)
+
+    result = asyncio.run(
+        interaction_service.request_llm(
+            "hello",
+            sensor=interaction_service.SensorPayload(
+                temperature=27.0,
+                humidity=57.0,
+                light=765.0,
+                water_level=199.0,
+                distance=49.0,
+                water_level_recent_avg_2h=61.0,
+                light_daytime_avg_13_18=501.0,
+                water_level_normalized_0_100=61,
+                light_normalized_0_100=72,
+            ),
+            state={"level": "normal"},
+            runtime_settings={},
+            use_sensor_context=True,
+            history=[],
+            persona_memo="custom persona",
+            system_memo="custom system",
+        )
+    )
+
+    assert result["answer"] == "ok"
+    assert client.payload is not None
+    assert "water_level" not in client.payload["sensor"]
+    assert "light" not in client.payload["sensor"]
+    assert client.payload["sensor"]["water_level_normalized_0_100"] == 61
+    assert client.payload["sensor"]["light_normalized_0_100"] == 72

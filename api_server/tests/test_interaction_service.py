@@ -64,7 +64,34 @@ def _patch_common_flow(monkeypatch, runtime_state):
         lambda: SimpleNamespace(
             distance=49.0,
             light=501.0,
-            model_dump=lambda: {"distance": 49.0, "light": 501.0},
+            water_level=61.0,
+            temperature=27.0,
+            humidity=57.0,
+            water_level_recent_avg_2h=61.0,
+            water_level_normalized_0_100=61,
+            water_level_sample_count=3,
+            light_daytime_avg_13_18=501.0,
+            light_normalized_0_100=72,
+            light_daytime_sample_count=5,
+            light_daytime_window_label="13:00~18:00 KST",
+            sensor_semantics={"water_level_normalized_0_100": 61, "light_normalized_0_100": 72},
+            sensor_summary="current merged summary",
+            model_dump=lambda: {
+                "distance": 49.0,
+                "light": 501.0,
+                "water_level": 61.0,
+                "temperature": 27.0,
+                "humidity": 57.0,
+                "water_level_recent_avg_2h": 61.0,
+                "water_level_normalized_0_100": 61,
+                "water_level_sample_count": 3,
+                "light_daytime_avg_13_18": 501.0,
+                "light_normalized_0_100": 72,
+                "light_daytime_sample_count": 5,
+                "light_daytime_window_label": "13:00~18:00 KST",
+                "sensor_semantics": {"water_level_normalized_0_100": 61, "light_normalized_0_100": 72},
+                "sensor_summary": "current merged summary",
+            },
         ),
     )
     monkeypatch.setattr(service, "judge_sensor_state", lambda sensor: {"level": "warning", "alerts": ["close"]})
@@ -187,6 +214,52 @@ def test_handle_interaction_uses_llm_action_proposal(monkeypatch) -> None:
     assert captured_session_meta[-1]["last_llm_contract"]["executed_action"]["patch"]["wake_enabled"] is False
 
 
+def test_handle_interaction_strips_json_wrapper_from_tts_text(monkeypatch) -> None:
+    runtime_state = {
+        "distance_detection_enabled": True,
+        "wake_enabled": True,
+        "web_voice_enabled": False,
+        "distance_threshold_cm": 50.0,
+        "distance_inside_threshold": False,
+    }
+    _patch_common_flow(monkeypatch, runtime_state)
+
+    async def fake_request_llm(
+        question,
+        sensor,
+        state,
+        runtime_settings,
+        use_sensor_context,
+        history=None,
+        session_summary=None,
+        action_result=None,
+        persona_memo=None,
+        system_memo=None,
+    ):
+        return {
+            "answer": '{"answer":"안녕하세요."}',
+            "action_proposal": None,
+            "confidence": 0.3,
+            "reason": "no proposal",
+        }
+
+    monkeypatch.setattr(service, "request_llm", fake_request_llm)
+
+    result = asyncio.run(
+        service.handle_interaction(
+            session_id=uuid4(),
+            session_kind="chat",
+            text="hello",
+            sensor=None,
+            use_sensor_context=True,
+            source="ask",
+        )
+    )
+
+    assert result["llm_answer"] == "안녕하세요."
+    assert result["tts_text"] == "안녕하세요."
+
+
 def test_handle_interaction_falls_back_to_text_resolution(monkeypatch) -> None:
     runtime_state = {
         "distance_detection_enabled": True,
@@ -245,3 +318,79 @@ def test_handle_interaction_falls_back_to_text_resolution(monkeypatch) -> None:
     assert result["llm"]["final_answer"] == "거리 감지 모드를 껐어요. 필요하면 다시 켜주세요!"
     assert captured_request["runtime_settings"]["distance_detection_enabled"] is True
     assert captured_session_meta[-1]["last_agent_action"]["summary"] == "distance_detection_enabled -> off"
+
+
+
+def test_handle_interaction_merges_latest_normalized_sensor_fields(monkeypatch) -> None:
+    runtime_state = {
+        "distance_detection_enabled": True,
+        "wake_enabled": True,
+        "web_voice_enabled": False,
+        "distance_threshold_cm": 50.0,
+        "distance_inside_threshold": False,
+    }
+    captured_request, _ = _patch_common_flow(monkeypatch, runtime_state)
+    captured_sensor: dict[str, object] = {}
+
+    async def fake_request_llm(
+        question,
+        sensor,
+        state,
+        runtime_settings,
+        use_sensor_context,
+        history=None,
+        session_summary=None,
+        action_result=None,
+        persona_memo=None,
+        system_memo=None,
+    ):
+        captured_sensor.update(sensor.model_dump() if sensor is not None else {})
+        captured_request.update(
+            {
+                "question": question,
+                "runtime_settings": runtime_settings,
+                "use_sensor_context": use_sensor_context,
+            }
+        )
+        return {
+            "answer": "ok",
+            "action_proposal": None,
+            "confidence": 0.3,
+            "reason": "no proposal",
+        }
+
+    monkeypatch.setattr(service, "request_llm", fake_request_llm)
+    monkeypatch.setattr(service, "save_runtime_settings_history", lambda *args, **kwargs: None)
+
+    result = asyncio.run(
+        service.handle_interaction(
+            session_id=uuid4(),
+            session_kind="chat",
+            text="??",
+            sensor=SimpleNamespace(
+                temperature=27.0,
+                humidity=57.0,
+                light=765.0,
+                water_level=199.0,
+                distance=49.0,
+                model_dump=lambda: {
+                    "temperature": 27.0,
+                    "humidity": 57.0,
+                    "light": 765.0,
+                    "water_level": 199.0,
+                    "distance": 49.0,
+                },
+            ),
+            use_sensor_context=True,
+            source="ask",
+        )
+    )
+
+    assert result["llm_answer"] == "ok"
+    assert result["sensor"]["water_level_normalized_0_100"] == 61
+    assert result["sensor"]["light_normalized_0_100"] == 72
+    assert captured_sensor["water_level_normalized_0_100"] == 61
+    assert captured_sensor["light_normalized_0_100"] == 72
+    assert captured_sensor["water_level_recent_avg_2h"] == 61.0
+    assert captured_sensor["light_daytime_avg_13_18"] == 501.0
+    assert captured_request["use_sensor_context"] is True

@@ -24,6 +24,10 @@ class AudioPlayer:
         self.on_playing = on_playing
         self.on_played = on_played
         self.should_suppress_proactive = should_suppress_proactive
+        self.suppress_proactive_until = 0.0
+
+    def suppress_proactive_for(self, ttl_sec: float) -> None:
+        self.suppress_proactive_until = max(self.suppress_proactive_until, time.time() + ttl_sec)
 
     def _extract_event_id(self, name: str) -> Optional[int]:
         if not name.startswith("event_") or not name.endswith(".wav"):
@@ -85,7 +89,7 @@ class AudioPlayer:
 
             # Proactive greeting is the only event-driven audio that should be spoken.
             if name.startswith("event_proactive_greeting_") and self.should_suppress_proactive is not None:
-                if self.should_suppress_proactive():
+                if time.time() <= self.suppress_proactive_until or self.should_suppress_proactive():
                     event_id = self._extract_event_id(name)
                     print(f"[audio_player] suppressing proactive greeting {name} because conversation is active")
                     self._update_status(event_id, "failed")

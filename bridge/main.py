@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import os
+import json
 import re
 import threading
 import time
@@ -27,6 +28,7 @@ from bridge.core.vad_wake import (
 
 def sanitize_tts_text(text: str) -> str:
     value = unicodedata.normalize("NFKC", text or "")
+    value = unwrap_spoken_text(value)
     value = re.sub(r"[\u200b-\u200d\ufeff\ufe0e\ufe0f]", "", value)
     value = re.sub(r"[\x00-\x1f\x7f]", "", value)
     value = re.sub(r"\([^)]*\)", "", value)
@@ -36,6 +38,31 @@ def sanitize_tts_text(text: str) -> str:
     value = re.sub(r"\s+([,.;:!?])", r"\1", value)
     value = re.sub(r"[ ]{2,}", " ", value)
     return value.strip()
+
+
+def unwrap_spoken_text(text: str) -> str:
+    value = (text or "").strip()
+    if not value:
+        return ""
+    value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.IGNORECASE | re.DOTALL).strip()
+    json_start = value.find("{")
+    json_end = value.rfind("}")
+    if json_start != -1:
+        json_blob = value[json_start : json_end + 1] if json_end > json_start else value[json_start:]
+        try:
+            parsed = json.loads(json_blob)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            for key in ("answer", "tts_text", "llm_answer", "response", "text", "content"):
+                candidate = parsed.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+            for key in ("answer", "tts_text", "llm_answer", "response", "text", "content"):
+                candidate = parsed.get(key)
+                if candidate not in (None, ""):
+                    return str(candidate).strip()
+    return value
 
 
 def strip_answer_prefix(text: str) -> str:
@@ -56,7 +83,7 @@ def is_meaningful_text(text: str) -> bool:
 class Bridge:
     def __init__(self, args: Any):
         self.args = args
-        self.api_bridge = ApiBridge(args.voice_agent_url, args.api_server_url)
+        self.api_bridge = ApiBridge(args.voice_agent_url, args.api_server_url, args.session_state_file)
         self.stt_client = SttClient(args.stt_endpoint, args.stt_model)
         self.event_logger = EventLogger(args.events_endpoint)
         self.audio_player = AudioPlayer(
@@ -268,6 +295,8 @@ class Bridge:
             self.suppress_next_reply_boost = False
             self.tts_mute_until = 0.0
             self.transcript_buffer = ""
+            if hasattr(self, "audio_player"):
+                self.audio_player.suppress_proactive_for(getattr(self.args, "distance_followup_timeout_sec", 30))
             return
 
         combined = f"{self.transcript_buffer} {transcript}".strip()

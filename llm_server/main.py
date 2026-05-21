@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 from typing import Any
@@ -123,7 +121,9 @@ def ready() -> JSONResponse:
 
 
 @app.post("/generate")
-def generate(payload: GeneratePayload) -> dict[str, Any]:
+def generate(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, GeneratePayload):
+        payload = GeneratePayload.model_validate(payload)
     contract = get_chain().invoke(payload)
     if not isinstance(contract, dict):
         contract = {

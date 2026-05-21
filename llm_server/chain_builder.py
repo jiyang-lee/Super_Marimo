@@ -128,23 +128,27 @@ def _sensor_summary(payload: Any) -> str:
 
     temperature = sensor.get("temperature")
     humidity = sensor.get("humidity")
-    water_level = sensor.get("water_level")
+    water_level = sensor.get("water_level_normalized_0_100")
     if water_level is None:
-        water_level = sensor.get("water_level_normalized_0_100")
-    light = sensor.get("light")
+        water_level = sensor.get("water_level_recent_avg_2h")
+    if water_level is None:
+        water_level = sensor.get("water_level")
+    light = sensor.get("light_normalized_0_100")
     if light is None:
         light = sensor.get("light_daytime_avg_13_18")
+    if light is None:
+        light = sensor.get("light")
 
     if temperature is not None:
         parts.append(f"기온은 {float(temperature):.1f}도입니다.")
     if humidity is not None:
         parts.append(f"습도는 {float(humidity):.1f}%입니다.")
     if water_level is not None:
-        parts.append(f"수위는 {float(water_level):.1f}입니다.")
+        parts.append(f"수위는 {float(water_level):.1f}%입니다.")
     if light is not None:
-        parts.append(f"조도는 {float(light):.1f}입니다.")
+        parts.append(f"조도는 {float(light):.1f}%입니다.")
 
-    return " ".join(parts).strip() or "현재 센서 요약을 만들 수 없습니다."
+    return " ".join(parts).strip() or "현재 소스 세부 정보를 읽을 수 없습니다."
 
 
 def _weather_contract(payload: Any) -> dict[str, Any]:
@@ -152,13 +156,13 @@ def _weather_contract(payload: Any) -> dict[str, Any]:
     temperature = sensor.get("temperature")
     humidity = sensor.get("humidity")
 
-    parts = ["현재 날씨를 직접 조회한 값은 아니고, 센서 기준으로만 보면"]
+    parts = ["현재 날씨는 직접 조회하지 않고, 세부 정보로만 안내합니다."]
     if temperature is not None:
         parts.append(f"기온은 {float(temperature):.1f}도입니다.")
     if humidity is not None:
         parts.append(f"습도는 {float(humidity):.1f}%입니다.")
     if len(parts) == 1:
-        parts.append("참고할 센서 값이 없습니다.")
+        parts.append("참고할 날씨 정보가 없습니다.")
 
     return build_contract(
         answer=" ".join(parts),
@@ -209,6 +213,18 @@ def _risk_contract(payload: Any) -> dict[str, Any]:
 def _general_model_payload(payload: Any) -> Any:
     data = _payload_dict(payload)
     data["use_sensor_context"] = False
+    data["sensor"] = None
+    data["state"] = None
+    data["runtime_settings"] = None
+    data["action_result"] = None
+    return SimpleNamespace(**data)
+
+
+def _setting_model_payload(payload: Any) -> Any:
+    data = _payload_dict(payload)
+    data["use_sensor_context"] = False
+    data["sensor"] = None
+    data["state"] = None
     return SimpleNamespace(**data)
 
 
@@ -239,6 +255,9 @@ def route_contract(payload: Any) -> dict[str, Any]:
         return _distance_contract(payload)
     if _is_sensor_risk_question(payload):
         return _risk_contract(payload)
+
+    if _looks_like_setting_request(_normalize(_question_text(payload))):
+        return generate_contract(_setting_model_payload(payload))
 
     if MOCK_MODE:
         return _general_mock_contract(payload)

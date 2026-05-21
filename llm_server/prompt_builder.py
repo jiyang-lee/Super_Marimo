@@ -36,6 +36,9 @@ def _format_block(label: str, value: Any) -> str:
 
 
 def _build_distance_context(payload: Any) -> str:
+    if not bool(getattr(payload, "use_sensor_context", False)):
+        return ""
+
     sensor = _to_plain(getattr(payload, "sensor", None)) or {}
     runtime_settings = _to_plain(getattr(payload, "runtime_settings", None)) or {}
     distance = sensor.get("distance")
@@ -84,12 +87,15 @@ def format_context(payload: Any) -> str:
             ]
         )
 
-    blocks = [
-        sensor_block,
-        _format_block("runtime_settings", runtime_settings),
-        f"recent_session_summary: {session_summary}",
-        _format_block("last_action_result", action_result),
-    ]
+    blocks = [f"recent_session_summary: {session_summary}"]
+    if use_sensor_context:
+        blocks.insert(0, sensor_block)
+        blocks.append(_format_block("runtime_settings", runtime_settings))
+        blocks.append(_format_block("last_action_result", action_result))
+    elif runtime_settings:
+        blocks.append(_format_block("runtime_settings", runtime_settings))
+    if not use_sensor_context and action_result:
+        blocks.append(_format_block("last_action_result", action_result))
     if sensor_semantics:
         blocks.append(_format_block("sensor_semantics", sensor_semantics))
     if sensor_summary:

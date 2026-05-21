@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getLatestSensor, getSensorHistory, type SensorLatest, type SensorReading } from '../api';
+import { getSensorHistory, type SensorReading } from '../api';
+import { useLiveSensor } from '../contexts/LiveSensorContext';
 
 type SensorKey = 'temperature' | 'humidity' | 'light' | 'water_level' | 'distance';
 
@@ -78,11 +79,11 @@ function getCurvePath(points: { x: number; y: number }[]): string {
 }
 
 export function SensorPage() {
-  const [sensor, setSensor] = useState<SensorLatest | null>(null);
   const [history, setHistory] = useState<SensorReading[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<SensorKey>('temperature');
+  const { sensor, status: sensorStatus, error: sensorError, syncedAt: sensorSyncedAt } = useLiveSensor();
 
   // Interactive Graph Hover State
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -91,11 +92,7 @@ export function SensorPage() {
     setLoading(true);
     setError('');
     try {
-      const [latestResult, historyResult] = await Promise.all([
-        getLatestSensor(),
-        getSensorHistory(120),
-      ]);
-      setSensor(latestResult);
+      const historyResult = await getSensorHistory(120);
       setHistory(historyResult.realtime_history ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : '센서 정보를 불러오지 못했어요.');
@@ -111,6 +108,7 @@ export function SensorPage() {
   }, []);
 
   const realtime = sensor?.latest_realtime ?? null;
+  const merged = sensor?.latest_merged ?? null;
   const hasData =
     realtime?.temperature !== undefined ||
     realtime?.humidity !== undefined ||
@@ -270,8 +268,18 @@ export function SensorPage() {
             </div>
             <h1 className="mt-3 text-4xl font-black text-bark">센서 놀이터</h1>
             <p className="mt-2 max-w-2xl text-base leading-7 text-bark/70">
-              온도, 습도, 조도, 수위, 거리만 보여줘요. 수위는 이제 ADC 원시값 그대로 보여줍니다.
+              온도, 습도, 조도, 수위, 거리만 보여줘요. 실시간 값은 공용 센서 소스에서만 읽습니다.
             </p>
+            <div
+              className="mt-3 inline-flex rounded-full border-2 border-bark/10 bg-white/70 px-3 py-1 font-dot text-xs text-bark/60"
+              title={sensorStatus === 'ready' && sensorSyncedAt ? sensorSyncedAt : sensorError || '센서 상태'}
+            >
+              {sensorStatus === 'ready' && sensorSyncedAt
+                ? `센서 LIVE ${sensorSyncedAt}`
+                : sensorStatus === 'loading'
+                  ? '센서 수신 중'
+                  : '센서 unavailable'}
+            </div>
           </div>
           <button
             type="button"
@@ -287,6 +295,11 @@ export function SensorPage() {
             {error}
           </div>
         )}
+        {sensorError && (
+          <div className="mt-4 rounded-[1.2rem] border-4 border-amber-400 bg-amber-400/10 p-4 text-base font-black text-amber-800">
+            {sensorError}
+          </div>
+        )}
 
         {!error && !hasData && (
           <div className="mt-4 rounded-[1.2rem] border-4 border-amber-400 bg-amber-400/10 p-4 text-base font-black text-amber-800">
@@ -300,11 +313,11 @@ export function SensorPage() {
         <Card label="상태" value={formatState(realtime?.state_level)} />
         <Card label="온도" value={realtime?.temperature} suffix="°C" />
         <Card label="습도" value={realtime?.humidity} suffix="%" />
-        <Card label="조도" value={realtime?.light} suffix="lux" />
+        <Card label="조도" value={merged?.light_normalized_0_100} suffix="%" />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
-        <Card label="수위(raw)" value={realtime?.water_level} />
+        <Card label="수위" value={merged?.water_level_normalized_0_100} suffix="%" />
         <Card label="거리" value={realtime?.distance} suffix="cm" />
       </section>
 
@@ -515,8 +528,8 @@ export function SensorPage() {
       <section className="rounded-[1.6rem] border-4 border-bark/10 bg-white/90 p-5">
         <div className="text-xl font-black text-bark">지금 한 줄 요약</div>
         <div className="mt-3 rounded-[1.2rem] border-2 border-bark/10 bg-parchment p-4 font-dot text-sm leading-7 text-bark">
-          온도 {realtime?.temperature ?? '-'}°C / 습도 {realtime?.humidity ?? '-'}% / 조도 {realtime?.light ?? '-'} lux /
-          수위(raw) {realtime?.water_level ?? '-'} / 거리 {realtime?.distance ?? '-'}cm
+          온도 {realtime?.temperature ?? merged?.temperature ?? '-'}°C / 습도 {realtime?.humidity ?? merged?.humidity ?? '-'}% / 조도 {merged?.light_normalized_0_100 ?? '-'}% /
+          수위 {merged?.water_level_normalized_0_100 ?? '-'}% / 거리 {realtime?.distance ?? merged?.distance ?? '-'}cm
         </div>
       </section>
     </div>

@@ -7,17 +7,19 @@ from types import SimpleNamespace
 
 
 CURRENT_DIR = Path(__file__).resolve().parents[1]
-if str(CURRENT_DIR) not in sys.path:
-    sys.path.insert(0, str(CURRENT_DIR))
+sys.path = [entry for entry in sys.path if Path(entry).resolve() != CURRENT_DIR.resolve()]
+sys.path.insert(0, str(CURRENT_DIR))
 
 _ORIGINAL_CONFIG = sys.modules.get("config")
-sys.modules.pop("config", None)
+for _module_name in ("config", "chain_builder", "model_engine", "prompt_builder", "main"):
+    sys.modules.pop(_module_name, None)
 
 
 def _load_module(module_name: str, path: Path):
     spec = util.spec_from_file_location(module_name, path)
     assert spec is not None and spec.loader is not None
     module = util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -26,7 +28,7 @@ try:
     prompt_builder = _load_module("llm_server_prompt_builder", CURRENT_DIR / "prompt_builder.py")
     model_engine = _load_module("llm_server_model_engine", CURRENT_DIR / "model_engine.py")
     chain_builder = _load_module("llm_server_chain_builder", CURRENT_DIR / "chain_builder.py")
-    main_module = _load_module("llm_server_main", CURRENT_DIR / "main.py")
+    main_module = _load_module("main", CURRENT_DIR / "main.py")
 finally:
     if _ORIGINAL_CONFIG is None:
         sys.modules.pop("config", None)
@@ -57,6 +59,25 @@ def test_build_system_prompt_requests_natural_dialogue() -> None:
     assert "wake_enabled" in prompt
     assert "custom persona memo" in prompt
     assert "custom system memo" in prompt
+
+
+def test_build_user_prompt_omits_distance_context_for_general_dialogue() -> None:
+    payload = SimpleNamespace(
+        question="오늘 뭐해?",
+        history=[],
+        sensor={"distance": 42.0, "temperature": 28.0},
+        state={"level": "warning"},
+        runtime_settings={"distance_threshold_cm": 50.0},
+        session_summary="최근 대화 없음",
+        action_result=None,
+        use_sensor_context=False,
+    )
+
+    prompt = prompt_builder.build_user_prompt(payload)
+
+    assert "distance_context" not in prompt
+    assert "sensor:" not in prompt
+    assert "state:" not in prompt
 
 
 def test_route_contract_sends_general_dialogue_to_model_without_sensor_context(monkeypatch) -> None:
@@ -217,3 +238,50 @@ def test_parse_contract_text_robust_regex_fallback() -> None:
 
     assert "기온 24도" in contract["answer"]
     assert contract["action_proposal"] is None
+
+
+
+def test_safe_plain_text_prefers_normalized_sensor_values() -> None:
+    payload = SimpleNamespace(
+        question="status",
+        sensor={
+            "temperature": 27.0,
+            "humidity": 57.0,
+            "water_level": 199.0,
+            "water_level_normalized_0_100": 73.0,
+            "light": 765.0,
+            "light_normalized_0_100": 28.0,
+        },
+        state={"level": "normal"},
+        runtime_settings={},
+    )
+
+    text = model_engine._safe_plain_text(payload)
+
+    assert "199.0" not in text
+    assert "765.0" not in text
+    assert "73.0%" in text
+    assert "28.0%" in text
+
+
+
+def test_sensor_summary_prefers_normalized_values() -> None:
+    payload = SimpleNamespace(
+        question="status",
+        sensor={
+            "temperature": 27.0,
+            "humidity": 57.0,
+            "water_level": 199.0,
+            "water_level_normalized_0_100": 73.0,
+            "light": 765.0,
+            "light_normalized_0_100": 28.0,
+        },
+        state={"level": "normal"},
+    )
+
+    text = chain_builder._sensor_summary(payload)
+
+    assert "199.0" not in text
+    assert "765.0" not in text
+    assert "73.0%" in text
+    assert "28.0%" in text

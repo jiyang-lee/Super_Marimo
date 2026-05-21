@@ -31,12 +31,24 @@ def ensure_session(conn, session_id: UUID, session_kind: Optional[str] = None) -
             SET last_seen_at = NOW(),
                 session_kind = COALESCE(session_kind, %s)
             WHERE session_id = %s
+              AND ended_at IS NULL
             RETURNING session_id, created_at, last_seen_at, ended_at, turn_count, meta, session_kind
             """,
             (resolved_session_kind, session_id),
         )
         row = cur.fetchone()
         if row is None:
+            cur.execute(
+                """
+                SELECT ended_at
+                FROM session
+                WHERE session_id = %s
+                """,
+                (session_id,),
+            )
+            existing = cur.fetchone()
+            if existing is not None and existing.get("ended_at") is not None:
+                raise HTTPException(status_code=409, detail="session has already ended")
             raise HTTPException(status_code=500, detail="session row could not be created")
         return row, False
 

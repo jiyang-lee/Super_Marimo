@@ -18,9 +18,7 @@ def _load_stt_model(model_key: str):
         return model
     except RuntimeError as exc:
         message = str(exc)
-        if "libcublas.so.12" not in message and "cannot be loaded" not in message:
-            raise
-        logger.warning("CUDA STT init failed for %s, falling back to CPU: %s", model_key, message)
+        logger.warning("STT init failed for %s on %s, falling back to CPU: %s", model_key, device, message)
         _STT_RUNTIME_STATES[model_key] = {"device": "cpu", "compute_type": "int8"}
         return WhisperModel(size, device="cpu", compute_type="int8")
 
@@ -46,11 +44,8 @@ def transcribe_audio(audio_path: str, model_key: str = "fast"):
         return list(segments), info
     except RuntimeError as exc:
         message = str(exc)
-        if "libcublas.so.12" not in message and "cannot be loaded" not in message:
-            raise
-
         cfg = _STT_CONFIG[model_key]
-        logger.warning("CUDA STT transcribe failed for %s, falling back to CPU: %s", model_key, message)
+        logger.warning("STT transcribe failed for %s, falling back to CPU: %s", model_key, message)
         _STT_RUNTIME_STATES[model_key] = {"device": "cpu", "compute_type": "int8"}
         _load_stt_model.cache_clear()
         cpu_model = WhisperModel(cfg["size"], device="cpu", compute_type="int8")

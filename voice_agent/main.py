@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import uuid
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -165,28 +166,78 @@ def ask_api_server(
         raise HTTPException(status_code=503, detail=f"api-server unreachable: {exc}") from exc
 
 
+_SPOKEN_TEXT_KEYS = ("answer", "tts_text", "llm_answer", "response", "text", "content")
+
+
+def _unwrap_spoken_text(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE | re.DOTALL).strip()
+    json_start = cleaned.find("{")
+    json_end = cleaned.rfind("}")
+    if json_start != -1:
+        json_blob = cleaned[json_start : json_end + 1] if json_end > json_start else cleaned[json_start:]
+        try:
+            parsed = json.loads(json_blob)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            for key in _SPOKEN_TEXT_KEYS:
+                value = parsed.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            for key in _SPOKEN_TEXT_KEYS:
+                value = parsed.get(key)
+                if value not in (None, ""):
+                    return str(value).strip()
+
+    return cleaned
+
+
 def extract_answer(api_result: dict[str, Any]) -> str:
-    answer = str(
+    answer = _unwrap_spoken_text(
         api_result.get("llm_answer")
         or api_result.get("answer")
         or api_result.get("tts_text")
         or ""
-    ).strip()
+    )
     if not answer:
         raise HTTPException(status_code=502, detail="api-server returned an empty answer")
     return answer
 
 
 def extract_tts_text(api_result: dict[str, Any]) -> str:
-    text = str(
+    text = _unwrap_spoken_text(
         api_result.get("tts_text")
         or api_result.get("llm_answer")
         or api_result.get("answer")
         or ""
-    ).strip()
+    )
     if not text:
         raise HTTPException(status_code=502, detail="api-server returned an empty tts text")
     return text
+
+
+def _resolve_session_id(explicit_session_id: Optional[str]) -> str:
+    if explicit_session_id:
+        return explicit_session_id
+
+    stored_session_id = session_store.load()
+    if not stored_session_id:
+        return str(uuid.uuid4())
+
+    try:
+        payload = api_client.get_json(f"{API_SERVER_URL}/sessions/{stored_session_id}", timeout=10)
+        session = payload.get("session") or {}
+        if session.get("ended_at"):
+            session_store.clear()
+            return str(uuid.uuid4())
+    except Exception:
+        return stored_session_id
+
+    return stored_session_id
 
 
 def synthesize_tts(text: str, voice_name: Optional[str] = None, prefix: str = "ask") -> Optional[str]:
@@ -213,7 +264,7 @@ def health() -> dict[str, Any]:
 
 @app.post("/ask", response_model=AskResponse)
 def ask(payload: AskPayload, background_tasks: BackgroundTasks = None) -> AskResponse:
-    session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
+    session_id = _resolve_session_id(payload.session_id)
     session_store.save(session_id)
 
     a_health = api_health()
@@ -271,7 +322,7 @@ def ask(payload: AskPayload, background_tasks: BackgroundTasks = None) -> AskRes
 
 @app.post("/speak", response_model=SpeakResponse)
 def speak(payload: SpeakPayload, background_tasks: BackgroundTasks = None) -> SpeakResponse:
-    session_id = payload.session_id or session_store.load() or str(uuid.uuid4())
+    session_id = _resolve_session_id(payload.session_id)
     session_store.save(session_id)
 
     tts_path: Optional[str] = None

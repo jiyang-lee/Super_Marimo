@@ -111,3 +111,24 @@ def test_sensor_summary_excludes_distance_and_distance_summary_separates_it() ->
     assert "42.0" not in summary
     assert "거리 센서는 환경 대화 모드" in distance_summary
     assert "42.0센티미터" in distance_summary
+
+
+
+def test_sensor_summary_prefers_normalized_values_when_present() -> None:
+    summary = build_sensor_summary(
+        {
+            "temperature": 27.0,
+            "humidity": 57.0,
+            "water_level": 199.0,
+            "water_level_normalized_0_100": 73.0,
+            "light": 765.0,
+            "light_normalized_0_100": 28.0,
+        },
+        {"level": "normal"},
+        {"water_level_recent_avg_2h": 80.0, "light_daytime_avg_13_18": 400.0},
+    )
+
+    assert "199.0" not in summary
+    assert "765.0" not in summary
+    assert "73.0%" in summary
+    assert "28.0%" in summary

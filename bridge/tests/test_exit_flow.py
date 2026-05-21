@@ -31,6 +31,7 @@ def test_normal_tts_still_opens_reply_window() -> None:
 
 def test_exit_phrase_ends_session_without_llm_tts(monkeypatch) -> None:
     calls = {"ask": 0, "end": 0}
+    suppressed: list[float] = []
 
     class _FakeApiBridge:
         active_session_id = "session-1"
@@ -59,6 +60,7 @@ def test_exit_phrase_ends_session_without_llm_tts(monkeypatch) -> None:
     bridge.api_bridge = _FakeApiBridge()
     bridge.stt_client = _FakeSttClient()
     bridge.event_logger = _FakeLogger()
+    bridge.audio_player = SimpleNamespace(suppress_proactive_for=lambda ttl: suppressed.append(ttl))
     bridge.armed_until = 0.0
     bridge.distance_followup_until = 0.0
     bridge.reply_window_until = 0.0
@@ -73,6 +75,7 @@ def test_exit_phrase_ends_session_without_llm_tts(monkeypatch) -> None:
 
     assert calls["ask"] == 0
     assert calls["end"] == 1
+    assert suppressed == [30]
 
 
 def test_reply_window_triggers_answer_turn_without_wake(monkeypatch) -> None:

@@ -6,7 +6,7 @@ from typing import Any
 
 logger = logging.getLogger("voice_server")
 
-RUN_MODE = os.getenv("RUN_MODE", os.getenv("MOCK_MODE", "true").lower() == "true" and "mock" or "gpu").lower()
+RUN_MODE = os.getenv("RUN_MODE", os.getenv("MOCK_MODE", "false").lower() == "true" and "mock" or "gpu").lower()
 MOCK_MODE = RUN_MODE == "mock"
 
 STT_MODEL_SIZE = os.getenv("STT_MODEL_SIZE", "small")

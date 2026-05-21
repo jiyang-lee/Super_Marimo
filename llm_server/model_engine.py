@@ -122,11 +122,18 @@ def _safe_plain_text(payload: Any) -> str:
         except (TypeError, ValueError):
             return None
 
+    def _first_num(*keys: str) -> float | None:
+        for key in keys:
+            value = _num(key)
+            if value is not None:
+                return value
+        return None
+
     if is_distance_question:
         distance = _num("distance")
         threshold = runtime_settings.get("distance_threshold_cm") if isinstance(runtime_settings, dict) else None
         inside = runtime_settings.get("distance_inside_threshold") if isinstance(runtime_settings, dict) else None
-        parts = ["거리 기준으로 보면"]
+        parts = ["어떻게 거리 기준을 알실까요"]
         if distance is not None:
             parts.append(f"현재 거리는 {distance:.1f}cm입니다.")
         if threshold is not None:
@@ -137,17 +144,13 @@ def _safe_plain_text(payload: Any) -> str:
         if inside is True:
             parts.append("지금은 기준 안쪽입니다.")
         elif inside is False:
-            parts.append("지금은 기준 바깥쪽입니다.")
+            parts.append("지금은 기준 바깜쪽입니다.")
         return " ".join(parts)
 
     temperature = _num("temperature")
     humidity = _num("humidity")
-    water_level = _num("water_level")
-    if water_level is None:
-        water_level = _num("water_level_normalized_0_100")
-    light = _num("light")
-    if light is None:
-        light = _num("light_daytime_avg_13_18")
+    water_level = _first_num("water_level_normalized_0_100", "water_level_recent_avg_2h", "water_level")
+    light = _first_num("light_normalized_0_100", "light_daytime_avg_13_18", "light")
     state_level = str(state.get("level") or "normal").strip() or "normal"
 
     parts = [f"현재 상태는 {state_level}입니다."]
@@ -156,9 +159,9 @@ def _safe_plain_text(payload: Any) -> str:
     if humidity is not None:
         parts.append(f"습도 {humidity:.1f}%")
     if water_level is not None:
-        parts.append(f"수위 {water_level:.1f}")
+        parts.append(f"수위 {water_level:.1f}%")
     if light is not None:
-        parts.append(f"조도 {light:.1f}")
+        parts.append(f"조도 {light:.1f}%")
 
     if len(parts) == 1:
         return "현재 센서 값을 바로 읽지 못했습니다."

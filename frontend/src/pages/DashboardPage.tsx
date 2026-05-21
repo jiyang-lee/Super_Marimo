@@ -4,15 +4,14 @@ import {
   checkApiHealth,
   checkLlmHealth,
   checkVoiceHealth,
-  getLatestSensor,
   listEvents,
   type AgentHealth,
   type ApiHealth,
   type DeviceEvent,
   type LlmHealth,
-  type SensorLatest,
   type VoiceHealth,
 } from '../api';
+import { useLiveSensor } from '../contexts/LiveSensorContext';
 
 function StatusDot({ ok }: { ok: boolean }) {
   return <span className={`lab-status-dot ${ok ? 'ok' : 'bad'}`} />;
@@ -23,49 +22,25 @@ function formatMetricValue(value: unknown, suffix = '') {
   return `${value}${suffix}`;
 }
 
-function formatNormalizedWithRaw(normalized: unknown, raw: unknown, suffix = '') {
-  const normalizedText = formatMetricValue(normalized, suffix);
-  const rawText = formatMetricValue(raw);
-  if (rawText === '-') {
-    return normalizedText;
-  }
-  return `${normalizedText} (raw ${rawText})`;
-}
-
-function normalizeToPercent(value: unknown, reference: unknown) {
-  const current = Number(value);
-  const base = Number(reference);
-  if (!Number.isFinite(current) || !Number.isFinite(base) || base <= 0) return null;
-  const normalized = Math.round((current / base) * 100);
-  return Math.max(0, Math.min(100, normalized));
-}
-
-function normalizeLightRange(value: unknown) {
-  const current = Number(value);
-  if (!Number.isFinite(current)) return null;
-  const normalized = Math.round(((current - 2) / (700 - 2)) * 100);
-  return Math.max(0, Math.min(100, normalized));
-}
-
 export function DashboardPage() {
   const [agent, setAgent] = useState<AgentHealth | null>(null);
   const [api, setApi] = useState<ApiHealth | null>(null);
   const [voice, setVoice] = useState<VoiceHealth | null>(null);
   const [llm, setLlm] = useState<LlmHealth | null>(null);
-  const [sensor, setSensor] = useState<SensorLatest | null>(null);
   const [events, setEvents] = useState<DeviceEvent[]>([]);
   const [error, setError] = useState('');
   const [syncedAt, setSyncedAt] = useState('');
+  const { sensor, status: sensorStatus, error: sensorError, syncedAt: sensorSyncedAt, refresh: refreshSensor } =
+    useLiveSensor();
 
   const refresh = async () => {
     setError('');
     try {
-      const [nextAgent, nextApi, nextVoice, nextLlm, nextSensor, nextEvents] = await Promise.all([
+      const [nextAgent, nextApi, nextVoice, nextLlm, nextEvents] = await Promise.all([
         checkAgentHealth(),
         checkApiHealth(),
         checkVoiceHealth(),
         checkLlmHealth(),
-        getLatestSensor(),
         listEvents({ limit: 8 }),
       ]);
 
@@ -73,9 +48,9 @@ export function DashboardPage() {
       setApi(nextApi);
       setVoice(nextVoice);
       setLlm(nextLlm);
-      setSensor(nextSensor);
       setEvents(nextEvents.events ?? []);
       setSyncedAt(new Date().toLocaleTimeString('ko-KR'));
+      void refreshSensor();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'refresh failed');
     }
@@ -87,6 +62,7 @@ export function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
+  const realtime = sensor?.latest_realtime ?? null;
   const merged = sensor?.latest_merged ?? null;
   const services = [
     { label: 'voice-agent', ok: Boolean(agent?.ok) },
@@ -96,25 +72,25 @@ export function DashboardPage() {
   ];
 
   const sensorCards = [
-    { label: 'Temperature', value: formatMetricValue(merged?.temperature, ' C') },
-    { label: 'Humidity', value: formatMetricValue(merged?.humidity, '%') },
+    { label: 'Temperature', value: formatMetricValue(realtime?.temperature ?? merged?.temperature, ' C') },
+    { label: 'Humidity', value: formatMetricValue(realtime?.humidity ?? merged?.humidity, '%') },
     {
       label: 'Light',
-      value: formatNormalizedWithRaw(
-        merged?.light_normalized_0_100 ?? normalizeLightRange(merged?.light),
-        merged?.light,
-      ),
+      value: formatMetricValue(merged?.light_normalized_0_100, '%'),
     },
     {
       label: 'Water',
-      value: formatNormalizedWithRaw(
-        merged?.water_level_normalized_0_100 ?? normalizeToPercent(merged?.water_level, merged?.water_level_recent_avg_2h),
-        merged?.water_level,
-      ),
+      value: formatMetricValue(merged?.water_level_normalized_0_100, '%'),
     },
-    { label: 'Distance', value: formatMetricValue(merged?.distance, 'cm') },
+    { label: 'Distance', value: formatMetricValue(realtime?.distance ?? merged?.distance, 'cm') },
     { label: 'Level', value: merged?.state_level ?? 'no data' },
   ];
+  const sensorStatusLabel =
+    sensorStatus === 'ready' && sensorSyncedAt
+      ? `LIVE ${sensorSyncedAt}`
+      : sensorStatus === 'loading'
+        ? '센서 수신 중'
+        : '센서 unavailable';
 
   return (
     <div className="lab-stack">
@@ -129,6 +105,15 @@ export function DashboardPage() {
           <span style={{ fontSize: 12, color: '#667085', fontFamily: '"Cascadia Mono", "SFMono-Regular", Consolas, monospace' }}>
             sync {syncedAt || '...'}
           </span>
+          <span
+            style={{
+              fontSize: 12,
+              color: sensorStatus === 'ready' ? '#2f6f3e' : sensorStatus === 'error' ? '#b42318' : '#667085',
+              fontFamily: '"Cascadia Mono", "SFMono-Regular", Consolas, monospace',
+            }}
+          >
+            {sensorStatusLabel}
+          </span>
           <button className="lab-btn lab-btn-secondary" onClick={() => void refresh()}>
             새로고침
           </button>
@@ -136,6 +121,7 @@ export function DashboardPage() {
       </div>
 
       {error && <div className="lab-log-item bad">{error}</div>}
+      {sensorError && <div className="lab-log-item warn">{sensorError}</div>}
 
       <div className="lab-sub-panel">
         <div className="lab-sub-panel-head">
