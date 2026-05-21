@@ -88,7 +88,7 @@
 
 .sensor-status-item__value {
   margin-left: 0.4cm;
-  color: #258236;
+  color: #147a2f;
   font-size: calc(clamp(1.08rem, 1.55vw, 1.45rem) + 6pt);
   font-weight: 900;
   white-space: nowrap;
@@ -204,6 +204,14 @@
 .sensor-report-tab__label {
   grid-area: 1 / 1;
   justify-self: center;
+}
+
+.sensor-report-tab--sensor:nth-child(2) .sensor-report-tab__icon {
+  transform: translateX(calc(-2.45em + 0.6cm));
+}
+
+.sensor-report-tab--sensor:nth-child(2) .sensor-report-tab__label {
+  transform: translateX(0.1cm);
 }
 
 .sensor-report-tab.is-active {
