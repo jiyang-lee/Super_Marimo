@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { askChat, getLatestSensor, getRuntimeSettings, getRuntimeSettingsHistory, synthesizeTts, updateRuntimeSettings, type AskResult, type RuntimeSettings, type RuntimeSettingsHistory, type SensorLatest } from '../api';
+import { askChat, getLatestSensor, getRuntimeSettings, getRuntimeSettingsHistory, getStoredVoiceName, synthesizeTts, updateRuntimeSettings, type AskResult, type RuntimeSettings, type RuntimeSettingsHistory, type SensorLatest } from '../api';
 
 const QUICK_PROMPTS = [
   {
@@ -159,7 +159,7 @@ export function TestPage() {
     setBusy(true);
     setError('');
     try {
-      const result = await askChat(value, sessionId, true);
+      const result = await askChat(value, sessionId, true, getStoredVoiceName());
       setLastResult(result);
       setSessionId(result.session_id);
       setInput('');
@@ -176,7 +176,7 @@ export function TestPage() {
     const text = sanitizeMessageContent(rawText);
     if (!text) return;
     try {
-      const blob = await synthesizeTts(text);
+      const blob = await synthesizeTts(text, getStoredVoiceName());
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);

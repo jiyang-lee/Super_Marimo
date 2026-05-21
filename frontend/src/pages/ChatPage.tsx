@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { askChat, getSessionDetail, listSessions, synthesizeTts, updateRuntimeSettings, deleteSession, type SessionDetail, type SessionSummary } from '../api';
+import { askChat, getSessionDetail, getStoredVoiceName, listSessions, synthesizeTts, updateRuntimeSettings, deleteSession, type SessionDetail, type SessionSummary } from '../api';
 
 declare global {
   interface Window {
@@ -156,11 +156,12 @@ export function ChatPage() {
   const send = async (text = input) => {
     const value = text.trim();
     if (!value || busy) return;
-    setBusy(true);
-    setError('');
-    setActionNote('');
-    try {
-      const result = await askChat(value, sessionId);
+      setBusy(true);
+      setError('');
+      setActionNote('');
+      try {
+      const voiceName = getStoredVoiceName();
+      const result = await askChat(value, sessionId, false, voiceName);
       const nextId = result.session_id;
       setInput('');
       const action = result.action_result;
@@ -211,7 +212,7 @@ export function ChatPage() {
 
   const play = async (text: string) => {
     try {
-      const blob = await synthesizeTts(text);
+      const blob = await synthesizeTts(text, getStoredVoiceName());
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);
