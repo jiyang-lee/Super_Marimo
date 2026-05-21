@@ -31,7 +31,13 @@ def compute_rms(frame: bytes) -> float:
 def open_serial(port: str, baudrate: int):
     import serial
 
-    return serial.Serial(port=port, baudrate=baudrate, timeout=0.25)
+    try:
+        return serial.Serial(port=port, baudrate=baudrate, timeout=0.25)
+    except serial.SerialException as exc:
+        raise RuntimeError(
+            f"Could not open serial port {port!r}. Close any other app using the RP2040 "
+            f"(for example Arduino Serial Monitor or another bridge process), then try again."
+        ) from exc
 
 
 def wav_bytes_from_pcm(pcm_bytes: bytes) -> bytes:
@@ -91,49 +97,57 @@ class SerialListener:
         start_hits = 0
         silence_hits = 0
         max_active_frames = int((self.args.max_segment_sec * SAMPLE_RATE) / FRAME_SAMPLES)
+        serial_buffer = bytearray()
 
         print(f"[serial] listening on {self.args.port} @ {self.args.baudrate}")
 
         try:
             while True:
-                frame = self.serial_port.read(FRAME_BYTES)
-                if len(frame) != FRAME_BYTES:
+                chunk = self.serial_port.read(FRAME_BYTES)
+                if chunk:
+                    serial_buffer.extend(chunk)
+
+                if len(serial_buffer) < FRAME_BYTES:
                     continue
 
-                rms = compute_rms(frame)
-                vad = build_vad_profile(self.args, boosted=bool(is_boosted and is_boosted()))
+                while len(serial_buffer) >= FRAME_BYTES:
+                    frame = bytes(serial_buffer[:FRAME_BYTES])
+                    del serial_buffer[:FRAME_BYTES]
 
-                if not active:
-                    pre_roll.append(frame)
-                    if rms >= vad.start_rms:
-                        start_hits += 1
+                    rms = compute_rms(frame)
+                    vad = build_vad_profile(self.args, boosted=bool(is_boosted and is_boosted()))
+
+                    if not active:
+                        pre_roll.append(frame)
+                        if rms >= vad.start_rms:
+                            start_hits += 1
+                        else:
+                            start_hits = 0
+
+                        if start_hits >= vad.start_frames:
+                            active = True
+                            active_frames = list(pre_roll)
+                            silence_hits = 0
+                            start_hits = 0
+                            if on_speech_started:
+                                on_speech_started(rms)
+                        continue
+
+                    active_frames.append(frame)
+                    if rms <= vad.stop_rms:
+                        silence_hits += 1
                     else:
-                        start_hits = 0
-
-                    if start_hits >= vad.start_frames:
-                        active = True
-                        active_frames = list(pre_roll)
                         silence_hits = 0
-                        start_hits = 0
-                        if on_speech_started:
-                            on_speech_started(rms)
-                    continue
 
-                active_frames.append(frame)
-                if rms <= vad.stop_rms:
-                    silence_hits += 1
-                else:
-                    silence_hits = 0
-
-                if silence_hits >= vad.silence_frames or len(active_frames) >= max_active_frames:
-                    if on_speech_ended:
-                        on_speech_ended(len(active_frames), silence_hits, max_active_frames)
-                    pcm = b"".join(active_frames)
-                    save_debug_wav(self.debug_dir, "segment", pcm, retain_count=self.debug_retain_count)
-                    on_segment(pcm)
-                    active = False
-                    active_frames = []
-                    silence_hits = 0
-                    pre_roll.clear()
+                    if silence_hits >= vad.silence_frames or len(active_frames) >= max_active_frames:
+                        if on_speech_ended:
+                            on_speech_ended(len(active_frames), silence_hits, max_active_frames)
+                        pcm = b"".join(active_frames)
+                        save_debug_wav(self.debug_dir, "segment", pcm, retain_count=self.debug_retain_count)
+                        on_segment(pcm)
+                        active = False
+                        active_frames = []
+                        silence_hits = 0
+                        pre_roll.clear()
         finally:
             self.serial_port.close()
