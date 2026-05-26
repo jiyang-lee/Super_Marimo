@@ -24,7 +24,7 @@ Wemos 거리센서
 → API Server /sensor/realtime-ingest
 → 거리값 판단 + 쿨다운 확인
 → proactive_greeting 이벤트 생성
-→ Voice Agent EventPoller가 /events 평
+→ Voice Agent EventPoller가 /events를 폴링
 → TTS 생성 → ./shared/audio/ 저장
 → Bridge audio_player → 블루투스 스피커
 → /events/{id}/played 로 마킹
@@ -152,3 +152,4 @@ Invoke-RestMethod -Uri http://localhost:8002/ready
 - Voice Agent 컨테이너는 `./shared/audio/`를 Bridge와 공유합니다.
 - 선제 인사 쿨다운 기본값은 60초입니다.
 - `.env.mock`, `.env.cpu`, `.env.gpu`, `.env.local` 파일로 실행 모드와 로컬 주소를 분리했습니다.
+- 런타임 산출물인 `bridge/session.json`과 `shared/audio/cache/*.wav`는 `.gitignore`로 제외합니다.

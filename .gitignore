@@ -25,4 +25,6 @@ frontend/dist/
 
 # Voice agent state
 voice_agent.session.json
+bridge/session.json
+shared/audio/cache/*.wav
 
