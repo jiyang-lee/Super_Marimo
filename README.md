@@ -19,6 +19,64 @@ RP2040(Nano) 마이크, Wemos 거리센서, Windows 브릿지, Docker 기반 백
 - **상태가 보이는 UI**: 프론트는 단순 채팅창이 아니라 센서 상태, 대화 흐름, 테스트 동작을 확인하는 콘솔 역할을 합니다.
 - **운영 문서화**: 실행 가이드, 네트워크 주소 매트릭스, 보고서 문서를 함께 관리합니다.
 
+## 기술 스택
+
+| 구분 | 기술 |
+|------|------|
+| Frontend | React 19, React Router, Vite, TypeScript |
+| UI / 스타일 | CSS, Tailwind CSS, PostCSS |
+| API / Backend | FastAPI, Uvicorn, Pydantic |
+| DB | PostgreSQL, psycopg |
+| LLM / 추론 | PyTorch, Transformers, Accelerate, OpenAI SDK |
+| 음성 처리 | faster-whisper, soundfile, supertonic, PyAudio |
+| 브릿지 / 디바이스 | Python, pyserial, winsound, Windows COM |
+| 실행 환경 | Docker Compose, GPU overlay, local `.env` 분리 |
+
+## 시스템 아키텍처
+
+```mermaid
+flowchart LR
+  subgraph Device[Device Layer]
+    N[Nano 마이크]
+    W[Wemos 거리센서]
+    S[블루투스 스피커]
+  end
+
+  subgraph Host[Windows Host]
+    B[Bridge]
+  end
+
+  subgraph Backend[Docker Backend]
+    A[API Server]
+    L[LLM Server]
+    V[Voice Server]
+    G[(DB)]
+    P[Voice Agent]
+  end
+
+  subgraph UI[Web UI]
+    F[Frontend]
+  end
+
+  N --> B
+  W --> A
+  F --> P
+  B --> V
+  V --> P
+  P --> A
+  A --> L
+  A --> G
+  A --> V
+  V --> B
+  B --> S
+```
+
+### 데이터 흐름
+
+- **호출어 대화**: `Nano 마이크 -> Bridge -> Voice Server -> Voice Agent -> API Server -> LLM Server -> DB -> TTS -> Bridge -> 스피커`
+- **선제 인사**: `Wemos 거리센서 -> API Server -> 이벤트 생성 -> Voice Agent 폴링 -> TTS -> Bridge -> 스피커`
+- **수동 테스트**: `Frontend -> Voice Agent -> API Server -> LLM Server -> DB -> UI`
+
 ## 동작 흐름
 
 ```mermaid
