@@ -1,0 +1,7 @@
+export const sampleScenarios = [
+  { id: 'temperature', label: '지금 온도 어때?', utterance: '지금 온도 어때?', answer: '현재 온도는 25도입니다.', setting: '', test: '개별 센서 및 케어 가이드 (빠른 응답)', source: 'report/demo_voice_script_guide.md', kind: '문서에 저장된 응답 형식 예시', sensors: [{ label: '온도 예시', value: '25 °C' }, { label: '입력 방식', value: '텍스트' }], state: '문서의 온도 응답 예시 · 현재 센서 측정이나 실제 실행 기록이 아닙니다.' },
+  { id: 'wake', label: '깨우기 기능 끄기', utterance: 'wake off', answer: '깨우기 기능을 껐어요. 필요하면 다시 켜주세요!', setting: 'wake_enabled', test: 'test_handle_interaction_uses_llm_action_proposal', source: 'api_server/tests/test_interaction_service.py', kind: '저장된 테스트 기대 결과', sensors: [{ label: '온도', value: '27 °C' }, { label: '습도', value: '57 %' }, { label: '수위 지수', value: '61 / 100' }, { label: '거리', value: '49 cm' }], state: 'warning · 테스트에서 지정한 모의 상태입니다.' },
+  { id: 'distance', label: '거리 감지 끄기', utterance: 'distance detection off', answer: '거리 감지 모드를 껐어요. 필요하면 다시 켜주세요!', setting: 'distance_detection_enabled', test: 'test_handle_interaction_falls_back_to_text_resolution', source: 'api_server/tests/test_interaction_service.py', kind: '저장된 테스트 기대 결과', sensors: [{ label: '온도', value: '27 °C' }, { label: '습도', value: '57 %' }, { label: '수위 지수', value: '61 / 100' }, { label: '거리', value: '49 cm' }], state: 'warning · 테스트에서 지정한 모의 상태입니다.' },
+] as const;
+export const replayStages = ['샘플 발화 선택', '저장된 센서 문맥 확인', '저장된 응답 확인', '로컬 체험 기록 표시'] as const;
+export type SampleScenario = (typeof sampleScenarios)[number];
